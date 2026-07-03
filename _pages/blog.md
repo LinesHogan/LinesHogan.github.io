@@ -189,7 +189,7 @@ pagination:
 
     {% if postlist.size == 0 %}
     <li>
-      <p>No posts yet.</p>
+      <p>No blog posts yet.</p>
     </li>
     {% endif %}
 
