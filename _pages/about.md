@@ -6,7 +6,7 @@ subtitle: Large language models, interesting algorithms and efficient systems.
 
 profile:
   align: right
-  image: prof_pic.jpg
+  image: pic_profile.jpg
   image_circular: false # crops the image to make it circular
   more_info:
 
