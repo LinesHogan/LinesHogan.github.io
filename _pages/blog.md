@@ -187,6 +187,12 @@ pagination:
 
     {% endfor %}
 
+    {% if postlist.size == 0 %}
+    <li>
+      <p>No posts yet.</p>
+    </li>
+    {% endif %}
+
   </ul>
 
 {% if page.pagination.enabled %}
