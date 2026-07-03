@@ -1,4 +1,4 @@
 User-agent: *
 Disallow:
 
-Sitemap: https://LinesHogan.github.io/sitemap.xml
+Sitemap: https://lineshogan.github.io/sitemap.xml
