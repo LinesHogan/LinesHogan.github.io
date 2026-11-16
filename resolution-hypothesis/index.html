@@ -331,11 +331,36 @@
     .exp-fig { margin-bottom: 12px; }
     .exp-fig figcaption { margin-top: 8px; }
     .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+    .guide-strip {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid var(--border); margin-top: 16px;
+    }
+    .guide-step {
+      display: block; padding: 12px 14px 12px 0; border-bottom: 0; color: var(--ink-2);
+      transition: color .15s;
+    }
+    .guide-step + .guide-step { padding-left: 14px; border-left: 1px solid var(--border); }
+    .guide-step:hover { color: var(--accent); border-bottom: 0; }
+    .guide-step .gs-k { font-family: var(--font-mono); font-size: 0.7rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 2px; }
+    .guide-step .gs-q { font-size: 0.84rem; color: var(--ink); font-weight: 500; line-height: 1.35; }
+    .guide-step:hover .gs-q { color: var(--accent); }
+    .q-hook { font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent); letter-spacing: 0.03em; margin-bottom: 6px; }
+    .bridge {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+      margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--border);
+      font-size: 0.88rem; color: var(--ink-2);
+    }
+    .bridge span { font-style: italic; }
+    .bridge a { font-family: var(--font-mono); font-size: 0.78rem; white-space: nowrap; }
     .seg button, .chips button, .btn, .qa summary, .case details.wrap > summary { min-height: 40px; }
     .chips button { display: inline-flex; align-items: center; }
     input[type=range] { height: 28px; cursor: pointer; }
 
     @media (max-width: 768px) {
+      .guide-strip { grid-template-columns: 1fr 1fr; }
+      .guide-step:nth-child(n) { padding-left: 0; border-left: 0; }
+      .guide-step:nth-child(2n) { padding-left: 14px; border-left: 1px solid var(--border); }
+      .guide-step:nth-child(n+3) { border-top: 1px solid var(--border); }
       .topnav .container { height: 44px; padding: 0 0 0 16px; }
       .navlinks { gap: 14px; scroll-snap-type: x proximity; padding-right: 16px; -webkit-overflow-scrolling: touch; }
       .navlinks a { font-size: 0.78rem; min-height: 44px; display: inline-flex; align-items: center; padding: 0; scroll-snap-align: start; }
@@ -403,11 +428,11 @@
       <div>
         <div class="kicker">Empirical Study &bull; &gt;10M LLM Calls &bull; 400K CPU Hours</div>
         <h1 class="title">The Resolution Hypothesis:<span class="sub">Agent Evolution's Key Is Identifying Improvements</span></h1>
-        <p class="lede">Agent evolution can propose better artifacts&mdash;but noisy evaluation cannot tell them apart, so selection harvests luck.</p>
+        <p class="lede">Why do agent-evolution papers claim +10&ndash;40 pp wins on one benchmark, trade leaderboard rankings across studies, and stall on coding tasks? Across &gt;10M LLM calls, we find the loop rarely fails to <em>propose</em> improvements&mdash;it fails to <em>recognize</em> them.</p>
         <ul class="takeaways">
           <li><strong>Proposal exists.</strong> Quality@K 49.2% &rarr; 61.8%, +3.4 pp above null.</li>
           <li><strong>Selection fails near chance.</strong> Selectors and LLM judges: 45.4%&ndash;49.7% pairwise accuracy.</li>
-          <li><strong>Noise compounds.</strong> In-loop +6.9&ndash;9.0 pp &rarr; held-out +0.35 to &minus;3.21 pp.</li>
+          <li><strong>Noise compounds.</strong> In-loop +6.9&ndash;9.0 pp &rarr; re-evaluated +0.35 to &minus;3.21 pp.</li>
         </ul>
         <div class="links">
           <a class="btn primary" href="#arxiv-pdf" title="arXiv link pending upload" aria-disabled="true" onclick="return false;">Paper (PDF)</a>
@@ -442,7 +467,13 @@
         <span><sup>2</sup> ByteDance, China</span>
         <span><sup>3</sup> BIGAI</span>
       </div>
-      <div class="notes">* Equal contribution &middot; &dagger; Corresponding author (<a href="mailto:renkan@shanghaitech.edu.cn">renkan@shanghaitech.edu.cn</a>)</div>
+      <div class="notes">* Equal contribution &middot; &dagger; Corresponding author &middot; Contact: <a href="mailto:zengyh2025@shanghaitech.edu.cn">zengyh2025@shanghaitech.edu.cn</a>, <a href="mailto:renkan@shanghaitech.edu.cn">renkan@shanghaitech.edu.cn</a></div>
+      <nav class="guide-strip" aria-label="Reading guide">
+        <a class="guide-step" href="#method-level"><span class="gs-k">Step 01 &middot; The Puzzle</span><span class="gs-q">Can single runs rank methods?&nbsp;&rarr;</span></a>
+        <a class="guide-step" href="#audit"><span class="gs-k">Step 02 &middot; The Illusion</span><span class="gs-q">Why do +40 pp wins vanish?&nbsp;&rarr;</span></a>
+        <a class="guide-step" href="#candidate-level"><span class="gs-k">Step 03 &middot; The Split</span><span class="gs-q">Proposal or selection bottleneck?&nbsp;&rarr;</span></a>
+        <a class="guide-step" href="#accumulation"><span class="gs-k">Step 04 &middot; The Drift</span><span class="gs-q">How do coin flips ruin 10 rounds?&nbsp;&rarr;</span></a>
+      </nav>
     </div>
   </div>
 
@@ -457,20 +488,26 @@
         </div>
         <div class="sec-body">
           <div class="gutter"></div>
-          <ul class="row-list">
-            <li><span class="rl">Why</span><div class="rc"><p><strong>We audit the measurement instrument, not the ambition of self-improving agents.</strong> Method rankings flip across studies, so we ask a foundational question: when an agent edits its prompts, skills, or harness, can standard evaluation reliably tell a true improvement from a lucky run?</p></div></li>
-            <li><span class="rl">Core conclusion</span><div class="rc"><p class="thesis-line">The bottleneck is <strong>identifying</strong> true improvements under noise&mdash;not <strong>proposing</strong> them.</p></div></li>
-            <li><span class="rl">Intuition</span><div class="rc"><div class="eq">Var(&Ycirc;) = &sigma;&sup2; + &tau;&sup2;</div><p><strong>Frozen-weight edits act through noisy multi-turn rollouts.</strong> Rollout noise (&sigma;&sup2;) and run-to-run drift (&tau;&sup2;) set an evaluation resolution floor; when gains sit below it, greedy acceptance harvests luck instead of better skills.</p></div></li>
-            <li><span class="rl">Not claiming</span><div class="rc">
-              <p style="margin-bottom:8px;"><strong>We are not rejecting agent evolution or questioning prior researchers' good faith.</strong> Proposers work, and even shortcuts confirm that evolution optimizes whatever signal clears the noise floor. Progress calls for four shifts:</p>
-              <ul class="micro">
-                <li><strong>Low-variance process checks:</strong> programmatic behavioral diagnostics show 13&times;&ndash;57&times; less noise than binary verdicts.</li>
-                <li><strong>Component-wise evaluation:</strong> benchmark proposers (Quality@K vs. null) separately from selectors.</li>
-                <li><strong>Resolution-aware reporting:</strong> publish &sigma;&#770; and &tau;&#770; alongside point scores.</li>
-                <li><strong>Higher-resolution regimes:</strong> more validation rollouts or deterministic program-environment feedback.</li>
-              </ul>
-            </div></li>
-          </ul>
+          <div style="min-width:0;">
+            <ul class="row-list">
+              <li><span class="rl">Why</span><div class="rc"><p><strong>We audit the measurement instrument, not the ambition of self-improving agents.</strong> Method rankings flip across studies, so we ask a foundational question: when an agent edits its prompts, skills, or harness, can standard evaluation reliably tell a true improvement from a lucky run?</p></div></li>
+              <li><span class="rl">Core conclusion</span><div class="rc"><p class="thesis-line">The bottleneck is <strong>identifying</strong> true improvements under noise&mdash;not <strong>proposing</strong> them.</p></div></li>
+              <li><span class="rl">Intuition</span><div class="rc"><div class="eq">Var(&Ycirc;) = &sigma;&sup2; + &tau;&sup2;</div><p><strong>Frozen-weight edits act through noisy multi-turn rollouts.</strong> Rollout noise (&sigma;&sup2;) and run-to-run drift (&tau;&sup2;) set an evaluation resolution floor; when gains sit below it, greedy acceptance harvests luck instead of better skills.</p></div></li>
+              <li><span class="rl">Not claiming</span><div class="rc">
+                <p style="margin-bottom:8px;"><strong>We are not rejecting agent evolution or questioning prior researchers' good faith.</strong> Proposers work, and even shortcuts confirm that evolution optimizes whatever signal clears the noise floor. Progress calls for four shifts:</p>
+                <ul class="micro">
+                  <li><strong>Low-variance process checks:</strong> programmatic behavioral diagnostics show 13&times;&ndash;57&times; less noise than binary verdicts.</li>
+                  <li><strong>Component-wise evaluation:</strong> benchmark proposers (Quality@K vs. null) separately from selectors.</li>
+                  <li><strong>Resolution-aware reporting:</strong> publish &sigma;&#770; and &tau;&#770; alongside point scores.</li>
+                  <li><strong>Higher-resolution regimes:</strong> more validation rollouts or deterministic program-environment feedback.</li>
+                </ul>
+              </div></li>
+            </ul>
+            <div class="bridge">
+              <span>Next: if noise blurs improvements, why do papers keep reporting contradictory wins&mdash;and huge jumps on some tasks?</span>
+              <a href="#introducing-our-work">02 Introducing Our Work &darr;</a>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -501,6 +538,10 @@
               <div class="stat"><div class="v">17.6&rarr;0.8</div><div class="l">median pp after eval repair</div></div>
               <div class="stat"><div class="v">49.7%</div><div class="l">1-rollout selection accuracy</div></div>
             </div>
+            <div class="bridge">
+              <span>So what did 150 configurations and 1,030 runs actually reveal? Here is the 60-second answer.</span>
+              <a href="#conclusion">03 Conclusion &darr;</a>
+            </div>
           </div>
         </div>
       </div>
@@ -515,12 +556,18 @@
         </div>
         <div class="sec-body">
           <div class="gutter"></div>
-          <ol class="concl">
-            <li><span class="n">01</span><div><h4>Single-run rankings rest on luck.</h4><p>Across 171 results in 9 papers, the 3.4 pp median margin sits below single-run SD on &gt;60% of pairs; best-of-4 accuracy on Terminal-Bench is 33% (random 25%).</p></div></li>
-            <li><span class="n">02</span><div><h4>Reported 10&ndash;40 pp gains reflect evaluation shortcuts.</h4><p>Auditing 12 benchmarks &times; 3 models, a one-sentence rule recovers a median 90% of gains &gt;3 pp; repairing the evaluation drops gains from 17.6 to 0.8 pp.</p></div></li>
-            <li><span class="n">03</span><div><h4>Proposers find real gains; selectors sit at chance.</h4><p>Quality@100 reaches 61.8% (+3.4 pp over null; shared skills span &gt;15 pp), while 1-rollout (49.7%), 2-rollout (48.6%), and LLM judges (45.4%&ndash;49.0%) sit near 50%.</p></div></li>
-            <li><span class="n">04</span><div><h4>Greedy selection errors accumulate across rounds.</h4><p>In-loop validation rises +6.9 to +9.0 pp while 8&times; validation re-evaluation shifts +0.35 to &minus;3.21 pp, and &tau;&#770;&sup2; grows to 4.2&ndash;24.5 pp&sup2;.</p></div></li>
-          </ol>
+          <div style="min-width:0;">
+            <ol class="concl">
+              <li><span class="n">01</span><div><h4>Single-run rankings rest on luck.</h4><p>Across 171 results in 9 papers, the 3.4 pp median margin sits below single-run SD on &gt;60% of pairs; best-of-4 accuracy on Terminal-Bench is 33% (random 25%).</p></div></li>
+              <li><span class="n">02</span><div><h4>Reported 10&ndash;40 pp gains reflect evaluation shortcuts.</h4><p>Auditing 12 benchmarks &times; 3 models, a one-sentence rule recovers a median 90% of gains &gt;3 pp; repairing the evaluation drops gains from 17.6 to 0.8 pp.</p></div></li>
+              <li><span class="n">03</span><div><h4>Proposers find real gains; selectors sit at chance.</h4><p>Quality@100 reaches 61.8% (+3.4 pp over null; shared skills span &gt;15 pp), while 1-rollout (49.7%), 2-rollout (48.6%), and LLM judges (45.4%&ndash;49.0%) sit near 50%.</p></div></li>
+              <li><span class="n">04</span><div><h4>Greedy selection errors accumulate across rounds.</h4><p>In-loop validation rises +6.9 to +9.0 pp while 8&times; validation re-evaluation shifts +0.35 to &minus;3.21 pp, and &tau;&#770;&sup2; grows to 4.2&ndash;24.5 pp&sup2;.</p></div></li>
+            </ol>
+            <div class="bridge">
+              <span>Skeptical about shortcut claims, selection budgets, or whether this is just &ldquo;common sense&rdquo;? Read our direct responses next.</span>
+              <a href="#qa">04 Q&amp;A &darr;</a>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -534,7 +581,8 @@
         </div>
         <div class="sec-body">
           <div class="gutter"></div>
-          <div class="qa">
+          <div style="min-width:0;">
+            <div class="qa">
             <details>
               <summary><span class="q">Q01</span><span>Are you claiming agent evolution doesn't work, or that prior papers were flawed?</span><span class="pm"></span></summary>
               <div class="ans"><p><strong>Neither&mdash;proposers genuinely work, and prior results reflect an unmeasured noise floor rather than bad faith.</strong> Tested proposers produce real held-out improvements (Quality@100 reaches 61.8%), and single-run reporting became standard before rollout variance (Var(&Ycirc;) = &sigma;&sup2; + &tau;&sup2;) was quantified.</p></div>
@@ -590,6 +638,11 @@
                 </ul>
               </div>
             </details>
+            </div>
+            <div class="bridge">
+              <span>Ready to inspect the four-step evidence chain&mdash;and test our numbers interactively?</span>
+              <a href="#experiments">05 Experiments &darr;</a>
+            </div>
           </div>
         </div>
       </div>
@@ -601,17 +654,18 @@
         <div class="sec-head">
           <div class="sec-num"><b>05</b>Evidence</div>
           <div>
-            <h2>Experiments &amp; Interactive Diagnostics</h2>
-            <p class="sec-desc">Four pillars. Each shows the paper figure; open the explorer to interact with the exact reported numbers.</p>
+            <h2>Four Steps Through the Evidence</h2>
+            <p class="sec-desc">Follow the argument step by step&mdash;from method-ranking instability to why evolution loops stall&mdash;and expand any explorer to test our empirical numbers yourself.</p>
           </div>
         </div>
 
         <!-- Pillar 1 -->
         <div class="pillar-head" id="method-level">
-          <div class="pn">I &middot; Method level</div>
+          <div class="pn">Step I &middot; The puzzle</div>
           <div>
-            <h3>Single-run rankings are below resolution</h3>
-            <p>Typical method margins are smaller than one single-run SD.</p>
+            <div class="q-hook">Question 1 &middot; Can a single evolution run tell two methods apart?</div>
+            <h3>Single-run rankings sit below resolution</h3>
+            <p>Across four audited benchmarks, &gt;60% of same-benchmark method pairs differ by less than one single-run SD&mdash;picking the best of four methods on Terminal-Bench is right only 33% of the time (random: 25%).</p>
           </div>
         </div>
         <figure class="exp-fig">
@@ -662,13 +716,18 @@
             </div>
           </div>
         </details>
+        <div class="bridge">
+          <span>Wait: if typical method gaps sit inside noise, how do some papers report +10 to +40 pp gains?</span>
+          <a href="#audit">Step II &middot; Audit +40 pp wins &darr;</a>
+        </div>
 
         <!-- Pillar 2 -->
         <div class="pillar-head" id="audit">
-          <div class="pn">II &middot; Literature audit</div>
+          <div class="pn">Step II &middot; The illusion</div>
           <div>
-            <h3>Large reported gains exploit evaluation shortcuts</h3>
-            <p>A one-sentence rule recovers 90% of gains; eval repair drops them 17.6 &rarr; 0.8 pp.</p>
+            <div class="q-hook">Question 2 &middot; Do +10&ndash;40 pp gains refute low resolution, or confirm it?</div>
+            <h3>Large reported gains come from evaluation shortcuts</h3>
+            <p>Across 12 benchmarks &times; 3 models, a one-sentence rule reproduces a median 90% of gains &gt;3 pp; repairing the evaluation drops median gains from 17.6 to 0.8 pp.</p>
           </div>
         </div>
         <figure class="exp-fig">
@@ -695,13 +754,18 @@
             </div>
           </div>
         </details>
+        <div class="bridge">
+          <span>Once shortcuts are removed, do genuine task skills even exist&mdash;or can LLMs simply not propose them?</span>
+          <a href="#candidate-level">Step III &middot; Proposal vs. Selection &darr;</a>
+        </div>
 
         <!-- Pillar 3 -->
         <div class="pillar-head" id="candidate-level">
-          <div class="pn">III &middot; Candidate level</div>
+          <div class="pn">Step III &middot; The split</div>
           <div>
-            <h3>Proposals exist; selection fails</h3>
-            <p>Pools hold real gains, but practical selectors stay near random.</p>
+            <div class="q-hook">Question 3 &middot; If evolution stalls without shortcuts, does proposal fail or does selection fail?</div>
+            <h3>Proposals hold real gains; selection sits at chance</h3>
+            <p>Quality@100 climbs to 61.8% (+3.4 pp above the equal-quality null; shared skills span &gt;15 pp), yet execution selectors (49.7% / 48.6%) and LLM judges (45.4%&ndash;49.0%) stay flat near 50%.</p>
           </div>
         </div>
         <figure class="exp-fig">
@@ -785,13 +849,18 @@
             </div>
           </div>
         </details>
+        <div class="bridge">
+          <span>If every single selection step is near a 50/50 coin flip, why do evolution curves look like they climb inside the loop?</span>
+          <a href="#accumulation">Step IV &middot; Why runs drift &darr;</a>
+        </div>
 
         <!-- Pillar 4 -->
         <div class="pillar-head" id="accumulation">
-          <div class="pn">IV &middot; Across rounds</div>
+          <div class="pn">Step IV &middot; The drift</div>
           <div>
-            <h3>Noise accumulates over evolution rounds</h3>
-            <p>In-loop gains vanish under 8&times; re-evaluation, and &tau;&#770;&sup2; grows.</p>
+            <div class="q-hook">Question 4 &middot; What happens when a chance selector runs round after round?</div>
+            <h3>Noise accumulates into optimism drift and variance diffusion</h3>
+            <p>Greedy acceptance harvests upward noise: in-loop scores rise +6.9 to +9.0 pp while 8&times; re-evaluation shifts +0.35 to &minus;3.21 pp, and &tau;&#770;&sup2; grows to 4.2&ndash;24.5 pp&sup2;.</p>
           </div>
         </div>
         <div class="fig-pair">
@@ -831,6 +900,10 @@
             </div>
           </div>
         </details>
+        <div class="bridge">
+          <span>Curious what a genuinely helpful&mdash;yet invisible to selectors&mdash;skill actually looks like inside?</span>
+          <a href="#case-study">06 Inspect concrete skills &darr;</a>
+        </div>
       </div>
     </section>
 
@@ -890,7 +963,7 @@
   <footer>
     <div class="container">
       <span>The Resolution Hypothesis &middot; 2026</span>
-      <span>Correspondence: <a href="mailto:renkan@shanghaitech.edu.cn">renkan@shanghaitech.edu.cn</a></span>
+      <span>Correspondence: <a href="mailto:zengyh2025@shanghaitech.edu.cn">zengyh2025@shanghaitech.edu.cn</a>, <a href="mailto:renkan@shanghaitech.edu.cn">renkan@shanghaitech.edu.cn</a></span>
     </div>
   </footer>
 
