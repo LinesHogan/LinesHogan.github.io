@@ -458,16 +458,16 @@
         <div class="sec-body">
           <div class="gutter"></div>
           <ul class="row-list">
-            <li><span class="rl">Why</span><div class="rc"><p>Agent-evolution results flip across papers. We ask whether evaluation can even tell two artifacts apart.</p></div></li>
+            <li><span class="rl">Why</span><div class="rc"><p><strong>We audit the measurement instrument, not the ambition of self-improving agents.</strong> Method rankings flip across studies, so we ask a foundational question: when an agent edits its prompts, skills, or harness, can standard evaluation reliably tell a true improvement from a lucky run?</p></div></li>
             <li><span class="rl">Core conclusion</span><div class="rc"><p class="thesis-line">The bottleneck is <strong>identifying</strong> true improvements under noise&mdash;not <strong>proposing</strong> them.</p></div></li>
-            <li><span class="rl">Intuition</span><div class="rc"><div class="eq">Var(&Ycirc;) = &sigma;&sup2; + &tau;&sup2;</div><p>&sigma;&sup2; = evaluation noise, &tau;&sup2; = run-to-run variance. Gains below this resolution make greedy acceptance harvest noise tails.</p></div></li>
+            <li><span class="rl">Intuition</span><div class="rc"><div class="eq">Var(&Ycirc;) = &sigma;&sup2; + &tau;&sup2;</div><p><strong>Frozen-weight edits act through noisy multi-turn rollouts.</strong> Rollout noise (&sigma;&sup2;) and run-to-run drift (&tau;&sup2;) set an evaluation resolution floor; when gains sit below it, greedy acceptance harvests luck instead of better skills.</p></div></li>
             <li><span class="rl">Not claiming</span><div class="rc">
-              <p style="margin-bottom:6px;">Agent evolution is not useless. Constructive directions:</p>
+              <p style="margin-bottom:8px;"><strong>We are not rejecting agent evolution or questioning prior researchers' good faith.</strong> Proposers work, and even shortcuts confirm that evolution optimizes whatever signal clears the noise floor. Progress calls for four shifts:</p>
               <ul class="micro">
-                <li>Low-variance process diagnostics (13&times;&ndash;57&times; less noise).</li>
-                <li>Component-wise eval: proposer Quality@K vs. selector.</li>
-                <li>Report &sigma;&#770; and &tau;&#770; with every score.</li>
-                <li>Larger effects, program evolution, higher-resolution validation.</li>
+                <li><strong>Low-variance process checks:</strong> programmatic behavioral diagnostics show 13&times;&ndash;57&times; less noise than binary verdicts.</li>
+                <li><strong>Component-wise evaluation:</strong> benchmark proposers (Quality@K vs. null) separately from selectors.</li>
+                <li><strong>Resolution-aware reporting:</strong> publish &sigma;&#770; and &tau;&#770; alongside point scores.</li>
+                <li><strong>Higher-resolution regimes:</strong> more validation rollouts or deterministic program-environment feedback.</li>
               </ul>
             </div></li>
           </ul>
@@ -482,24 +482,24 @@
           <div class="sec-num"><b>02</b>Setup</div>
           <div>
             <h2>Introducing Our Work</h2>
-            <p class="sec-desc">Methods trade wins across benchmarks and stall on Terminal-Bench while claiming 10&ndash;40 pp elsewhere. <strong>The Resolution Hypothesis:</strong> true gains fall below single-run resolution, so selection breaks in the loop and rankings break across papers.</p>
+            <p class="sec-desc"><strong>Why does evolution stall on some benchmarks while claiming +10&ndash;40 pp elsewhere?</strong> Methods trade wins across papers&mdash;stalling on Terminal-Bench while jumping elsewhere. <strong>The Resolution Hypothesis:</strong> evolution accumulates gains when they exceed evaluation resolution, and drifts on noise when they fall below it.</p>
           </div>
         </div>
         <div class="sec-body">
           <div class="gutter"></div>
           <div style="min-width:0;">
             <div class="preds" style="margin-top:0;">
-              <div class="pred"><div class="tag">P1</div><h4>Proposals exist</h4><p>More candidates raise quality beyond luck.</p></div>
-              <div class="pred"><div class="tag">P2</div><h4>Selection fails</h4><p>Practical selectors stay near random.</p></div>
-              <div class="pred"><div class="tag">P3</div><h4>Errors compound</h4><p>In-loop scores inflate; runs drift apart.</p></div>
+              <div class="pred"><div class="tag">P1 &middot; Proposals exist</div><h4>Proposers find real gains</h4><p>Candidate pools hold artifacts that improve held-out quality beyond luck.</p></div>
+              <div class="pred"><div class="tag">P2 &middot; Selection fails</div><h4>Selectors sit near chance</h4><p>Execution scores and trajectory LLM judges fail to rank candidates reliably.</p></div>
+              <div class="pred"><div class="tag">P3 &middot; Errors compound</div><h4>Noise accumulates over rounds</h4><p>Greedy acceptance inflates in-loop scores while runs diverge.</p></div>
             </div>
             <div class="stats">
-              <div class="stat"><div class="v">150</div><div class="l">configurations</div></div>
-              <div class="stat"><div class="v">1,030</div><div class="l">evolution runs</div></div>
-              <div class="stat"><div class="v">&gt;2.1M</div><div class="l">trajectories</div></div>
-              <div class="stat"><div class="v">3.4 pp</div><div class="l">median lit. margin</div></div>
-              <div class="stat"><div class="v">17.6&rarr;0.8</div><div class="l">pp after eval repair</div></div>
-              <div class="stat"><div class="v">49.7%</div><div class="l">1-rollout selection acc.</div></div>
+              <div class="stat"><div class="v">150</div><div class="l">configs (7 methods, 6 models)</div></div>
+              <div class="stat"><div class="v">1,030</div><div class="l">evolution runs (8&ndash;16&times; eval)</div></div>
+              <div class="stat"><div class="v">&gt;2.1M</div><div class="l">trajectories (&gt;10M LLM calls)</div></div>
+              <div class="stat"><div class="v">3.4 pp</div><div class="l">median lit. margin (171 results)</div></div>
+              <div class="stat"><div class="v">17.6&rarr;0.8</div><div class="l">median pp after eval repair</div></div>
+              <div class="stat"><div class="v">49.7%</div><div class="l">1-rollout selection accuracy</div></div>
             </div>
           </div>
         </div>
@@ -516,10 +516,10 @@
         <div class="sec-body">
           <div class="gutter"></div>
           <ol class="concl">
-            <li><span class="n">01</span><div><h4>Single-run rankings fail.</h4><p>&gt;60% of method pairs sit within 1 SD; best-of-4 identification on Terminal-Bench is 33% (random 25%).</p></div></li>
-            <li><span class="n">02</span><div><h4>10&ndash;40 pp gains exploit shortcuts.</h4><p>One sentence recovers 90% of reported gains; repairing evaluation drops them 17.6 &rarr; 0.8 pp.</p></div></li>
-            <li><span class="n">03</span><div><h4>Proposals exist; selectors are at chance.</h4><p>Quality@100 reaches 61.8% (+3.4 pp over null); selectors and LLM judges score 45.4%&ndash;49.7%.</p></div></li>
-            <li><span class="n">04</span><div><h4>Selection errors accumulate.</h4><p>In-loop +6.9&ndash;9.0 pp vs. held-out +0.35 to &minus;3.21 pp; &tau;&#770;&sup2; grows to 4.2&ndash;24.5 pp&sup2;.</p></div></li>
+            <li><span class="n">01</span><div><h4>Single-run rankings rest on luck.</h4><p>Across 171 results in 9 papers, the 3.4 pp median margin sits below single-run SD on &gt;60% of pairs; best-of-4 accuracy on Terminal-Bench is 33% (random 25%).</p></div></li>
+            <li><span class="n">02</span><div><h4>Reported 10&ndash;40 pp gains reflect evaluation shortcuts.</h4><p>Auditing 12 benchmarks &times; 3 models, a one-sentence rule recovers a median 90% of gains &gt;3 pp; repairing the evaluation drops gains from 17.6 to 0.8 pp.</p></div></li>
+            <li><span class="n">03</span><div><h4>Proposers find real gains; selectors sit at chance.</h4><p>Quality@100 reaches 61.8% (+3.4 pp over null; shared skills span &gt;15 pp), while 1-rollout (49.7%), 2-rollout (48.6%), and LLM judges (45.4%&ndash;49.0%) sit near 50%.</p></div></li>
+            <li><span class="n">04</span><div><h4>Greedy selection errors accumulate across rounds.</h4><p>In-loop validation rises +6.9 to +9.0 pp while 8&times; validation re-evaluation shifts +0.35 to &minus;3.21 pp, and &tau;&#770;&sup2; grows to 4.2&ndash;24.5 pp&sup2;.</p></div></li>
           </ol>
         </div>
       </div>
@@ -536,44 +536,57 @@
           <div class="gutter"></div>
           <div class="qa">
             <details>
-              <summary><span class="q">Q01</span><span>Are you saying agent evolution is useless?</span><span class="pm"></span></summary>
-              <div class="ans"><p>No. Proposers already find better artifacts (P1). The failure is identification under current evaluation budgets&mdash;a measurement problem with concrete fixes.</p></div>
+              <summary><span class="q">Q01</span><span>Are you claiming agent evolution doesn't work, or that prior papers were flawed?</span><span class="pm"></span></summary>
+              <div class="ans"><p><strong>Neither&mdash;proposers genuinely work, and prior results reflect an unmeasured noise floor rather than bad faith.</strong> Tested proposers produce real held-out improvements (Quality@100 reaches 61.8%), and single-run reporting became standard before rollout variance (Var(&Ycirc;) = &sigma;&sup2; + &tau;&sup2;) was quantified.</p></div>
             </details>
             <details>
-              <summary><span class="q">Q02</span><span>Papers report 10&ndash;40 pp gains&mdash;doesn't that refute low resolution?</span><span class="pm"></span></summary>
-              <div class="ans"><p>Large gains are what can clear the barrier, and they mostly come from evaluation shortcuts. A one-sentence rule recovers 90% of them; repairing the evaluation drops the median from 17.6 to 0.8 pp.</p></div>
-            </details>
-            <details>
-              <summary><span class="q">Q03</span><span>Why not use trajectory-reading LLM judges?</span><span class="pm"></span></summary>
-              <div class="ans"><p>We tested them: 45.4%&ndash;49.0% pairwise accuracy, no better than 1-rollout execution (49.7%). Lower-variance process checks are the better signal.</p></div>
-            </details>
-            <details>
-              <summary><span class="q">Q04</span><span>Isn't Quality@K just the max over K noisy runs?</span><span class="pm"></span></summary>
+              <summary><span class="q">Q02</span><span>High variance makes it hard to iterate or identify improvements&mdash;isn't that just common sense?</span><span class="pm"></span></summary>
               <div class="ans">
+                <p><strong>In principle, yes&mdash;yet in practice the community has operated on the opposite premise, and the severity is surprising.</strong></p>
                 <ul>
-                  <li>We compare against an <strong>Equal-Quality Null</strong>: the same max with identical true quality.</li>
-                  <li>Observed Quality@100 beats it by <strong>+3.4 pp</strong> on disjoint held-out tasks.</li>
-                  <li>Single shared skills alone span <strong>&gt;15 pp</strong>.</li>
+                  <li><strong>Standard reporting ignores it:</strong> across 171 results in 9 agent-evolution papers, 0 report variance (&sigma;&#770; or &tau;&#770;) and only 6 average &gt;1 evolution run, treating 3.4 pp margins as reliable rankings.</li>
+                  <li><strong>Intuitive selectors still fail:</strong> 1-rollout (49.7%), 2-rollout (48.6%), and LLM trajectory judges (45.4%&ndash;49.0%, <em>r</em> = 0.054) all sit near chance even when proposers yield +3.4 pp Quality@100 headroom.</li>
+                  <li><strong>Why this surprises researchers:</strong> even knowing noise exists in theory, the community rarely anticipated how severely it bites in practice&mdash;that true skill gains already sit below current selector resolution.</li>
                 </ul>
               </div>
             </details>
             <details>
-              <summary><span class="q">Q05</span><span>Wouldn't stronger models or program evolution solve this?</span><span class="pm"></span></summary>
+              <summary><span class="q">Q03</span><span>Our method achieved +20&ndash;40 pp on a published benchmark&mdash;why call that an evaluation shortcut?</span><span class="pm"></span></summary>
+              <div class="ans"><p><strong>Finding a +20&ndash;40 pp lever is real optimization, but it reflects a benchmark-wide convention rather than fine-grained task skills.</strong> Under frozen weights, one global rule&mdash;like matching a strict parser or benchmark variant&mdash;lifts most tasks at once (one sentence recovers a median 90% of gains &gt;3 pp). After evaluation repair, median gains drop from 17.6 to 0.8 pp.</p></div>
+            </details>
+            <details>
+              <summary><span class="q">Q04</span><span>What about Meta-Harness, AHE, ReasoningBank, GEPA, or SkillOpt&mdash;are all 7 methods equally affected?</span><span class="pm"></span></summary>
+              <div class="ans"><p><strong>The bottleneck is shared across both text-artifact and harness families whenever step gains fall below resolution.</strong> Across 4 text methods (GEPA, SkillOpt-Lite, Trace2Skill, ReasoningBank) and 3 harness methods (HarnessLens, Meta-Harness, AHE) on 6 models (150 configs), no single proposer is singled out&mdash;all hit sparse terminal feedback when ranking +1&ndash;3 pp refinements.</p></div>
+            </details>
+            <details>
+              <summary><span class="q">Q05</span><span>Why test 1&ndash;2 rollouts or LLM judges? Wouldn't averaging more rollouts fix selection?</span><span class="pm"></span></summary>
+              <div class="ans"><p><strong>Standard loops use 1&ndash;2 rollouts to stay tractable; scaling to 16&times; validation helps, at 16&times; inner-loop cost.</strong> Under standard budgets, execution (49.7% / 48.6%) and LLM judges (45.4%&ndash;49.0%) sit near a coin flip. Raising validation to 16&times; lifts mean test score 61.4% &rarr; 64.4% and best run 64.8% &rarr; 72.7%, motivating cheaper low-variance diagnostics.</p></div>
+            </details>
+            <details>
+              <summary><span class="q">Q06</span><span>Isn't Quality@K rising with K just the &ldquo;winner's curse&rdquo; over noisy scores?</span><span class="pm"></span></summary>
               <div class="ans">
                 <ul>
-                  <li>We test 6 models up to Kimi-K3, GLM-5.2, GPT-5.6, and DeepSeek-V4-Flash.</li>
-                  <li>On ALFWorld, near-ceiling scores leave little headroom; on Terminal-Bench, median noise stays 3.5&ndash;4.0 pp.</li>
-                  <li>Program evolution structurally reduces evaluation noise via cheap parallel re-evaluation of deterministic code and accessible program-environment diagnostics.</li>
+                  <li><strong>Equal-Quality Null:</strong> subtracts out the exact max-of-<em>K</em> curve expected if all 100 skills shared identical true quality.</li>
+                  <li><strong>Disjoint held-out tasks:</strong> across 10 disjoint test tasks (16 rollouts each), Quality@100 reaches 61.8% (+3.4 pp above null).</li>
+                  <li><strong>Single shared-skill spread:</strong> across 160 test rollouts per skill (2h budget), single skills span &gt;15 pp (57.5% best vs. 49.2% mean and 41.9% weakest).</li>
                 </ul>
               </div>
             </details>
             <details>
-              <summary><span class="q">Q06</span><span>What should researchers change now?</span><span class="pm"></span></summary>
+              <summary><span class="q">Q07</span><span>Deterministic program evolution (e.g., KernelAgent, AlphaEvolve, ARC-AGI) compounds steadily&mdash;does that contradict you?</span><span class="pm"></span></summary>
+              <div class="ans"><p><strong>It supports the Resolution Hypothesis by structurally reducing evaluation noise.</strong> Evolving task-specific code enables cheap parallel re-evaluation of deterministic programs and richer runtime diagnostics, allowing incremental gains to clear resolution&mdash;unlike frozen-weight text/harness edits scored by stochastic multi-turn rollouts.</p></div>
+            </details>
+            <details>
+              <summary><span class="q">Q08</span><span>Will stronger frontier models naturally solve evaluation resolution?</span><span class="pm"></span></summary>
+              <div class="ans"><p><strong>Across 6 models up to Kimi-K3, GLM-5.2, GPT-5.6, and DeepSeek-V4-Flash, noise shrinks mainly where benchmarks saturate.</strong> On ALFWorld, stronger models show lower noise only near the ceiling where little headroom remains. On unsaturated Terminal-Bench, median evaluation noise stays around 3.5&ndash;4.0 pp across model tiers.</p></div>
+            </details>
+            <details>
+              <summary><span class="q">Q09</span><span>What should benchmark authors, method builders, and reviewers do differently now?</span><span class="pm"></span></summary>
               <div class="ans">
                 <ul>
-                  <li>Report &sigma;&#770; and &tau;&#770;; evaluate proposer and selector separately.</li>
-                  <li>Add low-variance process checks.</li>
-                  <li>Budget 16&times; validation where affordable: mean 61.4% &rarr; 64.4%, best 64.8% &rarr; 72.7%.</li>
+                  <li><strong>Report &sigma;&#770; and &tau;&#770;:</strong> publish evaluation noise and run-to-run variance alongside point scores.</li>
+                  <li><strong>Decouple proposer from selector:</strong> score proposers via Quality@K vs. null, and selectors via selected-artifact curves on fixed pools.</li>
+                  <li><strong>Use low-variance behavioral checks:</strong> programmatic intermediate diagnostics cut evaluation noise by 13&times;&ndash;57&times;.</li>
                 </ul>
               </div>
             </details>
