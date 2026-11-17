@@ -2,7 +2,7 @@
 layout: about
 title: about
 permalink: /
-subtitle: Large language models, interesting algorithms and efficient systems.
+subtitle: 
 
 profile:
   align: right
