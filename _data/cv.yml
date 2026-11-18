@@ -12,7 +12,7 @@ cv:
 
   sections:
     Research:
-      - title: The Resolution Hypothesis: Agent Evolution's Key Is Identifying Improvements
+      - title: "The Resolution Hypothesis: Agent Evolution's Key Is Identifying Improvements"
         date: 2026
         location: arXiv:2611.23068
         highlights:
