@@ -12,6 +12,12 @@ cv:
 
   sections:
     Research:
+      - title: The Resolution Hypothesis: Agent Evolution's Key Is Identifying Improvements
+        date: 2026
+        location: arXiv:2611.23068
+        highlights:
+          - Audited 7 agent evolution methods and 6 models across 1,030 runs (>2.1M trajectories, >10M LLM calls), showing frozen-weight evolution is bottlenecked by evaluation resolution rather than proposal quality.
+          - Published paper at https://arxiv.org/abs/2611.23068 and interactive project page at https://lineshogan.github.io/resolution-hypothesis/.
       - title: Large Language Models Explore by Latent Distilling
         date: 2026
         location: ICML 2026
