@@ -1642,6 +1642,148 @@
       .fig-pair .fn-svg .fn-tick { font-size: 17px; }
       .fig-pair .fn-svg .fn-axis { font-size: 17px; }
     }
+    /* ---------- Shortcut atlas ---------- */
+    .atlas-method { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 0 0 28px; }
+    .am-card { background: var(--paper); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+    .am-card p { margin: 0 0 10px; font-family: var(--font-serif); font-size: 1rem; line-height: 1.6; color: var(--ink-2); }
+    .am-k { font-family: var(--font-sans); font-weight: 600; font-size: 0.95rem; color: var(--ink); margin-bottom: 8px; }
+    .am-card .am-if { margin: 0; padding-top: 10px; border-top: 1px solid var(--border); font-style: italic; color: var(--ink); }
+    .atlas { position: relative; background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
+    .atlas-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .atlas-filters button { font-family: var(--font-sans); font-size: 0.84rem; color: var(--ink-2); background: var(--paper); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; cursor: pointer; min-height: 34px; }
+    .atlas-filters button span { font-family: var(--font-mono); font-size: 0.76rem; color: var(--muted); margin-left: 3px; }
+    .atlas-filters button:hover { border-color: var(--border-strong); color: var(--ink); }
+    .atlas-filters button.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+    .atlas-filters button.on span { color: var(--oat-2); }
+    .atlas-grid { display: grid; grid-template-columns: 262px minmax(0, 1fr); gap: 18px; align-items: start; }
+    .atlas-list { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 64px; }
+    .atlas-item { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "n n" "t num"; align-items: center; gap: 1px 8px; text-align: left; font-family: var(--font-sans);
+      background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 8px 10px; cursor: pointer; color: var(--ink); transition: background .15s, opacity .2s; }
+    .atlas-item:hover { background: var(--paper-2); }
+    .atlas-item.on { background: var(--oat); border-color: var(--oat-2); }
+    .atlas-item.dim { opacity: 0.35; }
+    .atlas-item .ai-name { grid-area: n; font-weight: 600; font-size: 0.92rem; }
+    .atlas-item .ai-type { grid-area: t; font-size: 0.74rem; color: var(--muted); }
+    .atlas-item .ai-type::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: var(--tc, var(--faint, #a3a199)); vertical-align: 1px; }
+    .atlas-item .ai-num { grid-area: num; font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); white-space: nowrap; text-align: right; }
+    .atlas-item .ai-num b { color: var(--ink); font-weight: 600; }
+    .atlas-item .ai-arrow { color: var(--faint, #a3a199); }
+    .t-format { --tc: #d97757; } .t-recalc { --tc: #3e6a9e; } .t-leak { --tc: #7a5c8e; } .t-port { --tc: #a8742a; } .t-none { --tc: #a3a199; }
+    .atlas-detail { min-width: 0; }
+    .ad-head { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .ad-type { font-family: var(--font-sans); font-size: 0.8rem; font-weight: 500; color: var(--ink-2); }
+    .ad-type::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--tc); margin-right: 7px; }
+    .ad-head h3 { font-family: var(--font-serif); font-weight: 400; font-size: 1.7rem; margin: 4px 0 4px; letter-spacing: -0.01em; }
+    .ad-measures { margin: 0; font-family: var(--font-serif); color: var(--ink-2); font-size: 0.98rem; max-width: 560px; }
+    .ad-kpi { display: grid; grid-auto-flow: column; gap: 16px; flex-shrink: 0; text-align: right; position: relative; padding-bottom: 16px; }
+    .ad-kpi div span { display: block; font-family: var(--font-sans); font-size: 0.74rem; color: var(--muted); }
+    .ad-kpi div b { font-family: var(--font-mono); font-weight: 500; font-size: 1.35rem; color: var(--ink); }
+    .ad-kpi div:last-of-type b { color: var(--ink); }
+    .ad-kpi b.na { color: var(--muted) !important; font-size: 1.1rem; }
+    .ad-kpi em { position: absolute; right: 0; bottom: 0; font-family: var(--font-sans); font-style: normal; font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+    .ad-verdict { display: inline-block; margin: 12px 0 0; font-family: var(--font-sans); font-size: 0.82rem; font-weight: 600; color: var(--ink); background: var(--paper-2); border: 1px solid var(--border); border-left: 3px solid var(--tc); border-radius: 6px; padding: 4px 10px; }
+    .ad-source { font-family: var(--font-serif); font-size: 0.94rem; color: var(--ink-2); margin: 10px 0 6px; }
+    .ad-source b { font-family: var(--font-sans); font-weight: 600; color: var(--ink); font-size: 0.86rem; }
+    .ad-cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 26px; }
+    .atlas-detail section { margin-top: 16px; }
+    .atlas-detail h4 { font-family: var(--font-sans); font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+    .atlas-detail section p { margin: 0; font-family: var(--font-serif); font-size: 1rem; line-height: 1.6; color: var(--ink-2); }
+    .atlas-detail blockquote { margin: 0 0 8px; padding: 10px 14px; background: var(--paper-2); border-left: 3px solid var(--ink); border-radius: 0 8px 8px 0; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.55; color: var(--ink); }
+    .atlas-detail .ad-note { font-size: 0.94rem !important; }
+    .atlas-ex { margin-top: 14px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--paper); }
+    .ax-hd { font-family: var(--font-sans); font-size: 0.74rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .ax-t { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    .ax-t td, .ax-t th { white-space: normal; padding: 6px 6px; border-bottom: 1px solid var(--border); vertical-align: top; text-align: left; }
+    .ax-t tr:last-child td { border-bottom: 0; }
+    .ax-t th { font-family: var(--font-sans); font-size: 0.72rem; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 600; }
+    .ax-t td:first-child { color: var(--ink-2); }
+    .ax-t.qa td { font-family: var(--font-serif); }
+    .ax-t { table-layout: fixed; }
+    .ax-t code { font-size: 0.8rem; white-space: normal; overflow-wrap: anywhere; }
+    .ax-t.cells td:nth-child(1) { width: 30%; } .ax-t.cells td:nth-child(2) { width: 38%; }
+    .ax-t.parse td:nth-child(1) { width: 52%; }
+    .atlas-ex { overflow-x: auto; }
+    .ax-ok { color: var(--pos); font-weight: 700; } .ax-no { color: var(--neg); font-weight: 700; } .ax-mid { color: var(--c-amber); font-weight: 700; }
+    .ax-verdicts { font-family: var(--font-sans); font-size: 0.74rem; color: var(--muted); margin-top: 3px; }
+    .ax-p { margin: 0 0 6px; font-family: var(--font-serif); font-size: 0.94rem; color: var(--ink-2); }
+    .ax-opts { margin: 0; padding-left: 22px; font-family: var(--font-serif); font-size: 0.92rem; color: var(--ink-2); }
+    .ax-opts li { padding: 2px 0; } .ax-opts li.right { color: var(--ink); }
+    .ax-tag { font-family: var(--font-sans); font-size: 0.7rem; font-weight: 600; color: var(--pos); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; margin-left: 4px; white-space: nowrap; }
+    .ax-note { font-family: var(--font-sans); font-size: 0.74rem; color: var(--muted); margin-top: 6px; }
+    .atlas-bars { width: 100%; height: auto; display: block; overflow: visible; }
+    .ab-row { cursor: default; }
+    .ab-row:hover rect[fill="transparent"] { fill: rgba(20, 20, 19, 0.035); }
+    .atlas-leg { justify-content: flex-start; font-family: var(--font-sans); font-size: 0.76rem; color: var(--ink-2); margin-top: 4px; gap: 3px 12px; }
+    .atlas-leg i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+    .ad-lesson { margin: 20px 0 0; padding: 12px 14px; border-radius: 10px; background: var(--accent-soft); font-family: var(--font-serif); font-size: 1rem; line-height: 1.55; color: var(--ink); }
+    .ad-lesson b { font-family: var(--font-sans); font-weight: 600; }
+    .atlas-foot { margin: 14px 2px 0; font-family: var(--font-sans); font-size: 0.76rem; color: var(--muted); line-height: 1.5; }
+    .atlas-tail { margin-top: 36px; display: flex; flex-direction: column; gap: 30px; }
+    .atlas-tail h3 { font-family: var(--font-serif); font-weight: 400; font-size: 1.4rem; margin: 0 0 6px; }
+    .atlas-papers { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr); gap: 28px; align-items: start; }
+    .atlas-p { font-family: var(--font-serif); font-size: 0.98rem; line-height: 1.55; color: var(--ink-2); margin: 0 0 14px; }
+    .ap-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-top: 1px solid var(--border); }
+    .ap-stats div { padding: 12px 14px 12px 0; border-bottom: 1px solid var(--border); }
+    .ap-stats div:nth-child(odd) { padding-right: 18px; border-right: 1px solid var(--border); }
+    .ap-stats div:nth-child(even) { padding-left: 18px; }
+    .ap-stats b { display: block; font-family: var(--font-sans); font-weight: 600; font-size: 1.35rem; letter-spacing: -0.02em; color: var(--ink); line-height: 1.2; }
+    .ap-stats span { font-family: var(--font-sans); font-size: 0.82rem; line-height: 1.4; color: var(--ink-2); }
+    .ap-table { width: 100%; border-collapse: collapse; font-family: var(--font-sans); font-size: 0.84rem; border-top: 1px solid var(--ink); }
+    .ap-table th, .ap-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; text-align: left; }
+    .ap-table th { font-size: 0.72rem; font-weight: 600; color: var(--muted); text-transform: none; letter-spacing: 0; }
+    .ap-table td:nth-child(2) { font-family: var(--font-mono); font-size: 0.8rem; width: 55%; }
+    .ap-table td:nth-child(3) { color: var(--muted); }
+    .ap-table tfoot td { border-bottom: 0; font-size: 0.74rem; color: var(--muted); padding-top: 6px; white-space: normal; }
+    .ap-table tbody tr:hover td { background: var(--oat); }
+    .ap-bar { display: inline-block; width: calc(var(--w) * 1.3); max-width: 130px; height: 7px; border-radius: 2px; background: var(--clay); opacity: 0.75; margin-right: 8px; }
+    .atlas-checks ol { margin: 6px 0 0; padding-left: 22px; max-width: 820px; }
+    .atlas-checks li { font-family: var(--font-serif); font-size: 1rem; line-height: 1.6; color: var(--ink); padding: 2px 0; }
+    .ac-links { font-family: var(--font-sans); font-size: 0.78rem; color: var(--muted); margin-left: 4px; }
+    .ac-links button { font: inherit; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: rgba(20,20,19,0.25); text-underline-offset: 2px; }
+    .ac-links button:hover { color: var(--ink); }
+    .atlas-link { margin: 14px 0 0; font-family: var(--font-serif); font-size: 0.98rem; color: var(--ink-2); }
+    .atlas-link a { color: var(--ink); text-decoration: underline; text-decoration-color: rgba(20,20,19,0.35); text-underline-offset: 3px; border-bottom: 0; }
+    @media (max-width: 1060px) { .ad-cols { grid-template-columns: 1fr; gap: 6px; } }
+    @media (max-width: 900px) {
+      .atlas-method { grid-template-columns: 1fr 1fr; }
+      .atlas-papers { grid-template-columns: 1fr; }
+      .atlas-grid { grid-template-columns: 1fr; }
+      .atlas-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+      .atlas-filters::-webkit-scrollbar { display: none; }
+      .atlas-filters button { flex: 0 0 auto; }
+      .atlas-list { position: static; flex-direction: row; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px; scrollbar-width: thin; }
+      .atlas-item { flex: 0 0 auto; min-width: 168px; scroll-snap-align: start; border-color: var(--border); }
+      .atlas-item.dim { display: none; }
+      .ad-head { flex-direction: column; gap: 10px; }
+      .ad-kpi { text-align: left; }
+      .ad-kpi em { left: 0; right: auto; }
+    }
+    @media (max-width: 600px) {
+      .atlas { padding: 12px 10px; }
+      .atlas-method { grid-template-columns: 1fr; }
+      .ad-head h3 { font-size: 1.45rem; }
+      .ax-t.qa th:nth-child(2), .ax-t.qa td:nth-child(2) { display: none; }
+    }
+    /* Language switch + Chinese typography */
+    .lang-switch { display: inline-flex; flex-shrink: 0; margin-left: 14px; padding: 2px; border: 1px solid var(--border); border-radius: 999px; background: var(--paper); }
+    .lang-switch button { font-family: var(--font-sans); font-size: 0.76rem; font-weight: 500; color: var(--muted); background: none; border: 0; border-radius: 999px; padding: 3px 11px; cursor: pointer; min-height: 26px; }
+    .lang-switch button:hover { color: var(--ink); }
+    .lang-switch button.on { background: var(--ink); color: var(--paper); }
+    html.lang-zh { --font-serif: "Source Serif 4", "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", "STSong", "SimSun", Georgia, serif; }
+    html.lang-zh h2, html.lang-zh h3, html.lang-zh h4, html.lang-zh .hl-head, html.lang-zh .hero-subtitle, html.lang-zh .gc-title, html.lang-zh .bridge-head h2, html.lang-zh .ad-head h3 { letter-spacing: 0; }
+    html.lang-zh em, html.lang-zh i, html.lang-zh .fn-note, html.lang-zh .hl-scroll-cue, html.lang-zh .am-if, html.lang-zh .bc-tip, html.lang-zh .gc-or, html.lang-zh .gc-bubble, html.lang-zh .bridge span, html.lang-zh .bc-q em { font-style: normal; }
+    html.lang-zh .prose p, html.lang-zh .row-list .rc, html.lang-zh .qa .ans, html.lang-zh .pillar-head p, html.lang-zh .sec-desc, html.lang-zh .atlas-detail section p, html.lang-zh .hl-one, html.lang-zh .apple-sub { line-height: 1.8; }
+    html.lang-zh .navlinks a { font-size: 0.86rem; }
+    .ad-gloss { font-family: var(--font-serif); font-size: 0.9rem; line-height: 1.6; color: var(--muted); margin: 0 0 8px; }
+    @media (max-width: 768px) { .lang-switch { margin: 0 6px 0 4px; } .lang-switch button { padding: 3px 8px; } }
+    /* Nav row: overflow to the right (scrollable) instead of clipping the first links */
+    .navlinks { justify-content: flex-start; }
+    .navlinks > a:first-child { margin-left: auto; }
+    @media (max-width: 1240px) { .navlinks { gap: 14px; } .navlinks a, html.lang-zh .navlinks a { font-size: 0.8rem; } .brand { font-size: 0.88rem; } }
+    .topnav .container { max-width: 1360px; }
+    .navlinks.fade-l { -webkit-mask-image: linear-gradient(to right, transparent, #000 32px); mask-image: linear-gradient(to right, transparent, #000 32px); }
+    .navlinks.fade-r { -webkit-mask-image: linear-gradient(to left, transparent, #000 32px); mask-image: linear-gradient(to left, transparent, #000 32px); }
+    .navlinks.fade-l.fade-r { -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
   </style>
 </head>
 <body>
@@ -1658,9 +1800,11 @@
         <a href="#conclusion">Conclusion</a>
         <a href="#qa">Q&amp;A</a>
         <a href="#experiments">Experiments</a>
+        <a href="#shortcut-atlas">Shortcut Atlas</a>
         <a href="#case-study">Case Study</a>
         <a href="#bibtex">BibTeX</a>
       </div>
+      <div class="lang-switch" role="group" aria-label="Language"><button type="button" data-lang="en" onclick="setPageLang('en')">EN</button><button type="button" data-lang="zh" onclick="setPageLang('zh')" lang="zh-CN">中文</button></div>
     </div>
   </nav>
 
@@ -1781,8 +1925,8 @@
                 <button type="button" class="g-pill-btn" id="btn-seed-rand" onclick="setSeedType('random')">&#128256;</button>
               </div>
               <div class="g-pill-group" role="group" aria-label="Language">
-                <button type="button" class="g-pill-btn active" id="btn-lang-en" onclick="setGameLang('en')">EN</button>
-                <button type="button" class="g-pill-btn" id="btn-lang-zh" onclick="setGameLang('zh')">中</button>
+                <button type="button" class="g-pill-btn active" id="btn-lang-en" onclick="setPageLang('en')">EN</button>
+                <button type="button" class="g-pill-btn" id="btn-lang-zh" onclick="setPageLang('zh')">中</button>
               </div>
               <button type="button" class="g-icon-btn" id="btn-sound" onclick="toggleSound()" title="Sound effects">&#128266;</button>
               <button type="button" class="g-icon-btn" id="btn-music" onclick="toggleMusic()" title="Music">&#127925;</button>
@@ -2238,12 +2382,13 @@
             </label>
             <div class="chart-scroll wide"><svg id="svg-audit" class="chart" viewBox="0 0 820 350" aria-label="Gain audit chart"></svg></div>
             <div class="legend">
-              <span><span class="bx" style="background:#2563eb;"></span>Reported</span>
-              <span><span class="bx" style="background:#d97706;"></span>Baseline + 1 rule</span>
-              <span><span class="bx" style="background:#94a3b8;"></span>After eval repair</span>
+              <span><span class="bx" style="background:#3e6a9e;"></span>Reported</span>
+              <span><span class="bx" style="background:#c0703f;"></span>Baseline + 1 rule</span>
+              <span><span class="bx" style="background:#a3a199;"></span>After eval repair</span>
             </div>
           </div>
         </details>
+        <p class="atlas-link">Which loophole, on which benchmark, how it was found and how released artifacts use it: see the <a href="#shortcut-atlas">shortcut atlas</a> below.</p>
         <div class="bridge">
           <span>Once shortcuts are removed, do genuine task skills even exist&mdash;or can LLMs simply not propose them?</span>
           <a href="#candidate-level">Step III &middot; Proposal vs. Selection &darr;</a>
@@ -2399,16 +2544,87 @@
         </details>
         <div class="bridge">
           <span>Curious what a genuinely helpful&mdash;yet invisible to selectors&mdash;skill actually looks like inside?</span>
-          <a href="#case-study">06 Inspect concrete skills &darr;</a>
+          <a href="#shortcut-atlas">06 Shortcut atlas: benchmark by benchmark &darr;</a>
         </div>
       </div>
     </section>
 
     <!-- ================= 6. CASE STUDY ================= -->
-    <section id="case-study" class="block band">
+    <!-- ================= 6. SHORTCUT ATLAS ================= -->
+    <section id="shortcut-atlas" class="block band">
       <div class="container">
         <div class="sec-head">
-          <div class="sec-num"><b>06</b>Case study</div>
+          <div class="sec-num"><b>06</b>Audit</div>
+          <div>
+            <h2>Where Benchmarks Leak: A Shortcut Atlas</h2>
+            <p class="sec-desc">We audited the largest reported gains on twelve benchmarks with three models. On eight of them, the evaluation released with the method admits a <em>shortcut</em>: one behavior that the grader rewards on most tasks at once, large enough for even a noisy evaluation to pick up. Choose a benchmark to see the loophole, what the grader actually sees, how released artifacts earn their gain, and what is left once the evaluation is repaired.</p>
+          </div>
+        </div>
+
+        <div class="atlas-method">
+          <div class="am-card">
+            <div class="am-k">Test 1 &middot; One sentence</div>
+            <p>An LLM agent goes through the artifacts released with GEPA and SkillOpt-Lite and those evolved in our grid, instruction by instruction, and flags what could explain the gain. We check each flag by hand against the grader and append the most responsible instruction, as a single rule, to the <b>unevolved</b> baseline. The rule is frozen before the run.</p>
+            <p class="am-if">If one sentence recovers the gain, the gain is a single behavior, not an accumulation of skills.</p>
+          </div>
+          <div class="am-card">
+            <div class="am-k">Test 2 &middot; Repair the evaluation</div>
+            <p>Restore the benchmark&rsquo;s official evaluation where the method&rsquo;s port departs from it, or grade answers by meaning instead of surface form (exact match, or two LLM judges that see only the question, the reference and the extracted answer both accept). Then re-score the <b>same</b> artifacts.</p>
+            <p class="am-if">If the gain disappears, it came from the evaluation, not from the capability the benchmark intends to measure.</p>
+          </div>
+        </div>
+
+        <div class="atlas" id="atlas">
+          <div class="atlas-filters" id="atlas-filters" role="tablist" aria-label="Filter by type of shortcut"></div>
+          <div class="atlas-grid">
+            <div class="atlas-list" id="atlas-list" role="listbox" aria-label="Benchmarks"></div>
+            <article class="atlas-detail" id="atlas-detail" aria-live="polite"></article>
+          </div>
+          <div class="fn-tip hidden"></div>
+          <p class="atlas-foot">Sources: Appendix &ldquo;Gain Audit&rdquo; of the paper (shortcut, repair and rule tables; per-benchmark results; headroom after repair) and our audit logs. Rules are quoted as run; the full text is released with our code. Reported gains on GEPA and SkillOpt-Lite benchmarks are those of the released artifacts transferred to our models, typically smaller than on the model they were optimized for.</p>
+        </div>
+
+        <div class="atlas-tail">
+          <div class="atlas-papers">
+            <div class="ap-left">
+              <h3>What the method papers report</h3>
+              <p class="atlas-p">Main results of nine agent-evolution papers: 178 benchmark&ndash;model results, 171 with an optimization competitor.</p>
+              <div class="ap-stats">
+                <div><b>0 / 178</b><span>report an error bar or variance</span></div>
+                <div><b>6 / 178</b><span>average over several evolution runs</span></div>
+                <div><b>3.4 pp</b><span>median lead over the strongest competitor, about one single-run SD</span></div>
+                <div><b>15</b><span>results where the strongest competitor is at or below the baseline</span></div>
+              </div>
+            </div>
+            <table class="ap-table">
+              <thead><tr><th>Paper</th><th>Median lead</th><th>Runs</th></tr></thead>
+              <tbody>
+                <tr><td>GEPA</td><td><span class="ap-bar" style="--w:24%"></span>2.5</td><td>n/s</td></tr>
+                <tr><td>ACE</td><td><span class="ap-bar" style="--w:100%"></span>10.4</td><td>n/s</td></tr>
+                <tr><td>ReasoningBank</td><td><span class="ap-bar" style="--w:35%"></span>3.6</td><td>n/s</td></tr>
+                <tr><td>Trace2Skill</td><td><span class="ap-bar" style="--w:73%"></span>7.6</td><td>3</td></tr>
+                <tr><td>SkillOpt</td><td><span class="ap-bar" style="--w:29%"></span>3.0</td><td>n/s</td></tr>
+                <tr><td>SkillOpt-Lite</td><td><span class="ap-bar" style="--w:19%"></span>2.0</td><td>n/s</td></tr>
+                <tr><td>Meta-Harness</td><td><span class="ap-bar" style="--w:37%"></span>3.8</td><td>n/s</td></tr>
+                <tr><td>HarnessLens</td><td><span class="ap-bar" style="--w:8%"></span>0.8</td><td>1</td></tr>
+                <tr><td>AHE</td><td><span class="ap-bar" style="--w:0%"></span>0.0</td><td>1</td></tr>
+              </tbody>
+              <tfoot><tr><td colspan="3">Lead in pp. n/s: a single score, number of runs not stated.</td></tr></tfoot>
+            </table>
+          </div>
+
+          <div class="atlas-checks">
+            <h3>Before you trust a gain</h3>
+            <ol id="atlas-checklist"></ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="case-study" class="block">
+      <div class="container">
+        <div class="sec-head">
+          <div class="sec-num"><b>07</b>Case study</div>
           <div>
             <h2>Inspecting Concrete Skills</h2>
             <p class="sec-desc">Good evolved skills exist&mdash;exact-identifier and tokenizer-fidelity rules that transfer across tasks.</p>
@@ -2437,7 +2653,7 @@
     <section id="bibtex" class="block">
       <div class="container">
         <div class="sec-head">
-          <div class="sec-num"><b>07</b>Citation</div>
+          <div class="sec-num"><b>08</b>Citation</div>
           <div><h2>BibTeX</h2></div>
         </div>
         <div class="sec-body">
@@ -2471,6 +2687,54 @@
   </div>
 
   <script>
+    // =====================================================================
+    // i18n. English lives in the HTML. Chinese for static text blocks is looked up by a hash of the
+    // block's English HTML, so an edited English block falls back to English instead of showing a
+    // stale translation. Dynamic text (figures, atlas, explorers, game) asks L(en, zh) when rendering.
+    // =====================================================================
+    let PAGE_LANG = "en";
+    const L = (en, zh) => (PAGE_LANG === "zh" && zh != null ? zh : en);
+    const I18N_ZH = {"18ql3nv":"Resolution Hypothesis","1hbzpbj":"发现","1aomyse":"小游戏","1bpavij":"游戏 → 论文","19iqu3t":"先读这里","thnxru":"概览","1uk4w32":"结论","1t9rlc0":"问答","dxciab":"实验","1el0md4":"Shortcut 图谱","ups3wc":"案例","yzmziv":"BibTeX","1mdhzwq":"实证研究 · arXiv:2611.23068","1ks6088":"The Resolution Hypothesis","j38nvl":"智能体演化的关键在于识别改进","1ht1bg0":"智能体已经能提出真实的改进。演化之所以停滞，是因为负责在其中做选择的评测器实际上是在抛硬币。","14rn70d":"Yuanhao Zeng<sup>1,2,3,*</sup>","15r1hi":"Shaocheng Lan<sup>1,2,*</sup>","1waae46":"Ao Lu<sup>1,2,*</sup>","1mljqs8":"Kuang Yan<sup>2</sup>","m928i1":"Heng Lin<sup>2</sup>","1vchcpo":"Xinang Xu<sup>2</sup>","1v8mea1":"Yexin Li<sup>3</sup>","11sh4oc":"Ruo Shan<sup>2</sup>","1q0fdw2":"Kan Ren<sup>1,†</sup>","1thtqak":"<sup>1</sup> 上海科技大学","rcnlai":"<sup>2</sup> 字节跳动","1v630bh":"<sup>3</sup> BIGAI","hlz6ft":"* 同等贡献 · † 通讯作者：<a href=\"mailto:zengyh2025@shanghaitech.edu.cn\">zengyh2025@shanghaitech.edu.cn</a>，<a href=\"mailto:renkan@shanghaitech.edu.cn\">renkan@shanghaitech.edu.cn</a>","xu7li8":"阅读论文","1ca7mnp":"PDF","1jdup01":"博客","1gyb24r":"试玩：你能赢过硬币吗？","b6rpxt":"规模","ntnagu":"&gt;10M 次 LLM 调用 · 400K CPU 小时","6ikx1":"问题","tx2y4m":"评测能否区分真实的改进与侥幸的一次运行？","1ch7ihv":"从这里开始","zwn0yw":"先读这里 ↓","1cbbwq5":"<span>01</span>提出环节有效","1qmuld1":"好的 skill 已经存在。","zmmhi8":"只需一次性采样 100 个候选 skill，池中就已有真正跨任务胜出的 skill：<b>Quality@100 = 61.8%</b>，比 null 池高 <b>+3.4 pp</b>。","1nswbsp":"<span>02</span>识别环节失效","izgz4f":"评测器的挑选与随机无异。","1pwj8s1":"执行门控（<b>49.7%</b>）和 LLM judge（<b>45.4–49.0%</b>）选中更优候选的频率并不比抛硬币高，于是训练中的增益变成了测试中的下降。","1i3lc92":"接下来是一个 90 秒的小游戏。你会像演化中的智能体那样挑选升级，看看能否赢过硬币。<span class=\"chev\">↓</span>","hshhmv":"刚才发生了什么 → 论文","f4upeo":"你玩的游戏就是我们的实验。","p43ol6":"每个被提出的升级都是我们 Terminal-Bench 运行中真实的 SKILL.md。自我改进（RSI）的智能体挑选升级的方式，和你刚才完全一样。","nsdli6":"第 1 步 · 谜题","1sbvk86":"Terminal-Bench 上 4 选 1 挑选方法（随机：25%）","siggou":"游戏中：误差条相互重叠","1ah3x87":"阅读 →","1n2xh5u":"第 2 步 · 假象","17cxtf":"修复评分器后报告增益的中位数（pp）","cpyke9":"游戏中：第 5 轮的评分器修复","1ctglf4":"第 3 步 · 拆分","1qa2qnf":"1 次运行的选择准确率 · LLM judge 45–49%","7ionih":"游戏中：测 2 次 + 1 个 judge ≈ 抛硬币","1crowpm":"第 4 步 · 漂移","nxwvke":"vs","4meljo":"in-loop 增益 vs. 8× 重新评测后的增益（pp）","1x3l037":"游戏中：账面估值 vs. 真实回报","1pob5wr":"再玩一次","1of48mm":"开始阅读 ↓","1vu11l7":"<b>01</b>前言","gvy6er":"阅读之前","y9m5zt":"为什么","hyvdr7":"<strong>我们检验的是测量工具，而不是自我改进智能体这一愿景。</strong>方法排名在不同研究之间反复颠倒，因此我们提出一个基础问题：当智能体修改自身的 prompt、skill 或 harness 时，标准评测能否可靠地区分真实的改进与侥幸的一次运行？","1srhhlp":"核心结论","a70t4":"瓶颈在于在噪声下<strong>识别</strong>真实的改进，而不是<strong>提出</strong>改进。","1rqj4ki":"直觉","1toab1a":"Var","wjjtyq":"<strong>冻结权重下的修改要通过带噪声的多轮 rollout 才能起作用。</strong>Rollout 噪声（σ²）和运行间漂移（τ²）决定了评测 resolution 的下限；当增益低于这一下限时，贪心接受收获的是运气，而不是更好的 skill。","4f3z5q":"我们不主张","tbgibd":"<strong>我们并不否定智能体演化，也不质疑以往研究者的诚意。</strong>Proposer 是有效的，甚至 shortcut 也印证了：演化会优化任何高出噪声下限的信号。要取得进展，需要四点转变：","93946k":"<strong>低方差的过程检查：</strong>程序化的行为诊断比二元判定的噪声低 13×–57×。","1aw8yfh":"<strong>分组件评测：</strong>把 proposer（Quality@K vs. null）和 selector 分开评测。","1e3hrxr":"<strong>考虑 resolution 的报告：</strong>在给出点估计分数的同时公布 <span class=\"mth\"><span class=\"hat\">σ</span></span> 和 <span class=\"mth\"><span class=\"hat\">τ</span></span>。","g3bu9y":"<strong>更高 resolution 的设定：</strong>更多的验证 rollout，或确定性的程序环境反馈。","n0dm6y":"接下来：如果噪声会模糊改进，为什么论文还在不断报告相互矛盾的胜出，以及在某些任务上的大幅跃升？","1rok4lp":"02 介绍我们的工作 ↓","jgim9t":"<b>02</b>设定","1ktw84k":"介绍我们的工作","19crusr":"<strong>为什么演化在一些 benchmark 上停滞，却在另一些上宣称 +10–40 pp？</strong>各方法在不同论文中互有胜负：在 Terminal-Bench 上停滞，在别处却大幅跃升。<strong>The Resolution Hypothesis：</strong>当增益高于评测 resolution 时，演化会累积增益；当增益低于它时，演化只会随噪声漂移。","nenaoy":"点击放大","1mmfrdx":"<b>图 1.</b> 每步增益落在单次运行的噪声带内，由此得出预测 P1–P3。","1jjc6lf":"P1 · 真实改进已存在","1w90oqn":"Proposer 能找到真实增益","x0dd85":"候选池中包含能在 held-out 上带来超出运气的质量提升的 artifact。","17a51cp":"P2 · 选择失效","y0jvtr":"Selector 接近随机水平","62p51m":"执行分数和基于轨迹的 LLM judge 都无法可靠地为候选排序。","4x2ded":"P3 · 误差叠加","1ccor6x":"噪声随轮次累积","1tcywuu":"贪心接受抬高了 in-loop 分数，而各次运行却彼此发散。","mfecc2":"配置（7 种方法，6 个模型）","1ugopgq":"演化运行（8–16× 评测）","wes4a5":"&gt;2.1M","10f47b7":"轨迹（&gt;10M 次 LLM 调用）","6tkcfk":"3.4 pp","infr8q":"文献中领先幅度的中位数（171 个结果）","1d5or44":"评测修复后的 pp 中位数","1omhpwn":"1 次 rollout 的选择准确率","1iojxpj":"那么，150 个配置和 1,030 次运行究竟揭示了什么？下面是 60 秒版本的回答。","3tfn52":"03 结论 ↓","1sd70td":"<b>03</b>发现","1ucq23e":"单次运行的排名取决于运气。","6162n7":"在 9 篇论文的 171 个结果中，3.4 pp 的领先幅度中位数在 &gt;60% 的配对上低于单次运行的 SD；Terminal-Bench 上 4 选 1 的挑选准确率为 33%（随机为 25%）。","u0nve4":"报告的 10–40 pp 增益反映的是评测 shortcut。","amt28q":"对 12 个 benchmark × 3 个模型的审查表明，一句话规则可以复现 &gt;3 pp 增益中的 90%（中位数）；修复评测后，增益从 17.6 降至 0.8 pp。","1pjaib9":"Proposer 能找到真实增益；selector 只有随机水平。","1847z1q":"Quality@100 达到 61.8%（比 null 高 +3.4 pp；共享 skill 的质量跨度 &gt;15 pp），而 1 次 rollout（49.7%）、2 次 rollout（48.6%）和 LLM judge（45.4%–49.0%）都在 50% 附近。","se1sco":"贪心选择的误差随轮次累积。","1cqhkpk":"In-loop 验证分数上升 +6.9 至 +9.0 pp，而 8× 验证重新评测的变化为 +0.35 至 −3.21 pp，且 <span class=\"mth\"><span class=\"hat\">τ</span><sup>2</sup></span> 增大到 4.2–24.5 pp²。","1jtcttm":"对 shortcut 的结论、选择预算，或者这是否只是“常识”有疑问？接下来请看我们的直接回应。","napbxj":"04 问答 ↓","o0ure3":"点击任意处或按 Esc 关闭","rnpevl":"<b>04</b>问答","9hrn2b":"我们预想到的问题","4qhtsf":"Q01","1ggmj2t":"你们是在说智能体演化不起作用，还是说之前的论文有问题？","3ahp2r":"<strong>都不是——proposer 确实有效，以往的结果反映的是一个未被测量的噪声下限，而非有意为之。</strong>被测试的 proposer 能带来真实的 held-out 提升（Quality@100 达到 61.8%）；而只报告单次运行的做法，在 rollout 方差（Var(Ŷ) = σ² + τ²）被量化之前就已成为惯例。","50hfhe":"Q02","98dse0":"方差大会让迭代和识别改进变得困难——这不就是常识吗？","qqmbxo":"原则上是的——但在实践中，社区一直基于相反的前提行事，而且问题的严重程度出人意料。","1p6s6ex":"<strong>常规报告方式忽略了它：</strong>在 9 篇智能体演化论文的 171 个结果中，报告方差（<span class=\"mth\"><span class=\"hat\">σ</span></span> 或 <span class=\"mth\"><span class=\"hat\">τ</span></span>）的有 0 个，对 &gt;1 次演化运行取平均的仅有 6 个，3.4 pp 的领先幅度却被当作可靠的排名。","atdixw":"<strong>直观的 selector 依然失效：</strong>即便 proposer 带来了 +3.4 pp 的 Quality@100 提升空间，1 次 rollout（49.7%）、2 次 rollout（48.6%）和基于轨迹的 LLM judge（45.4%–49.0%，<em>r</em> = 0.054）都接近随机水平。","i2tbyz":"<strong>为什么这会让研究者意外：</strong>即便理论上知道噪声存在，社区也很少预料到它在实践中的影响如此严重——真实的 skill 增益已经低于当前 selector 的 resolution。","5ah16d":"Q03","2um9vd":"我们的方法在一个已发表的 benchmark 上取得了 +20–40 pp——为什么说这是评测 shortcut？","5semsx":"<strong>找到一个 +20–40 pp 的杠杆确实是真正的优化，但它反映的是整个 benchmark 层面的约定，而不是细粒度的任务 skill。</strong>在权重冻结的情况下，一条全局规则——比如对齐严格的解析器或某个 benchmark 变体——就能一次性提升大部分任务（对 &gt;3 pp 的增益，一句话恢复比例的中位数为 90%）。修复评测后，增益中位数从 17.6 降到 0.8 pp。","3cjtbk":"Q04","lfen14":"Meta-Harness、AHE、ReasoningBank、GEPA 或 SkillOpt 呢——这 7 种方法都受到同样的影响吗？","4hsgo1":"<strong>只要单步增益低于 resolution，文本 artifact 和 harness 两类方法都面临同一个瓶颈。</strong>在 6 个模型（150 个配置）上的 4 种文本方法（GEPA、SkillOpt-Lite、Trace2Skill、ReasoningBank）和 3 种 harness 方法（HarnessLens、Meta-Harness、AHE）中，问题并不只出在某个 proposer 上——在给 +1–3 pp 的改进排序时，它们都受困于稀疏的终局反馈。","3mjf0j":"Q05","175mgbn":"为什么测试 1–2 次 rollout 或 LLM judge？对更多 rollout 取平均不就能解决选择问题吗？","168qeyj":"<strong>标准循环用 1–2 次 rollout 以控制开销；把验证扩大到 16× 有帮助，但内循环成本也变为 16×。</strong>在标准预算下，基于执行的选择（49.7% / 48.6%）和 LLM judge（45.4%–49.0%）都接近抛硬币。将验证提高到 16× 后，平均测试分数 61.4% → 64.4%，最佳运行 64.8% → 72.7%，这促使我们寻找更便宜的低方差诊断手段。","3wj0pi":"Q06","9t9iow":"Quality@K 随 K 上升，难道不只是噪声分数上的“赢家诅咒”吗？","fuityu":"<strong>Equal-Quality Null：</strong>扣除假设全部 100 个 skill 真实质量相同时，从 <em>K</em> 个中取最大值的精确期望曲线。","wknedn":"<strong>互不重叠的 held-out 任务：</strong>在 10 个互不重叠的测试任务上（每个 16 次 rollout），Quality@100 达到 61.8%（比 null 高 +3.4 pp）。","1an64cb":"<strong>单个共享 skill 的分数跨度：</strong>每个 skill 进行 160 次测试 rollout（2h 预算），单个 skill 之间的跨度 &gt;15 pp（最好 57.5%，平均 49.2%，最弱 41.9%）。","46imeh":"Q07","10wp0ue":"确定性程序演化（如 KernelAgent、AlphaEvolve、ARC-AGI）能稳步累积提升——这与你们的结论矛盾吗？","4wz8dp":"<strong>它从结构上降低了评测噪声，因此反而支持 Resolution Hypothesis。</strong>演化任务特定的代码时，确定性程序可以低成本地并行重新评测，并提供更丰富的运行时诊断，使渐进的增益能够越过 resolution——而冻结权重下的文本 / harness 修改由随机的多轮 rollout 打分，做不到这一点。","6of1n8":"Q08","1r5b7s8":"更强的前沿模型会自然解决评测 resolution 的问题吗？","1es8wpc":"<strong>在最强到 Kimi-K3、GLM-5.2、GPT-5.6 和 DeepSeek-V4-Flash 的 6 个模型上，噪声主要在 benchmark 饱和处才缩小。</strong>在 ALFWorld 上，更强的模型只在接近上限、几乎没有提升空间时噪声才更低。在尚未饱和的 Terminal-Bench 上，各档模型的评测噪声中位数都维持在 3.5–4.0 pp 左右。","6yenc7":"Q09","1agi85x":"Benchmark 作者、方法开发者和审稿人现在应该做出哪些改变？","19gc83x":"<strong>报告 <span class=\"mth\"><span class=\"hat\">σ</span></span> 和 <span class=\"mth\"><span class=\"hat\">τ</span></span>：</strong>在给出点估计分数的同时，公布评测噪声和运行间方差。","x5xi40":"<strong>将 proposer 与 selector 解耦：</strong>用 Quality@K 相对 null 的差距评估 proposer，用固定候选池上被选中 artifact 的曲线评估 selector。","1kgkoic":"<strong>使用低方差的行为检查：</strong>程序化的中间诊断可将评测噪声降低 13×–57×。","1nk6gu8":"准备好查看四步证据链，并交互式地检验我们的数字了吗？","n9fuhz":"05 实验 ↓","ceyj9u":"<b>07</b>案例","1hq9zh6":"查看具体的 skill","rn17cm":"演化出的好 skill 确实存在——例如能跨任务迁移的精确标识符规则和 tokenizer 保真规则。","1e59p3d":"查看 artifact · seed-027 / seed-099 / seed-058","1e8xk9e":"seed-027 · +11.4 pp","1gv8a4x":"seed-099 · +11.4 pp","1mn6myk":"seed-058 · 100% mteb-retrieve","fl7e8n":"<b>08</b>引用","s6g5lw":"复制","a3brbp":"The Resolution Hypothesis · arXiv:2611.23068 · 2026","z75vnd":"通讯作者：<a href=\"mailto:zengyh2025@shanghaitech.edu.cn\">zengyh2025@shanghaitech.edu.cn</a>，<a href=\"mailto:renkan@shanghaitech.edu.cn\">renkan@shanghaitech.edu.cn</a>","1hi3ubw":"<b>05</b>证据","konlz5":"分四步看证据","1nihtnm":"沿着论证逐步推进：从方法排名的不稳定，到演化循环为何停滞。展开任一交互探索，可亲自检验我们的实证数字。","ipysme":"第一步 · 谜题","olhru0":"问题 1 · 单次演化运行能区分两个方法吗？","1nanys5":"单次运行的排名低于 resolution","1hka9i7":"在四个审计过的 benchmark 上，&gt;60% 的同 benchmark 方法对之间的差距小于单次运行的一个 SD；在 Terminal-Bench 上从四个方法中挑最好的一个，只有 33% 的概率挑对（随机：25%）。","102fl0u":"<b>(a)</b> 同 benchmark 的配置对<span class=\"fn-note\" id=\"fig2a-note\"></span>","l9htmh":"<b>(b)</b> 分辨 3.4 pp 领先幅度所需的每方法运行次数<span class=\"fn-note\">方框：方法配置；灰条：领先幅度从 6.6 降至 1.2 pp。</span>","x6irnt":"<b>图 2.</b> (a) 同 benchmark 配置对的全部运行均值之差，与单次运行比较的标准差对比；阴影：差距小于一个标准差。(b) 在 80% 统计功效下识别文献中位领先幅度（3.4 pp）所需的每方法运行次数；灰条：报告的领先幅度的四分位距，1.2–6.6 pp。悬停在点和方框上可查看详情。","o02klh":"交互探索 · 运行预算计算器","b6t50d":"N ≥ 2 · [(z<sub>1−α/2</sub> + z<sub>1−β</sub>) / Δ]<sup>2</sup> · (τ<sup>2</sup> + σ<sup>2</sup>)","l7t2vh":"80% 统计功效，<span class=\"mth\">α</span> = 0.05","1ji95tv":"Terminal-Bench v2.1","12sd12m":"ALFWorld","1yjxkyb":"OfficeQA","ts3n3p":"SpreadsheetBench","1rlmeo2":"目标领先幅度 Δ","17ihqfw":"Q1 1.2","awivls":"中位数 3.4","19pve37":"Q3 6.6","n9fll4":"评测噪声 σ","qtkuxf":"3.87 pp","1xhpgjr":"运行间 SD τ","1f8tu1l":"1.36 pp","102xsjr":"每方法运行次数 N","12vvjht":"1 次运行","1ksjig4":"单次运行 SD","161mknm":"所需运行次数（80%）","efkh3e":"信噪比","1xnf62x":"实际统计功效","1clu8io":"等等：如果典型的方法差距都落在噪声之内，为什么有些论文能报告 +10 到 +40 pp 的增益？","n9yv3u":"第二步 · 审计 +40 pp 的增益 ↓","t0s6k0":"第二步 · 假象","pycpbu":"问题 2 · +10–40 pp 的增益是推翻了低 resolution，还是印证了它？","z6yuw":"报告的大幅增益来自评测 shortcut","ds39j5":"在 12 个 benchmark × 3 个模型上，一句话规则复现了 &gt;3 pp 增益的中位 90%；修复评测后，增益中位数从 17.6 降到 0.8 pp。","ftajij":"<b>(a)</b> 未演化的基线 + 一条规则<span class=\"fn-note\">追加一句话即可找回报告增益的中位 90%。</span>","yjm1w":"<b>(b)</b> 相同 artifact，修复后的评测<span class=\"fn-note\">增益中位数从 17.6 降至 0.8 pp。</span>","bbzv4q":"<b>图 3.</b> 每个点是一个模型–benchmark 组合。(a) 在未演化的基线上追加一条规则，几乎追平完整演化的增益。(b) 在修复后的评测下对相同 artifact 重新评分，增益随之消失；空心标记为各组合在 (a) 中的位置。悬停在某个点上，可在两个面板中找到同一组合。","1nutx5j":"交互探索 · 增益审计（12 个 benchmark × 3 个模型）","dy7col":"模型平均","1rarctc":"GPT-5.4 nano","1jzwx27":"DeepSeek-V4-Flash","m8wzxa":"GPT-5.6 Luna","1nxndrx":"<input type=\"checkbox\" id=\"chk-defect-only\" onchange=\"renderAuditChart()\" style=\"width:18px; height:18px;\"> 仅显示已识别出 shortcut 的 benchmark","1v06b17":"<span class=\"bx\" style=\"background:#3e6a9e;\"></span>报告值","1np4nt7":"<span class=\"bx\" style=\"background:#c0703f;\"></span>基线 + 1 条规则","bkxjg4":"<span class=\"bx\" style=\"background:#a3a199;\"></span>评测修复后","lpjly6":"哪个漏洞、出现在哪个 benchmark、如何被发现、已发布的 artifact 如何利用它：见下方的 <a href=\"#shortcut-atlas\">shortcut 图谱</a>。","1j0xjr0":"去掉 shortcut 之后，真正有用的任务 skill 还存在吗？还是 LLM 根本提不出来？","p3xxi7":"第三步 · 提出与选择 ↓","16os148":"第三步 · 拆分","b3h8ix":"问题 3 · 如果没有 shortcut 演化就停滞，失败的是提出还是选择？","1uui1a8":"提出的候选含有真实增益；选择却停在随机水平","9nbt04":"Quality@100 升至 61.8%（比 equal-quality null 高 +3.4 pp；共享 skill 之间相差 &gt;15 pp），但基于执行的 selector（49.7% / 48.6%）和 LLM judge（45.4%–49.0%）都停在 50% 附近。","m5des3":"<b>(a)</b> Proposal Pool 中的候选质量<span class=\"fn-note\">两种超时设置下，Quality@K 都高于其 equal-quality null。</span>","8cgcor":"<b>(b)</b> selector 在 Selection Pool 中能找回多少<span class=\"fn-note\">执行门控和 LLM judge 几乎没有偏离随机挑选。</span>","1rmjbib":"<b>图 4.</b> (a) 在 Proposal Pool 的 10 个 Terminal-Bench 测试任务上（100 个 skill，每个 16 次 rollout），2 小时预算与原始单任务超时两种设置下的 Quality@K（实线）与匹配的 equal-quality null（虚线）；阴影：95% 区间。(b) 在 Selection Pool 的 11 个任务上，各 selector 挑出的 artifact 相对基线的增益随候选预算 K 的变化；oracle 按 selector 的取值范围截断。悬停可查看数值。","1js3hjr":"交互探索 · Proposal Pool 与 Selection Pool","113nppx":"A · Proposal Pool","1yqsocg":"B · Selection Pool","x8bmib":"超时设置","tzdttx":"2 h","1983no2":"原始","tog316":"候选预算 K","1yomaxa":"K = 100","zkx83f":"Quality@K","147y55k":"Equal-quality null","vsw1eq":"高于 null 的提升空间","jy6mwt":"<span class=\"sw\" style=\"border-color:#2563eb;\"></span>Quality@K（95% 区间）","1bjyjz5":"<span class=\"sw dash\" style=\"border-color:#94a3b8;\"></span>Equal-quality null","8dkait":"<span class=\"sw\" style=\"border-color:#d97706;\"></span>真实差距","9c9yjb":"Oracle","i2496q":"随机","1h2eniu":"执行 n=1 · 49.7%","cpc86h":"SkillOpt/GEPA · 48.6%","1ywknen":"LLM 逐点评分 · 45.4%","ps74ow":"ACE judge · 46.9%","11ar6jd":"相对基线的增益；% = 成对准确率。","19hecuc":"<span class=\"sw\" style=\"border-color:#2563eb;\"></span>Oracle","1jxg83r":"<span class=\"sw\" style=\"border-color:#0d9488;\"></span>LLM 逐点评分","ivwcpu":"<span class=\"sw\" style=\"border-color:#d97706;\"></span>SkillOpt / GEPA","yktohd":"<span class=\"sw\" style=\"border-color:#64748b;\"></span>执行 n=1","1r9ys0v":"<span class=\"sw dash\" style=\"border-color:#94a3b8;\"></span>随机","1wi8j4j":"K = 100 时各任务的 held-out 成功率（%）","18zt8p0":"如果每一步选择都接近 50/50 的抛硬币，为什么演化曲线在循环内看起来一直在上升？","1wn5emv":"第四步 · 运行为何漂移 ↓","qcppkv":"第四步 · 漂移","1lvf6l6":"问题 4 · 一个随机水平的 selector 一轮接一轮地运行，会发生什么？","123gxw":"噪声累积成乐观漂移和方差扩散","1txvtik":"贪心接受会收割向上的噪声：in-loop 分数上升 +6.9 到 +9.0 pp，而 8× 重新评测的变化只有 +0.35 到 −3.21 pp，且 <span class=\"mth\"><span class=\"hat\">τ</span><sup>2</sup></span> 增长到 4.2–24.5 pp²。","mq6vzp":"<b>图 5.</b> in-loop 分数与相同 artifact 经 8× 重新评测的分数对比，均以相对初始化的变化表示；阴影：95% 区间。+6.9 到 +9.0 pp 的 in-loop 增益在重新评测时缩小到 +0.35 至 −3.21 pp 之间。","ctpzi9":"<b>图 6.</b> 各演化轮次的运行间方差 <span class=\"mth\"><span class=\"hat\">τ</span><sup>2</sup></span>：经噪声校正（实线，95% 区间）与未校正（虚线）。","10bbup7":"交互探索 · 乐观漂移与方差扩散","13cmt2n":"GEPA · DeepSeek-V4-Flash","1lk6jim":"GEPA · GPT-5.6 Luna","1y6yh37":"SkillOpt-Lite · DeepSeek-V4-Flash","1qdii":"SkillOpt-Lite · GPT-5.6 Luna","17bz8e6":"In-loop 增益","hd8jip":"8× 重新评测","w9su0b":"乐观偏差","1iy75na":"最终 <span class=\"mth\"><span class=\"hat\">τ</span><sup>2</sup></span>","5rc2fh":"(a) in-loop 增益与重新评测增益（pp）","pgs25a":"(b) 运行间方差 <span class=\"mth\"><span class=\"hat\">τ</span><sup>2</sup></span>（pp²）","nnvw4q":"想看看一个真正有用、却对 selector 不可见的 skill 内部究竟长什么样吗？","7g58lw":"06 Shortcut 图谱：逐个 benchmark ↓","5g23cv":"<b>06</b>审计","sifkod":"Benchmark 的漏洞在哪里：shortcut 图谱","1ezb30h":"我们用三个模型审计了十二个 benchmark 上报告的最大增益。其中八个 benchmark 上，随方法发布的评测存在 <em>shortcut</em>：评分器在大多数任务上同时奖励的某一种行为，其效应大到即使有噪声的评测也能捕捉到。选择一个 benchmark，可以看到其中的漏洞、评分器实际看到的内容、已发布的 artifacts 如何获得增益，以及评测修复后还剩下什么。","193rnv4":"测试 1 · 一句话","1kcs19o":"一个 LLM 智能体逐条检查随 GEPA 和 SkillOpt-Lite 发布的 artifacts，以及我们网格实验中演化出的 artifacts，标记出可能解释增益的内容。我们对照评分器逐一人工核验这些标记，并把对增益贡献最大的那条指令作为一条规则，追加到<b>未演化的</b>基线上。规则在运行前即已固定。","wsnep5":"如果一句话就能复现增益，那么这个增益是单一行为，而不是多项 skills 的累积。","1q64u8m":"测试 2 · 修复评测","1f8rieq":"在方法所用的移植版本偏离 benchmark 官方评测之处恢复官方评测，或按语义而非表面形式评分（精确匹配，或两个只看到问题、参考答案和抽取出的答案的 LLM judge 都判为正确）。然后对<b>同一批</b> artifacts 重新评测。","7nyxdw":"如果增益消失，说明它来自评测，而不是来自该 benchmark 想要衡量的能力。","p4aop4":"来源：论文附录“Gain Audit”（shortcut、修复与规则表；各 benchmark 结果；修复后的提升空间）以及我们的审计日志。规则按实际运行时的原文引用，全文随代码发布。GEPA 和 SkillOpt-Lite 所用 benchmark 上报告的增益，是已发布 artifacts 迁移到我们的模型后的增益，通常小于在其优化时所用模型上的增益。","u2f89u":"方法论文报告了什么","12yov5p":"九篇智能体演化论文的主要结果：178 个 benchmark–模型结果，其中 171 个有优化方法作为对比。","uap5h9":"报告了误差棒或方差","q8g0pj":"对多次演化运行取平均","aapzdt":"相对最强对比方法的领先幅度中位数，约为一个单次运行 SD","ea8dmt":"最强对比方法持平或低于基线的结果","1ynpwih":"论文","10zqfof":"领先幅度中位数","16tz87v":"运行次数","1bi41jy":"GEPA","a0d59n":"n/s","z3tymg":"ACE","1knp4j9":"ReasoningBank","3tku0p":"Trace2Skill","15nan3":"SkillOpt","1g3wcnm":"SkillOpt-Lite","1cpvhn5":"Meta-Harness","5wzbzv":"HarnessLens","q73kq3":"AHE","1nrtefb":"领先幅度单位为 pp。n/s：只报告单个分数，未说明运行次数。","fvpmpn":"在相信一个增益之前"};
+    const PAGE_I18N = { units: [], title: { en: document.title, zh: "Resolution Hypothesis：智能体演化的关键在于识别改进" } };
+    const I18N_SKIP = "script, style, svg, noscript, pre, #game-scroll-track, #atlas-list, #atlas-detail, #atlas-checklist, #atlas-filters, .fn-legend, .fn-tip, #skill-view, .lang-switch";
+    function i18nHash(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36); }
+    function i18nCollect() {
+      const units = [];
+      const walk = el => {
+        if (el.matches && el.matches(I18N_SKIP)) return;
+        const direct = Array.from(el.childNodes).some(n => n.nodeType === 3 && /[A-Za-z]/.test(n.nodeValue));
+        if (direct && el !== document.body) { units.push({ el, en: el.innerHTML, key: i18nHash(el.innerHTML.replace(/\s+/g, " ").trim()) }); return; }
+        Array.from(el.children).forEach(walk);
+      };
+      walk(document.body);
+      PAGE_I18N.units = units;
+    }
+    function i18nResolveLang() {
+      try { const q = new URLSearchParams(location.search).get("lang"); if (q === "zh" || q === "en") return q; } catch (e) {}
+      try { const v = localStorage.getItem("rh-lang"); if (v === "zh" || v === "en") return v; } catch (e) {}
+      return "en";  // English by default (as the game is); Chinese via the switch, ?lang=zh, or a remembered choice
+    }
+    function i18nApplyStatic() {
+      const zh = PAGE_LANG === "zh";
+      document.documentElement.lang = zh ? "zh-CN" : "en";
+      document.documentElement.classList.toggle("lang-zh", zh);
+      PAGE_I18N.units.forEach(u => { const html = (zh && I18N_ZH[u.key]) || u.en; if (u.el.innerHTML !== html) u.el.innerHTML = html; });
+      document.title = zh ? PAGE_I18N.title.zh : PAGE_I18N.title.en;
+      document.querySelectorAll(".lang-switch button").forEach(b => { const on = b.dataset.lang === PAGE_LANG; b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
+    }
+    function i18nRerender() {
+      const safe = f => { try { f(); } catch (e) { console.error("i18n re-render failed", e); } };
+      [renderHeroCharts, renderNativeFigures, renderAtlas, updatePowerSim, renderAuditChart, updateProposalReadout, updateSelectionReadout, renderPerTaskTable].forEach(safe);
+      ["#bench-presets button.active", "#sec7-combos button.active", ".skill-tabs button.active"].forEach(sel => { const b = document.querySelector(sel); if (b) safe(() => b.click()); });
+      safe(() => { if (typeof G !== "undefined" && G.lang !== PAGE_LANG) setGameLang(PAGE_LANG); });
+    }
+    function setPageLang(lang) {
+      if ((lang !== "zh" && lang !== "en") || lang === PAGE_LANG) { if (typeof G !== "undefined" && G.lang !== lang && (lang === "zh" || lang === "en")) setGameLang(lang); return; }
+      PAGE_LANG = lang;
+      try { localStorage.setItem("rh-lang", lang); } catch (e) {}
+      try { const u = new URL(location.href); u.searchParams.set("lang", lang); history.replaceState(null, "", u); } catch (e) {}
+      i18nApplyStatic(); i18nRerender();
+    }
 
     // =========================================================================
     // Empirical datasets (verbatim from paper / result CSVs)
@@ -2480,25 +2744,29 @@
         name: "Terminal-Bench v2.1",
         sigma: 3.87,
         tau: 1.36,
-        note: "Empirical benchmark median across 20 configurations on Terminal-Bench v2.1: σ=3.87 pp (range 2.87–4.49), τ=1.36 pp (0–5.99), typical single-run SD=4.07 pp. Single-run best-of-4 identification rate: 33% (random: 25%)."
+        note: "Empirical benchmark median across 20 configurations on Terminal-Bench v2.1: σ=3.87 pp (range 2.87–4.49), τ=1.36 pp (0–5.99), typical single-run SD=4.07 pp. Single-run best-of-4 identification rate: 33% (random: 25%).",
+        noteZh: "Terminal-Bench v2.1 上 20 个配置的中位数：σ=3.87 pp（范围 2.87–4.49），τ=1.36 pp（0–5.99），典型单次运行 SD=4.07 pp。单次运行从 4 个方法中选出最好者的识别率：33%（随机：25%）。"
       },
       alfworld: {
         name: "ALFWorld",
         sigma: 2.48,
         tau: 2.37,
-        note: "Empirical benchmark median across 37 configurations on ALFWorld: σ=2.48 pp (range 0.71–3.40), τ=2.37 pp (0.34–7.42), typical single-run SD=3.60 pp."
+        note: "Empirical benchmark median across 37 configurations on ALFWorld: σ=2.48 pp (range 0.71–3.40), τ=2.37 pp (0.34–7.42), typical single-run SD=3.60 pp.",
+        noteZh: "ALFWorld 上 37 个配置的中位数：σ=2.48 pp（范围 0.71–3.40），τ=2.37 pp（0.34–7.42），典型单次运行 SD=3.60 pp。"
       },
       officeqa: {
         name: "OfficeQA",
         sigma: 1.95,
         tau: 1.68,
-        note: "Empirical benchmark median across 36 configurations on OfficeQA: σ=1.95 pp (range 1.27–2.60), τ=1.68 pp (0.00–12.33), typical single-run SD=2.54 pp."
+        note: "Empirical benchmark median across 36 configurations on OfficeQA: σ=1.95 pp (range 1.27–2.60), τ=1.68 pp (0.00–12.33), typical single-run SD=2.54 pp.",
+        noteZh: "OfficeQA 上 36 个配置的中位数：σ=1.95 pp（范围 1.27–2.60），τ=1.68 pp（0.00–12.33），典型单次运行 SD=2.54 pp。"
       },
       spreadsheetbench: {
         name: "SpreadsheetBench",
         sigma: 1.46,
         tau: 0.76,
-        note: "Empirical benchmark median across 36 configurations on SpreadsheetBench: σ=1.46 pp (range 0.97–1.98), τ=0.76 pp (0.00–12.20), typical single-run SD=1.67 pp."
+        note: "Empirical benchmark median across 36 configurations on SpreadsheetBench: σ=1.46 pp (range 0.97–1.98), τ=0.76 pp (0.00–12.20), typical single-run SD=1.67 pp.",
+        noteZh: "SpreadsheetBench 上 36 个配置的中位数：σ=1.46 pp（范围 0.97–1.98），τ=0.76 pp（0.00–12.20），典型单次运行 SD=1.67 pp。"
       }
     };
 
@@ -2743,7 +3011,7 @@
       const b = BENCHMARKS[key];
       document.getElementById("slider-sigma").value = b.sigma;
       document.getElementById("slider-tau").value = b.tau;
-      document.getElementById("bench-note").textContent = b.note;
+      document.getElementById("bench-note").textContent = L(b.note, b.noteZh);
       updatePowerSim();
     }
 
@@ -2773,11 +3041,11 @@
       const st = document.getElementById("power-status");
       st.className = "status " + (power >= 0.8 ? "ok" : power >= 0.4 ? "mid" : "bad");
       if (power >= 0.8) {
-        st.textContent = `Resolvable at N = ${nRuns} runs \u2014 ${(power * 100).toFixed(1)}% power \u2265 80% target.`;
+        st.textContent = L(`Resolvable at N = ${nRuns} runs \u2014 ${(power * 100).toFixed(1)}% power \u2265 80% target.`, `N = ${nRuns} 次运行即可识别：统计功效 ${(power * 100).toFixed(1)}%，达到 80% 的目标。`);
       } else if (nRuns === 1) {
-        st.textContent = `Unresolvable at N = 1 run \u2014 requires ${reqN} independent runs per method for 80% power.`;
+        st.textContent = L(`Unresolvable at N = 1 run \u2014 requires ${reqN} independent runs per method for 80% power.`, `N = 1 次运行无法识别：要达到 80% 统计功效，每个方法需要 ${reqN} 次独立运行。`);
       } else {
-        st.textContent = `Underpowered at N = ${nRuns} runs (${(power * 100).toFixed(1)}% power) \u2014 need ${reqN} runs for 80% power.`;
+        st.textContent = L(`Underpowered at N = ${nRuns} runs (${(power * 100).toFixed(1)}% power) \u2014 need ${reqN} runs for 80% power.`, `N = ${nRuns} 次运行时统计功效不足（${(power * 100).toFixed(1)}%）：达到 80% 需要 ${reqN} 次运行。`);
       }
       drawPowerChart(delta, varTot, nRuns, reqN);
     }
@@ -2803,11 +3071,11 @@
         html += `<text x="${m.l - 8}" y="${y + 4}" text-anchor="end" font-size="12" fill="${C.text}" ${MONO}>${Math.round(p * 100)}%</text>`;
       });
       html += `<line x1="${m.l}" y1="${m.t + ch}" x2="${W - m.r}" y2="${m.t + ch}" stroke="${C.axis}"/>`;
-      html += `<text x="${m.l + 6}" y="${yScale(0.8) - 6}" font-size="12" fill="${C.navy}" ${FS}>80% power</text>`;
+      html += `<text x="${m.l + 6}" y="${yScale(0.8) - 6}" font-size="12" fill="${C.navy}" ${FS}>${L("80% power", "80% 统计功效")}</text>`;
       [1, Math.round(maxN * 0.25), Math.round(maxN * 0.5), Math.round(maxN * 0.75), maxN].forEach(n => {
         html += `<text x="${xScale(n)}" y="${m.t + ch + 16}" text-anchor="middle" font-size="12" fill="${C.text}" ${MONO}>${n}</text>`;
       });
-      html += `<text x="${m.l + cw / 2}" y="${H - 5}" text-anchor="middle" font-size="12.5" fill="${C.label}" ${FS}>Independent evolution runs per method (N)</text>`;
+      html += `<text x="${m.l + cw / 2}" y="${H - 5}" text-anchor="middle" font-size="12.5" fill="${C.label}" ${FS}>${L("Independent evolution runs per method (N)", "每个方法的独立演化运行次数（N）")}</text>`;
       html += `<polyline fill="none" stroke="${C.navy}" stroke-width="2" points="${pts.join(' ')}"/>`;
       if (reqN <= maxN) {
         const rx = xScale(reqN);
@@ -2886,7 +3154,7 @@
       const up = xs.map((x, i) => `${X(x).toFixed(1)},${Y(hi[i]).toFixed(1)}`), dn = xs.map((x, i) => `${X(x).toFixed(1)},${Y(lo[i]).toFixed(1)}`).reverse();
       return up.concat(dn).join(" ");
     }
-    const pfText = (x, y, s, o = {}) => `<text class="${o.cls || "fn-axis"}" x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" text-anchor="${o.anchor || "middle"}" font-size="${o.fs || 14}" fill="${o.fill || PF.ink2}" ${o.serif ? PF.serif : PF.sans}${o.rot ? ` transform="rotate(${o.rot} ${(+x).toFixed(1)} ${(+y).toFixed(1)})"` : ""}${o.weight ? ` font-weight="${o.weight}"` : ""}${o.italic ? ' font-style="italic"' : ""}>${s}</text>`;
+    const pfText = (x, y, s, o = {}) => `<text class="${o.cls || "fn-axis"}" x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" text-anchor="${o.anchor || "middle"}" font-size="${o.fs || 14}" fill="${o.fill || PF.ink2}" ${o.serif ? PF.serif : PF.sans}${o.rot ? ` transform="rotate(${o.rot} ${(+x).toFixed(1)} ${(+y).toFixed(1)})"` : ""}${o.weight ? ` font-weight="${o.weight}"` : ""}${o.italic && PAGE_LANG !== "zh" ? ' font-style="italic"' : ""}>${s}</text>`;
     // Grid + tick labels for one panel box b = {x0,x1,y0,y1}
     function pfAxes(b, X, Y, xt, yt, o = {}) {
       const fs = o.fs || 13; let h = "";
@@ -2928,7 +3196,7 @@
     function pfCrosshair(svg, wrap, tip, panels) {
       const guide = document.createElementNS("http://www.w3.org/2000/svg", "g"); guide.setAttribute("class", "pf-guide"); svg.appendChild(guide);
       const pt = svg.createSVGPoint(), hide = () => { guide.innerHTML = ""; tip.classList.add("hidden"); };
-      svg.addEventListener("pointermove", e => {
+      svg.onpointermove = e => {
         pt.x = e.clientX; pt.y = e.clientY; const p = pt.matrixTransform(svg.getScreenCTM().inverse());
         const pan = panels.find(q => p.x >= q.b.x0 - 8 && p.x <= q.b.x1 + 8 && p.y >= q.b.y0 - 8 && p.y <= q.b.y1 + 8);
         if (!pan) return hide();
@@ -2944,8 +3212,8 @@
         tip.innerHTML = `<b>${pan.title ? pan.title + " &middot; " : ""}${pan.fmtX(pan.xs[bi])}</b>${rows}`;
         tip.classList.remove("hidden");
         pfPlaceTip(wrap, tip, svg, gx, pan.b.y0 + 4, "right");
-      });
-      svg.addEventListener("pointerleave", hide);
+      };
+      svg.onpointerleave = hide;
     }
     // Point hover: elements with data-tip; on hover show the tip and spotlight elements sharing data-key
     function pfPointHover(wrap, tip) {
@@ -2959,9 +3227,9 @@
         pfPlaceTip(wrap, tip, svg, (r.left + r.width / 2 - sr.left) * k, (r.top - sr.top) * k, "top");
       };
       const hide = () => { wrap.classList.remove("fn-focus"); wrap.querySelectorAll(".fn-pt.on").forEach(x => x.classList.remove("on")); tip.classList.add("hidden"); };
-      wrap.addEventListener("pointerover", e => { const el = e.target.closest && e.target.closest("[data-tip]"); if (el && !el.classList.contains("gone")) show(el); });
-      wrap.addEventListener("pointerout", e => { if (e.target.closest && e.target.closest("[data-tip]")) hide(); });
-      wrap.addEventListener("click", e => { const el = e.target.closest && e.target.closest("[data-tip]"); if (el && !el.classList.contains("gone")) show(el); else hide(); });
+      wrap.onpointerover = e => { const el = e.target.closest && e.target.closest("[data-tip]"); if (el && !el.classList.contains("gone")) show(el); };
+      wrap.onpointerout = e => { if (e.target.closest && e.target.closest("[data-tip]")) hide(); };
+      wrap.onclick = e => { const el = e.target.closest && e.target.closest("[data-tip]"); if (el && !el.classList.contains("gone")) show(el); else hide(); };
     }
     const pfWrap = id => { const w = document.getElementById(id); return w ? { wrap: w, tip: w.querySelector(".fn-tip") } : null; };
 
@@ -2976,6 +3244,7 @@
     };
     const METHOD_NAME = { gepa: "GEPA", reasoningbank: "ReasoningBank", skillopt_lite: "SkillOpt-Lite", trace2skill: "Trace2Skill", ahe: "AHE", meta_harness: "Meta-Harness",
       harnesslens: "HarnessLens", baseline: "unevolved baseline", baseline_harness: "initial harness" };
+    const MNAME = k => k === "baseline" ? L("unevolved baseline", "未演化的基线") : k === "baseline_harness" ? L("initial harness", "初始 harness") : (METHOD_NAME[k] || k);
     function renderNoiseFig() {
       const A = document.getElementById("svg-fig2a"), Bv = document.getElementById("svg-fig2b"), w = pfWrap("fig2-native"); if (!A || !Bv || !w) return;
       const bmOf = k => NOISE_BM.find(b => b.k === k);
@@ -2985,29 +3254,29 @@
       h += `<polygon points="${b.x0},${Y(1.6).toFixed(1)} ${b.x1},${Y(20).toFixed(1)} ${b.x1},${b.y1} ${b.x0},${b.y1}" fill="${PF.shade}"/>`;
       h += pfAxes(b, X, Y, [2, 5, 10, 20], [0.1, 1, 10], { xgrid: true });
       h += `<line x1="${b.x0}" y1="${Y(1.6).toFixed(1)}" x2="${b.x1}" y2="${Y(20).toFixed(1)}" stroke="${PF.faint}" stroke-width="1.4" stroke-dasharray="6,5"/>`;
-      h += pfText(b.x1 - 8, b.y1 - 12, "gap &lt; 1 SD", { anchor: "end", fs: 14, fill: PF.muted, serif: true, italic: true });
+      h += pfText(b.x1 - 8, b.y1 - 12, L("gap &lt; 1 SD", "差距 &lt; 1 SD"), { anchor: "end", fs: 14, fill: PF.muted, serif: true, italic: true });
       const pairs = PFIG.noise.pairs, below = pairs.filter(p => p[3] < p[2]).length;
       pairs.forEach(p => {
         const [bm, md, sd, gap, m1, m2] = p, B0 = bmOf(bm), M = NOISE_MD[md]; if (!B0 || !M) return;
-        const tipTxt = `<b>${B0.label}</b> &middot; ${M.label}<br>${METHOD_NAME[m1] || m1} vs. ${METHOD_NAME[m2] || m2}<br>gap <b>${gap.toFixed(2)}</b> pp &middot; single-run SD <b>${sd.toFixed(2)}</b> pp`;
+        const tipTxt = `<b>${B0.label}</b> &middot; ${M.label}<br>${MNAME(m1)} vs. ${MNAME(m2)}<br>${L("gap", "差距")} <b>${gap.toFixed(2)}</b> pp &middot; ${L("single-run SD", "单次运行 SD")} <b>${sd.toFixed(2)}</b> pp`;
         h += `<g class="fn-pt" data-tip="${tipTxt.replace(/"/g, "&quot;")}" style="transform:translate(${X(sd).toFixed(1)}px, ${Y(Math.max(yMin, gap)).toFixed(1)}px)"><g class="mk">${markerSvg(M.shape, 0, 0, 4.4, B0.col, 'fill-opacity="0.85" stroke="#ffffff" stroke-width="0.8"')}</g></g>`;
       });
-      h += pfText(b.x0 + (b.x1 - b.x0) / 2, H - 8, "Single-run SD of the comparison (pp, log)", { fs: 14 });
-      h += pfText(20, b.y0 + (b.y1 - b.y0) / 2, "Gap between means (pp, log)", { fs: 14, rot: -90 });
+      h += pfText(b.x0 + (b.x1 - b.x0) / 2, H - 8, L("Single-run SD of the comparison (pp, log)", "比较的单次运行 SD（pp，对数）"), { fs: 14 });
+      h += pfText(20, b.y0 + (b.y1 - b.y0) / 2, L("Gap between means (pp, log)", "均值差距（pp，对数）"), { fs: 14, rot: -90 });
       A.setAttribute("viewBox", `0 0 ${W} ${H}`); A.innerHTML = h;
-      const noteA = document.getElementById("fig2a-note"); if (noteA) noteA.textContent = `${below} of ${pairs.length} pairs (${Math.round(100 * below / pairs.length)}%) differ by less than one single-run standard deviation.`;
+      const noteA = document.getElementById("fig2a-note"); if (noteA) noteA.textContent = L(`${below} of ${pairs.length} pairs (${Math.round(100 * below / pairs.length)}%) differ by less than one single-run standard deviation.`, `${pairs.length} 对配置中有 ${below} 对（${Math.round(100 * below / pairs.length)}%）的差距小于一个单次运行标准差。`);
       // (b) runs per method, box plots on a log axis
       h = ""; b = { x0: 74, x1: 488, y0: 12, y1: 384 };
       const Yb = pfLog(0.6, 400, b.y1, b.y0), slot = (b.x1 - b.x0) / NOISE_BM.length;
       h += pfAxes(b, v => v, Yb, [], [1, 10, 100], { xgrid: false });
       h += `<line x1="${b.x0}" y1="${Yb(1).toFixed(1)}" x2="${b.x1}" y2="${Yb(1).toFixed(1)}" stroke="${PF.faint}" stroke-width="1.3" stroke-dasharray="6,5"/>`;
-      h += pfText(b.x1 - 6, Yb(1) - 8, "single run", { anchor: "end", fs: 14, fill: PF.muted, serif: true, italic: true });
+      h += pfText(b.x1 - 6, Yb(1) - 8, L("single run", "单次运行"), { anchor: "end", fs: 14, fill: PF.muted, serif: true, italic: true });
       const q = (s, p) => { const i = (s.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i); return s[lo] + (s[hi] - s[lo]) * (i - lo); };
       NOISE_BM.forEach((B0, i) => {
         const cx = b.x0 + slot * (i + 0.5), ns = PFIG.noise.runs[B0.k].map(r => r[0]).sort((a, c) => a - c), g = PFIG.noise.grayRaw[B0.k];
         const q1 = q(ns, 0.25), q2 = q(ns, 0.5), q3 = q(ns, 0.75), iqr = q3 - q1;
         const inl = ns.filter(v => v >= q1 - 1.5 * iqr && v <= q3 + 1.5 * iqr), wl = Math.min(...inl), wh = Math.max(...inl), bw = slot * 0.42, gw = slot * 0.74;
-        const tipBox = `<b>${B0.label}</b> &middot; ${ns.length} method configurations<br>runs to resolve 3.4 pp: median <b>${pfNum(q2)}</b> (IQR ${pfNum(q1)}&ndash;${pfNum(q3)}, max ${ns[ns.length - 1]})<br>gray bar: ${Math.ceil(g[0])}&ndash;${Math.ceil(g[1])} runs for margins of 6.6&ndash;1.2 pp`;
+        const tipBox = L(`<b>${B0.label}</b> &middot; ${ns.length} method configurations<br>runs to resolve 3.4 pp: median <b>${pfNum(q2)}</b> (IQR ${pfNum(q1)}&ndash;${pfNum(q3)}, max ${ns[ns.length - 1]})<br>gray bar: ${Math.ceil(g[0])}&ndash;${Math.ceil(g[1])} runs for margins of 6.6&ndash;1.2 pp`, `<b>${B0.label}</b> &middot; ${ns.length} 个方法配置<br>识别 3.4 pp 所需运行次数：中位数 <b>${pfNum(q2)}</b>（IQR ${pfNum(q1)}&ndash;${pfNum(q3)}，最大 ${ns[ns.length - 1]}）<br>灰条：领先幅度 6.6&ndash;1.2 pp 时需 ${Math.ceil(g[0])}&ndash;${Math.ceil(g[1])} 次`);
         h += `<rect class="fn-pt" data-tip="${tipBox}" x="${(cx - gw / 2).toFixed(1)}" y="${Yb(g[1]).toFixed(1)}" width="${gw.toFixed(1)}" height="${(Yb(g[0]) - Yb(g[1])).toFixed(1)}" fill="${PF.shade}" rx="3"/>`;
         h += `<line x1="${cx}" y1="${Yb(wl).toFixed(1)}" x2="${cx}" y2="${Yb(q1).toFixed(1)}" stroke="${B0.col}" stroke-width="1.6"/><line x1="${cx}" y1="${Yb(q3).toFixed(1)}" x2="${cx}" y2="${Yb(wh).toFixed(1)}" stroke="${B0.col}" stroke-width="1.6"/>`;
         [wl, wh].forEach(v => { h += `<line x1="${(cx - bw / 4).toFixed(1)}" y1="${Yb(v).toFixed(1)}" x2="${(cx + bw / 4).toFixed(1)}" y2="${Yb(v).toFixed(1)}" stroke="${B0.col}" stroke-width="1.6"/>`; });
@@ -3015,12 +3284,12 @@
         h += `<line x1="${(cx - bw / 2).toFixed(1)}" y1="${Yb(q2).toFixed(1)}" x2="${(cx + bw / 2).toFixed(1)}" y2="${Yb(q2).toFixed(1)}" stroke="#ffffff" stroke-width="2"/>`;
         PFIG.noise.runs[B0.k].filter(r => r[0] < wl || r[0] > wh).forEach(r => {
           const M = NOISE_MD[r[1]];
-          h += `<circle class="fn-pt" data-tip="<b>${B0.label}</b> &middot; ${M ? M.label : r[1]}<br>${METHOD_NAME[r[2]] || r[2]}: <b>${r[0]}</b> runs per method" cx="${cx}" cy="${Yb(r[0]).toFixed(1)}" r="3.6" fill="${B0.col}" stroke="#fff" stroke-width="0.8"/>`;
+          h += `<circle class="fn-pt" data-tip="<b>${B0.label}</b> &middot; ${M ? M.label : r[1]}<br>${MNAME(r[2])}: ${L("", "每个方法需要 ")}<b>${r[0]}</b>${L(" runs per method", " 次运行")}" cx="${cx}" cy="${Yb(r[0]).toFixed(1)}" r="3.6" fill="${B0.col}" stroke="#fff" stroke-width="0.8"/>`;
         });
         const lines = B0.k === "spreadsheetbench" ? ["Spreadsheet", "Bench"] : B0.k === "terminalbench" ? ["Terminal", "Bench"] : [B0.label];
         h += `<text class="fn-tick" x="${cx.toFixed(1)}" y="${b.y1 + 20}" text-anchor="middle" font-size="13" fill="${PF.ink2}" ${PF.sans}>${lines.map((t, li) => `<tspan x="${cx.toFixed(1)}" dy="${li ? "1.15em" : 0}">${t}</tspan>`).join("")}</text>`;
       });
-      h += pfText(20, b.y0 + (b.y1 - b.y0) / 2, "Runs per method (log)", { fs: 14, rot: -90 });
+      h += pfText(20, b.y0 + (b.y1 - b.y0) / 2, L("Runs per method (log)", "每个方法所需运行次数（对数）"), { fs: 14, rot: -90 });
       Bv.setAttribute("viewBox", `0 0 ${W} ${H}`); Bv.innerHTML = h;
       pfLegend(document.getElementById("fig2-legend"), [NOISE_BM.map(B0 => ({ label: B0.label, col: B0.col, kind: "swatch" })),
         Object.values(NOISE_MD).map(M => ({ label: M.label, col: PF.ink2, kind: "marker", shape: M.shape }))]);
@@ -3038,15 +3307,15 @@
         let h = pfAxes(b, X, Y, [0, 20, 40, 60], [0, 20, 40, 60], { zeroY: 0, fs: 14 });
         h += `<line x1="${X(lo)}" y1="${Y(lo)}" x2="${X(hi)}" y2="${Y(hi)}" stroke="${PF.faint}" stroke-width="1.4" stroke-dasharray="6,5"/>`;
         const ang = -(Math.atan2(b.y1 - b.y0, b.x1 - b.x0) * 180 / Math.PI);
-        h += pfText(X(48), Y(48) - 8, "same as reported", { fs: 13.5, fill: PF.muted, serif: true, italic: true, rot: ang.toFixed(1) });
-        h += pfText(b.x0 + (b.x1 - b.x0) / 2, H - 8, "Reported gain (pp)", { fs: 15 });
+        h += pfText(X(48), Y(48) - 8, L("same as reported", "与报告值相同"), { fs: 13.5, fill: PF.muted, serif: true, italic: true, rot: ang.toFixed(1) });
+        h += pfText(b.x0 + (b.x1 - b.x0) / 2, H - 8, L("Reported gain (pp)", "报告的增益（pp）"), { fs: 15 });
         h += pfText(20, b.y0 + (b.y1 - b.y0) / 2, ylabel, { fs: 15, rot: -90 });
         return h;
       };
-      let ha = frame("Baseline + one rule (pp)"), hb = frame("Gain under repaired evaluation (pp)"), ghosts = "", drops = "", ptsA = "", ptsB = "";
+      let ha = frame(L("Baseline + one rule (pp)", "基线 + 一句话（pp）")), hb = frame(L("Gain under repaired evaluation (pp)", "修复评测后的增益（pp）")), ghosts = "", drops = "", ptsA = "", ptsB = "";
       AUDIT_ROWS.forEach((r, i) => {
         const fam = FAMILY_OF[r.bench] || r.bench, col = famCol(fam), shape = MODEL_STYLE[r.model].shape, key = `${r.bench}|${r.model}`, x = X(r.rep);
-        const tip = `<b>${BENCH_FULL[r.bench] || r.bench}</b> &middot; ${MODEL_STYLE[r.model].label}<br>reported <b>${fmt(r.rep)}</b> &rarr; one rule <b>${fmt(r.rule1)}</b> &rarr; repaired <b>${fmt(r.after)}</b> pp`;
+        const tip = `<b>${BENCH_FULL[r.bench] || r.bench}</b> &middot; ${MODEL_STYLE[r.model].label}<br>${L("reported", "报告")} <b>${fmt(r.rep)}</b> &rarr; ${L("one rule", "一句话")} <b>${fmt(r.rule1)}</b> &rarr; ${L("repaired", "修复后")} <b>${fmt(r.after)}</b> pp`;
         const dot = (y, extra) => `<g class="fn-pt" data-key="${key}" data-tip="${tip}" ${extra || ""} style="transform:translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)"><g class="mk">${markerSvg(shape, 0, 0, 7, col, 'stroke="#ffffff" stroke-width="1.3"')}</g></g>`;
         if (r.rule1 != null) ptsA += dot(Y(r.rule1));
         if (r.after != null) {
@@ -3060,12 +3329,12 @@
       });
       A.setAttribute("viewBox", `0 0 ${W} ${H}`); A.innerHTML = ha + `<g>${ptsA}</g>`;
       Bv.setAttribute("viewBox", `0 0 ${W} ${H}`); Bv.innerHTML = hb + `<g class="fn-drops">${drops}</g><g class="fn-ghosts">${ghosts}</g><g>${ptsB}</g>`;
-      pfLegend(document.getElementById("fig3-legend"), [FAMILY_STYLE.map(f => ({ label: f.label, col: f.col, kind: "swatch", title: f.note || f.label })),
+      pfLegend(document.getElementById("fig3-legend"), [FAMILY_STYLE.map(f => ({ label: f.key === "QA" ? L("QA benchmarks", "QA 类 benchmark") : f.key === "Math" ? L("Math benchmarks", "数学类 benchmark") : f.label, col: f.col, kind: "swatch", title: f.note || f.label })),
         Object.values(MODEL_STYLE).map(md => ({ label: md.label, col: PF.ink2, kind: "marker", shape: md.shape }))]);
       // Panel (b): points start where they stood in (a) and fall to the repaired value the first time the figure scrolls into view.
       const fall = () => { w.wrap.classList.add("fallen"); Bv.querySelectorAll(".fn-pt[data-yb]").forEach(g => { g.style.transitionDelay = (+g.dataset.i * 18) + "ms"; g.style.transform = g.style.transform.replace(/,\s*[-\d.]+px\)/, `, ${g.dataset.yb}px)`); }); };
       const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (reduce || !("IntersectionObserver" in window)) fall();
+      if (reduce || !("IntersectionObserver" in window) || w.wrap.classList.contains("fallen")) fall();
       else { const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { setTimeout(fall, 350); io.disconnect(); } }, { threshold: 0.45 }); io.observe(Bv); }
       pfPointHover(w.wrap, w.tip);
     }
@@ -3076,25 +3345,25 @@
       const K = Array.from({ length: 100 }, (_, i) => i + 1), W = 500, H = 410, b = { x0: 66, x1: 486, y0: 12, y1: 350 };
       const X = pfLog(1, 100, b.x0, b.x1), xt = [1, 3, 10, 30, 100];
       // (a)
-      const Q = PFIG.quality, ST = { "2h": { label: "2-hour budget", col: "#3e6a9e" }, original: { label: "Original timeout", col: "#5e5d59" } };
+      const Q = PFIG.quality, ST = { "2h": { label: L("2-hour budget", "2 小时预算"), col: "#3e6a9e" }, original: { label: L("Original timeout", "原始超时"), col: "#5e5d59" } };
       const Ya = pfLin(37, 65, b.y1, b.y0); let h = pfAxes(b, X, Ya, xt, pfTicks(37, 65, 5).filter(v => v >= 37), { fs: 14 }), seriesA = [];
       ["2h", "original"].forEach(k => {
         const d = Q[k], s = ST[k];
         h += `<polygon points="${pfBand(K, d.nlo, d.nhi, X, Ya)}" fill="${s.col}" fill-opacity="0.08"/><polygon points="${pfBand(K, d.qlo, d.qhi, X, Ya)}" fill="${s.col}" fill-opacity="0.16"/>`;
         h += `<path d="${pfPath(K, d.n, X, Ya)}" fill="none" stroke="${s.col}" stroke-width="2.2" stroke-dasharray="6,4"/><path d="${pfPath(K, d.q, X, Ya)}" fill="none" stroke="${s.col}" stroke-width="2.6"/>`;
         const lead = d.q[99] - d.n[99];
-        h += pfText(b.x1 - 4, (k === "2h" ? Ya(d.qhi[99]) - 10 : b.y1 - 12), `${s.label} &middot; ${pfSigned(lead)} pp vs. null`, { anchor: "end", fs: 13.5, fill: s.col, weight: 600 });
+        h += pfText(b.x1 - 4, (k === "2h" ? Ya(d.qhi[99]) - 10 : b.y1 - 12), `${s.label} &middot; ${L("", "比 null 高 ")}${pfSigned(lead)} pp${L(" vs. null", "")}`, { anchor: "end", fs: 13.5, fill: s.col, weight: 600 });
         seriesA.push({ label: `${s.label}, Quality@K`, ys: d.q, col: s.col, fmt: v => v.toFixed(1) + "%" }, { label: `${s.label}, null`, ys: d.n, col: s.col, fmt: v => v.toFixed(1) + "%" });
       });
-      h += pfText(b.x0 + (b.x1 - b.x0) / 2, H - 8, "Candidate count K (log scale)", { fs: 15 });
-      h += pfText(18, b.y0 + (b.y1 - b.y0) / 2, "Task success (%)", { fs: 15, rot: -90 });
+      h += pfText(b.x0 + (b.x1 - b.x0) / 2, H - 8, L("Candidate count K (log scale)", "候选数 K（对数刻度）"), { fs: 15 });
+      h += pfText(18, b.y0 + (b.y1 - b.y0) / 2, L("Task success (%)", "任务成功率（%）"), { fs: 15, rot: -90 });
       A.setAttribute("viewBox", `0 0 ${W} ${H}`); A.innerHTML = h;
       pfCrosshair(A, w.wrap, w.tip, [{ b, X, Y: Ya, xs: K, series: seriesA, fmtX: v => `K = ${v}` }]);
       // (b) selection; the oracle is clipped to the selector range, as in the paper
       const S = PFIG.selection, SEL = [
-        { k: "Oracle", label: "Selection oracle", col: "#7a5c8e", dash: "" }, { k: "Execution n=1", label: "Execution (1 rollout)", col: "#d97757", dash: "7,4" },
-        { k: "LLM pointwise", label: "LLM judge (pointwise)", col: "#4d7c55", dash: "" }, { k: "ACE-style judge", label: "LLM judge (ACE)", col: "#a8577a", dash: "7,3,1.5,3" },
-        { k: "Random", label: "Random pick", col: "#9a988f", dash: "1.5,3.5" }];
+        { k: "Oracle", label: L("Selection oracle", "选择 oracle"), col: "#7a5c8e", dash: "" }, { k: "Execution n=1", label: L("Execution (1 rollout)", "执行验证（1 次 rollout）"), col: "#d97757", dash: "7,4" },
+        { k: "LLM pointwise", label: L("LLM judge (pointwise)", "LLM judge（逐个打分）"), col: "#4d7c55", dash: "" }, { k: "ACE-style judge", label: "LLM judge (ACE)", col: "#a8577a", dash: "7,3,1.5,3" },
+        { k: "Random", label: L("Random pick", "随机挑选"), col: "#9a988f", dash: "1.5,3.5" }];
       const ys = [].concat(...SEL.filter(s => s.k !== "Oracle").map(s => S[s.k])), lo = Math.min(...ys), hi = Math.max(...ys), pad = 0.15 * Math.max(hi - lo, 0.2);
       const Yb = pfLin(lo - pad, hi + pad, b.y1, b.y0);
       h = pfAxes(b, X, Yb, xt, pfTicks(lo - pad, hi + pad, 4), { fs: 14, yfmt: v => v.toFixed(1) });
@@ -3102,12 +3371,12 @@
       SEL.slice().reverse().forEach(s => { h += `<path d="${pfPath(K, S[s.k], X, Yb)}" fill="none" stroke="${s.col}" stroke-width="${s.k === "Random" ? 2 : 2.6}"${s.dash ? ` stroke-dasharray="${s.dash}"` : ""} stroke-linecap="round"/>`; });
       h += `</g>`;
       const ko = S.Oracle.findIndex(v => v > hi + pad);
-      h += pfText(X(K[Math.max(1, ko)]) + 8, b.y0 + 16, `oracle &rarr; ${pfSigned(S.Oracle[99])} pp at K = 100 (off scale)`, { anchor: "start", fs: 13, fill: "#7a5c8e", serif: true, italic: true });
-      h += pfText(b.x0 + (b.x1 - b.x0) / 2, H - 8, "Candidate count K (log scale)", { fs: 15 });
-      h += pfText(18, b.y0 + (b.y1 - b.y0) / 2, "Gain vs. baseline (pp)", { fs: 15, rot: -90 });
+      h += pfText(X(K[Math.max(1, ko)]) + 8, b.y0 + 16, L(`oracle &rarr; ${pfSigned(S.Oracle[99])} pp at K = 100 (off scale)`, `oracle 在 K = 100 时达 ${pfSigned(S.Oracle[99])} pp（超出坐标范围）`), { anchor: "start", fs: 13, fill: "#7a5c8e", serif: true, italic: true });
+      h += pfText(b.x0 + (b.x1 - b.x0) / 2, H - 8, L("Candidate count K (log scale)", "候选数 K（对数刻度）"), { fs: 15 });
+      h += pfText(18, b.y0 + (b.y1 - b.y0) / 2, L("Gain vs. baseline (pp)", "相对基线的增益（pp）"), { fs: 15, rot: -90 });
       Bv.setAttribute("viewBox", `0 0 ${W} ${H}`); Bv.innerHTML = h;
       pfCrosshair(Bv, w.wrap, w.tip, [{ b, X, Y: Yb, xs: K, clip: [lo - pad, hi + pad], series: SEL.map(s => ({ label: s.label, ys: S[s.k], col: s.col, fmt: v => pfSigned(v, 2) + " pp" })), fmtX: v => `K = ${v}` }]);
-      pfLegend(document.getElementById("fig4a-legend"), [[{ label: "2-hour budget", col: ST["2h"].col, kind: "swatch" }, { label: "Original timeout", col: ST.original.col, kind: "swatch" }],
+      pfLegend(document.getElementById("fig4a-legend"), [[{ label: ST["2h"].label, col: ST["2h"].col, kind: "swatch" }, { label: ST.original.label, col: ST.original.col, kind: "swatch" }],
         [{ label: "Quality@K", col: PF.ink2, kind: "line" }, { label: "Equal-quality null", col: PF.ink2, kind: "dash" }]]);
       pfLegend(document.getElementById("fig4b-legend"), SEL.map(s => ({ label: s.label, col: s.col, kind: s.k === "Random" ? "dot" : s.k === "Execution n=1" ? "dash" : s.k === "ACE-style judge" ? "dashdot" : "line" })));
     }
@@ -3115,26 +3384,26 @@
     // ---------------- Figs. 5 and 6: 2x2 method/model grids over evolution rounds ----------------
     function renderSec7Fig(id, kind) {
       const svg = document.getElementById("svg-" + id), w = pfWrap(id + "-native"); if (!svg || !w) return;
-      const W = 540, H = 492, L = 106, R = 12, T = 34, gapX = 40, gapY = 62, Bm = 60, pw = (W - L - R - gapX) / 2, ph = (H - T - Bm - gapY) / 2;
+      const W = 540, H = 492, LM = 106, R = 12, T = 34, gapX = 40, gapY = 62, Bm = 60, pw = (W - LM - R - gapX) / 2, ph = (H - T - Bm - gapY) / 2;
       const cols = [{ key: "deepseek-v4-flash-0731", label: "DeepSeek-V4-Flash" }, { key: "gpt-5.6-luna", label: "GPT-5.6 Luna" }];
       const rows = [{ key: "skillopt_lite", label: "SkillOpt-Lite" }, { key: "gepa", label: "GEPA" }];
       let h = "", panels = [];
-      cols.forEach((c, j) => { h += pfText(L + j * (pw + gapX) + pw / 2, 20, c.label, { fs: 15, fill: PF.ink, weight: 600 }); });
+      cols.forEach((c, j) => { h += pfText(LM + j * (pw + gapX) + pw / 2, 20, c.label, { fs: 15, fill: PF.ink, weight: 600 }); });
       rows.forEach((r, i) => {
         h += pfText(18, T + i * (ph + gapY) + ph / 2, r.label, { fs: 15, fill: PF.ink, weight: 600, rot: -90 });
         cols.forEach((c, j) => {
-          const d = PFIG.sec7[`${r.key}|${c.key}`], b = { x0: L + j * (pw + gapX), x1: L + j * (pw + gapX) + pw, y0: T + i * (ph + gapY), y1: T + i * (ph + gapY) + ph };
+          const d = PFIG.sec7[`${r.key}|${c.key}`], b = { x0: LM + j * (pw + gapX), x1: LM + j * (pw + gapX) + pw, y0: T + i * (ph + gapY), y1: T + i * (ph + gapY) + ph };
           const xs = d.round, xmax = xs[xs.length - 1], X = pfLin(0, xmax, b.x0, b.x1);
           let lo, hi, series;
           if (kind === "drift") {
             lo = -9; hi = 16;
-            series = [{ label: "In-loop score", ys: d.original_gain, lo: d.original_gain_low, hi: d.original_gain_high, col: "#3e6a9e", mk: "circle", fmt: v => pfSigned(v) + " pp" },
-                      { label: "Re-evaluated", ys: d.fresh_gain, lo: d.fresh_gain_low, hi: d.fresh_gain_high, col: "#d97757", mk: "square", fmt: v => pfSigned(v) + " pp" }];
+            series = [{ label: L("In-loop score", "in-loop 分数"), ys: d.original_gain, lo: d.original_gain_low, hi: d.original_gain_high, col: "#3e6a9e", mk: "circle", fmt: v => pfSigned(v) + " pp" },
+                      { label: L("Re-evaluated", "重新评测"), ys: d.fresh_gain, lo: d.fresh_gain_low, hi: d.fresh_gain_high, col: "#d97757", mk: "square", fmt: v => pfSigned(v) + " pp" }];
           } else {
             const all = [...d.variance_low_pp2, ...d.variance_high_pp2, ...d.corrected_variance_pp2, ...d.raw_variance_pp2, 0];
             lo = Math.min(...all); hi = Math.max(...all); const pad = 0.07 * Math.max(hi - lo, 1); lo -= pad; hi += pad;
-            series = [{ label: "Noise-corrected", ys: d.corrected_variance_pp2, lo: d.variance_low_pp2, hi: d.variance_high_pp2, col: "#4d7c55", mk: "circle", fmt: v => pfSigned(v) + " pp²" },
-                      { label: "Uncorrected", ys: d.raw_variance_pp2, col: "#8a877e", dash: "5,4", fmt: v => v.toFixed(1) + " pp²" }];
+            series = [{ label: L("Noise-corrected", "去噪后"), ys: d.corrected_variance_pp2, lo: d.variance_low_pp2, hi: d.variance_high_pp2, col: "#4d7c55", mk: "circle", fmt: v => pfSigned(v) + " pp²" },
+                      { label: L("Uncorrected", "未去噪"), ys: d.raw_variance_pp2, col: "#8a877e", dash: "5,4", fmt: v => v.toFixed(1) + " pp²" }];
           }
           const Y = pfLin(lo, hi, b.y1, b.y0), xt = xmax <= 4 ? xs.filter(v => v <= xmax) : pfTicks(0, xmax, 3).filter(v => v <= xmax);
           h += pfAxes(b, X, Y, xt, pfTicks(lo, hi, 3).filter(v => v >= lo && v <= hi), { zeroY: 0, xgrid: false, fs: 13 });
@@ -3143,20 +3412,342 @@
             h += `<path d="${pfPath(xs, s.ys, X, Y)}" fill="none" stroke="${s.col}" stroke-width="2.2"${s.dash ? ` stroke-dasharray="${s.dash}"` : ""} stroke-linejoin="round"/>`;
             if (s.mk) xs.forEach((x, k) => { h += markerSvg(s.mk, X(x), Y(s.ys[k]), xs.length > 6 ? 2.8 : 3.6, s.col, 'stroke="#ffffff" stroke-width="0.9"'); });
           });
-          panels.push({ b, X, Y, xs, series, fmtX: v => `round ${v}`, title: `${r.label}, ${c.label}` });
+          panels.push({ b, X, Y, xs, series, fmtX: v => L(`round ${v}`, `第 ${v} 轮`), title: `${r.label}, ${c.label}` });
         });
       });
-      h += pfText(L + (W - L - R) / 2, H - 10, "Evolution round", { fs: 15 });
-      h += pfText(50, T + (H - T - Bm) / 2, kind === "drift" ? "Change from initialization (pp)" : "Run-to-run variance (pp²)", { fs: 14, rot: -90 });
+      h += pfText(LM + (W - LM - R) / 2, H - 10, L("Evolution round", "演化轮次"), { fs: 15 });
+      h += pfText(50, T + (H - T - Bm) / 2, kind === "drift" ? L("Change from initialization (pp)", "相对初始的变化（pp）") : L("Run-to-run variance (pp²)", "运行间方差（pp²）"), { fs: 14, rot: -90 });
       svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.innerHTML = h;
       pfCrosshair(svg, w.wrap, w.tip, panels);
       pfLegend(document.getElementById(id + "-legend"), kind === "drift"
-        ? [{ label: "In-loop score", col: "#3e6a9e", kind: "line", mk: "circle" }, { label: "Re-evaluated (8×)", col: "#d97757", kind: "line", mk: "square" }]
-        : [{ label: "Noise-corrected variance", col: "#4d7c55", kind: "line", mk: "circle" }, { label: "Uncorrected variance", col: "#8a877e", kind: "dash" }]);
+        ? [{ label: L("In-loop score", "in-loop 分数"), col: "#3e6a9e", kind: "line", mk: "circle" }, { label: L("Re-evaluated (8×)", "重新评测（8 次）"), col: "#d97757", kind: "line", mk: "square" }]
+        : [{ label: L("Noise-corrected variance", "去噪后的方差"), col: "#4d7c55", kind: "line", mk: "circle" }, { label: L("Uncorrected variance", "未去噪的方差"), col: "#8a877e", kind: "dash" }]);
     }
     function renderNativeFigures() {
       [renderNoiseFig, renderGainLedgerFig, renderQualitySelectionFig, () => renderSec7Fig("fig5", "drift"), () => renderSec7Fig("fig6", "variance")]
         .forEach(f => { try { f(); } catch (e) { console.error("native figure failed", e); } });
+    }
+    // =====================================================================
+    // Shortcut atlas: per-benchmark audit, from the paper's Appendix "Gain Audit"
+    // (Tables audit-repairs / audit-rules / audit-full / audit-reevolve, App. "Headroom after repair")
+    // and the audit campaign logs (singlerule_extra_20261010, singlerule_skills, hotpotqa_judge).
+    // Scores in pp; models: GPT-5.4 nano / DeepSeek-V4-Flash / GPT-5.6 Luna.
+    // m: [model, releasedBase, releasedEvolved, ruleScore, repairedBase, repairedEvolved]
+    // =====================================================================
+    const ATLAS_TYPES = {
+      format: { label: "Grader rejects correct answers by format", short: "Answer format" },
+      recalc: { label: "Grader skips formula recalculation", short: "Formulas not evaluated" },
+      leak:   { label: "Answer leaked through an option", short: "Leaked answer" },
+      port:   { label: "Benchmark port drops an official instruction", short: "Modified port" },
+      none:   { label: "No shortcut found", short: "No shortcut" }
+    };
+    const ATLAS = [
+      {
+        key: "spreadsheetbench", name: "SpreadsheetBench", type: "recalc", verdict: "Shortcut · gain mostly vanishes",
+        measures: "Spreadsheet manipulation: the agent writes a Python script that edits an <code>.xlsx</code> file so the target cells hold the right result.",
+        source: "Artifacts evolved in our grid (best method, mean over 8 evolution runs). The SkillOpt-Lite paper reports +36 to +45 pp on this benchmark for four GPT-5 models.",
+        shortcut: "The released grader opens the output with openpyxl&rsquo;s <code>data_only=True</code>, which returns the <em>cached</em> value of a formula cell. A workbook written from Python carries no cached values, so every formula reads as empty and is marked wrong. The official evaluation recalculates formulas before comparing.",
+        example: { kind: "cells", rows: [
+          ["Answer cell written as a formula", "<code>=SUM(B2:B9)</code>", "read as empty", false],
+          ["Same cell written as the computed number", "<code>1284</code>", "matches the reference", true]
+        ], note: "Illustration of the mechanism; the cell and value are schematic." },
+        how: "Under the released grader the <b>unevolved baseline itself</b> loses most formula answers: 33.5 / 43.4 / 35.3, versus 58.0 / 66.9 / 69.4 once formulas are recalculated. Writing values instead of formulas is worth about 30 pp, and evolution finds it: all eight SkillOpt-Lite runs with GPT-5.4 nano discover it.",
+        rule: "Write computed literal values into the answer cells, never Excel formula strings: compute the result in Python and write the resulting number or text. The checker reads cells with data_only=True, so formulas are not evaluated.",
+        ruleNote: "One sentence matches the evolved gain for all three models.",
+        repair: "Recalculate every workbook with LibreOffice before comparison, as the official evaluation does.",
+        after: "+5.7 to +6.7 pp survive recalculation, but re-evolved artifacts keep a gain only by adapting to the recalculation engine (writing values, avoiding functions LibreOffice cannot evaluate). Re-evolving GEPA and SkillOpt-Lite under the repaired grader gains at most 1.9 pp, except SkillOpt-Lite with DeepSeek-V4-Flash (+5.8). The harness method AHE gains 11&ndash;13 pp, but only on the 151 of 281 tasks whose instructions ask for a formula: the grader compares values, so writing the computed value still passes.",
+        lesson: "If the output is a file, score it the way the benchmark authors do, end to end. Check how much the <em>unevolved</em> baseline loses to correct-but-unevaluated outputs.",
+        m: [["nano", 33.5, 64.6, 62.5, 58.0, 64.7], ["deepseek", 43.4, 72.0, 69.1, 66.9, 72.6], ["luna", 35.3, 73.7, 75.2, 69.4, 75.3]]
+      },
+      {
+        key: "aime", name: "AIME 2025", type: "format", verdict: "Shortcut · gain vanishes",
+        measures: "Competition mathematics: 30 problems, each with an integer answer.",
+        source: "Programs released with the GEPA paper (evolved for GPT-4.1-mini), transferred to our models.",
+        shortcut: "The released metric is <code>int(answer) == gold</code>. A correct answer wrapped in LaTeX or followed by any text cannot be parsed and scores 0, so the benchmark largely measures whether the answer field holds a bare integer.",
+        example: { kind: "parse", rows: [
+          ["<code>\\(\\boxed{293}\\)</code>", "unparseable &rarr; 0", false],
+          ["<code>468\\n[[ ## completed ##]]</code>", "DSPy end marker leaks into the answer &rarr; 0", false],
+          ["<code>293</code>", "parsed &rarr; scored", true]
+        ], note: "Answer strings as they appear in our evaluation logs." },
+        how: "Before evolution, 56.2% of GPT-5.4 nano&rsquo;s answers and 84.5% of GPT-5.6 Luna&rsquo;s fail to parse. The GEPA program&rsquo;s main effect is to make answers parseable: nano&rsquo;s parse failures drop to 0.5%.",
+        rule: "Provide final answers exactly in the requested format: single integer, fraction in lowest terms, or exact closed-form expressions without additional commentary or formatting.",
+        ruleNote: "The sentence recovers 99% of the gain for nano and scores <b>higher</b> than the evolved program for Luna (69.3 vs. 51.0): it removes more of the answers the parser fails to read.",
+        repair: "Check mathematical equivalence after removing LaTeX wrappers.",
+        after: "With the repaired check the baselines are 85.8 / 96.7 / 80.3 and every gain stays within 2.5 pp, comparable to the confidence interval of a 30-problem test set. DeepSeek-V4-Flash already solves 96.5% of attempts without evolution.",
+        lesson: "Count how many &ldquo;wrong&rdquo; answers are actually unparseable. If that share is large, the benchmark is rewarding output format.",
+        m: [["nano", 32.0, 87.3, 86.7, 85.8, 87.7], ["deepseek", 96.5, 96.0, 97.3, 96.7, 96.5], ["luna", 11.5, 51.0, 69.3, 80.3, 82.8]]
+      },
+      {
+        key: "livemath", name: "LiveMathematicianBench", type: "leak", verdict: "Shortcut · gain vanishes",
+        measures: "Five-option questions built from theorems in recent arXiv papers: choose the strongest statement that can be proved.",
+        source: "Skills released with SkillOpt-Lite. The SkillOpt-Lite paper reports +20 to +37 pp on this benchmark.",
+        shortcut: "Some questions include the option &ldquo;One of the remaining options is correct, but a stronger result can be proven.&rdquo; In the 177 released questions it appears 85 times and is the correct answer <b>all 85 times</b>; it appears in 46 of the 106 test questions. Always picking it answers those 46 correctly without reading the mathematics.",
+        example: { kind: "mcq", text: "One test question is built from the theorem that every flow-admissible, cyclically 5-edge-connected, cubic signed graph has a nowhere-zero 6-flow. The theorem itself is not among the options:", rows: [
+          ["weakens the conclusion to a ℤ₆-flow", false], ["strengthens it to cyclic 4-edge-connectivity", false], ["strengthens it to a 5-flow", false], ["drops flow-admissibility", false],
+          ["&ldquo;One of the remaining options is correct, but a stronger result can be proven.&rdquo;", true]
+        ] },
+        how: "The released skill&rsquo;s entire gain comes from these 46 questions. Its first section is titled <em>The &ldquo;stronger result&rdquo; meta-option (check first)</em> and tells the model to &ldquo;default to this meta-option whenever it is present&rdquo;, because &ldquo;the concrete options are almost always deliberately understated&rdquo;. With the skill, models choose that option on 67%, 86% and 92% of the questions where it is correct.",
+        rule: "If one option states that one of the remaining options is correct but a stronger result can be proven, choose that option.",
+        ruleNote: "Here one sentence recovers only 0&ndash;51% of the gain: the models follow it on 4%, 54% and 27% of those questions. The evolved skill gives a reason, makes the option the default, lists its wordings and repeats the instruction before the answer. <b>Evolution optimizes not only which shortcut to take but also how to state it so that the model takes it.</b>",
+        repair: "Score capability only on the 60 test questions that do not contain the option.",
+        after: "On those 60 questions the baselines are 50&ndash;61 and no artifact improves (the confidence interval is about ±5 pp). Re-evolving with the option balanced so that it is correct only half the time halves the shortcut rather than removing it.",
+        lesson: "Before using a multiple-choice benchmark, check whether any option text, position or template correlates with the answer across the released splits.",
+        m: [["nano", 29.0, 56.1, 28.3, 49.6, 47.9], ["deepseek", 38.9, 68.4, 54.0, 54.6, 54.6], ["luna", 37.0, 73.8, 46.7, 60.8, 59.6]]
+      },
+      {
+        key: "officeqa", name: "OfficeQA", type: "port", verdict: "Shortcut · gain vanishes",
+        measures: "Question answering over a corpus of documents: find the right file, extract the values and compute the requested quantity.",
+        source: "Artifacts evolved in our grid, evaluated with the version of the benchmark released with SkillOpt-Lite.",
+        shortcut: "The version released with SkillOpt-Lite drops the official instruction to answer with a bare value, while the reward still compares bare values. A correct answer written with a unit, a percent sign or a word fails.",
+        example: { kind: "cells", rows: [
+          ["Answer with a unit", "<code>&lt;answer&gt;27.67%&lt;/answer&gt;</code>", "marked wrong", false],
+          ["Bare value", "<code>&lt;answer&gt;27.67&lt;/answer&gt;</code>", "marked correct", true]
+        ], note: "The example used in the one-rule test." },
+        how: "The evolved gain is what the dropped instruction is worth: for GPT-5.6 Luna the evolved artifact scores 56.6 against a baseline of 35.5 (+21.1), and the baseline plus one sentence restating the bare-value format reaches 56.9.",
+        rule: "Put only the bare value inside <answer>…</answer>: no units, currency signs, %, or explanatory words, unless the question explicitly asks for them. Keep the requested decimal places. Example: write 27.67, not 27.67% or 27.67 percent.",
+        ruleNote: "One sentence matches the evolved gain for DeepSeek-V4-Flash and Luna. GPT-5.4 nano&rsquo;s reported gain (+1.0) is within noise, so its repaired evaluation was not run.",
+        repair: "Restore the official instruction and reward.",
+        after: "Under the official evaluation the gain is gone (+0.2 / &minus;0.1). The benchmark still leaves 35&ndash;39 pp of headroom, yet neither the released artifacts nor re-evolved text-artifact methods gain anything, and re-evolved harness methods gain at most 3.7 pp.",
+        lesson: "Diff your benchmark port against the official release: prompt, answer format and reward. A dropped instruction becomes a gain that evolution will rediscover.",
+        m: [["nano", 11.4, 12.3, 9.2, null, null], ["deepseek", 55.3, 58.5, 58.8, 64.7, 64.9], ["luna", 35.5, 56.6, 56.9, 61.0, 60.9]]
+      },
+      {
+        key: "docvqa", name: "DocVQA", type: "format", verdict: "Shortcut · gain vanishes",
+        measures: "Visual question answering on scanned documents.",
+        source: "Skill released with SkillOpt-Lite. DeepSeek-V4-Flash does not accept image input, so only two models are tested.",
+        shortcut: "The released metric is a near-exact string match (ANLS ≥ 0.999). A correct answer with an extra word, a field label, a unit or a trailing period fails.",
+        example: null,
+        how: "Graded by meaning, the unevolved baseline already scores 88.3 (nano) and 93.9 (Luna), against 61.0 and 73.1 under the released metric. The skill&rsquo;s gain of +21.0 / +14.1 pp comes from trimming answers to the exact printed span.",
+        rule: "Inside <answer>, output only the minimal span exactly as printed in the document, with no full sentence, field label, unit, qualifier, or trailing period.",
+        ruleNote: "One sentence recovers 90% and 110% of the gain.",
+        repair: "Semantic grading: an answer counts if it matches exactly or if two LLM judges (DeepSeek-V4-Flash and GPT-5.6 Luna), shown only the question, the reference and the extracted answer, both accept it.",
+        after: "Under semantic grading the released skill adds nothing (&minus;0.2 / &minus;0.7), and the baseline leaves little headroom.",
+        lesson: "Report a meaning-based score next to string match. A large gap between the two means you are measuring answer formatting.",
+        m: [["nano", 61.0, 82.0, 79.9, 88.3, 88.1], ["luna", 73.1, 87.2, 88.6, 93.9, 93.2]]
+      },
+      {
+        key: "hotpotqa", name: "HotpotQA", type: "format", verdict: "Shortcut · plus a real retrieval gain",
+        measures: "Multi-hop question answering over Wikipedia with retrieval.",
+        source: "Programs released with the GEPA paper, transferred to our models.",
+        shortcut: "Exact match rejects correct answers that are written differently from the short reference answer.",
+        example: { kind: "qa", rows: [
+          ["Hyposmocoma fulvogriesa is endemic to Kauai, which is also known as what?", "the &ldquo;Garden Isle&rdquo;", "Kauai is also known as the <b>Garden Isle</b>."],
+          ["Trey Anastasio and Glenn Bidmead have which mutual occupation?", "guitarist", "They both are <b>guitarists</b>."],
+          ["Which NBA team in Phoenix, Arizona did Kyle Robert Macy play for?", "The Phoenix Suns", "Kyle Robert Macy played for the <b>Phoenix Suns</b>."]
+        ], note: "Baseline answers from our logs: exact match marks them wrong; both LLM judges accept them." },
+        how: "Graded by meaning, the baselines score 77.0 / 78.3 / 83.8 instead of 40.2 / 57.4 / 51.2. Most of the evolved gain is reproduced just by shortening answers to the reference span.",
+        rule: "The answer is scored by exact match against a short reference answer. Output only the minimal answer span, with no full sentence, explanation or qualifiers.",
+        ruleNote: "One sentence recovers 78% and 71% of the gain for nano and DeepSeek-V4-Flash, and exceeds it for Luna.",
+        repair: "Semantic grading (exact match, or both LLM judges accept).",
+        after: "Unlike most benchmarks here, a real gain of <b>5.5&ndash;7.6 pp survives</b>. Re-evolution traces it to retrieval: recall of supporting articles rises by about 10 pp, and GEPA re-evolved under semantic grading improves all three models (+8.6 / +8.9 / +3.5).",
+        lesson: "Shortcuts and genuine gains can coexist. Repair the grader first, then the remaining gain can be attributed.",
+        m: [["nano", 40.2, 63.6, 58.4, 77.0, 82.8], ["deepseek", 57.4, 71.0, 67.1, 78.3, 85.9], ["luna", 51.2, 57.9, 63.8, 83.8, 89.2]]
+      },
+      {
+        key: "searchqa", name: "SearchQA", type: "format", verdict: "Shortcut · gain vanishes",
+        measures: "Answering Jeopardy-style questions from retrieved search snippets.",
+        source: "Skill released with SkillOpt-Lite.",
+        shortcut: "Exact match rejects correct answers written differently. Models also answer as well <em>without</em> the snippets, so the benchmark no longer tests retrieval.",
+        example: { kind: "cells", rows: [
+          ["Hedged but correct answer", "<code>George Calvert (the 1st Lord Baltimore)</code>", "fails exact match, accepted when graded by meaning", null]
+        ], note: "From our logs." },
+        how: "Graded by meaning, the baselines score 84.2 / 89.4 / 89.8 instead of 52.0 / 69.3 / 63.9. Removing all snippets changes these to 81.9 / 90.2 / 90.7.",
+        rule: "Inside the answer tag, write only the shortest span that exactly answers the question: no parenthetical clarifications, translations, or acronym expansions, no quotes, and no trailing period.",
+        ruleNote: "One sentence recovers 45&ndash;78% of the gain. Under semantic grading it even <b>lowers</b> nano&rsquo;s score by 2.0 pp: forced to write one short span, the model sometimes keeps the wrong part of a hedged answer.",
+        repair: "Semantic grading (exact match, or both LLM judges accept).",
+        after: "The released skill adds at most 1.6 pp. Of 100 residual errors, 36 come from wrong or ambiguous gold answers (for example Jeopardy clues that lost their category) or are in fact acceptable. The benchmark cannot separate DeepSeek-V4-Flash from GPT-5.6 Luna (&minus;0.4 pp, 95% CI [&minus;1.5, 0.8]).",
+        lesson: "Ablate the evidence the benchmark claims to test. If the score does not drop without retrieved context, it measures something else.",
+        m: [["nano", 52.0, 63.5, 60.9, 84.2, 85.8], ["deepseek", 69.3, 73.7, 71.3, 89.4, 90.4], ["luna", 63.9, 73.0, 70.2, 89.8, 89.6]]
+      },
+      {
+        key: "livebench", name: "LiveBench-Math", type: "format", verdict: "Shortcut · gains small throughout",
+        measures: "Mathematics questions, including AMPS problems with symbolic answers.",
+        source: "Programs released with the GEPA paper (GEPA+Merge for two models).",
+        shortcut: "Matching on AMPS problems is format-specific: equivalent answers written in another form are marked wrong.",
+        example: null,
+        how: "Gains under the released evaluation are small (0.9 / 1.3 / 3.9 pp); only the last has a 95% confidence interval that excludes zero.",
+        rule: null,
+        ruleNote: "No one-rule test: the gains are too small for the recovered share to be interpretable.",
+        repair: "Grade by mathematical equivalence.",
+        after: "Graded by equivalence, the baselines rise to 82.7 / 88.6 / 85.2, leaving 11&ndash;17 pp of headroom, yet the repaired gains are only 0.2 to 1.3 pp.",
+        lesson: "Use equivalence checking for symbolic answers; otherwise score differences between methods partly reflect notation.",
+        m: [["nano", 73.8, 74.7, null, 82.7, 83.2], ["deepseek", 80.5, 81.8, null, 88.6, 90.0], ["luna", 72.9, 76.8, null, 85.2, 85.4]]
+      },
+      {
+        key: "alfworld", name: "ALFWorld", type: "none", verdict: "No shortcut in the grader",
+        measures: "Text-based household tasks: navigate rooms and manipulate objects to reach a goal.",
+        source: "Artifacts evolved in our grid.",
+        shortcut: "No shortcut found in the released evaluation. The gain comes from a better search procedure, which one rule can state.",
+        example: null,
+        how: "Two findings matter for evaluation: (1) the initial agent keeps only the last two steps of its history, and one harness run that changes nothing but this setting gains 29 pp; Meta-Harness and AHE improve DeepSeek-V4-Flash and GPT-5.6 Luna by 16&ndash;32 pp because of this setting. (2) For strong models the benchmark is saturated: Gemini-3.7-flash starts at 96.3, and in the SkillOpt paper both SkillOpt and its strongest competitor score 100.0 with GPT-5.4-mini, GPT-5.4 and GPT-5.5.",
+        rule: "Search systematically: first look at every open surface in numbered order, then open closed receptacles; never revisit an empty location. You can hold only one object: never pick up anything that is not your target. For ‘two X’ tasks, place the first one at the destination before searching for the second.",
+        ruleNote: "A search procedure rather than a statement about evaluation. It recovers the gain for nano but only 30% for DeepSeek-V4-Flash, which does not follow it, while the longer evolved artifact does change its behavior.",
+        repair: null,
+        after: "Gains are real but come from one change that helps most tasks at once, the kind of gain evolution can identify.",
+        lesson: "Audit harness settings (history window, step limits) before crediting a method; and check whether strong baselines already saturate the benchmark.",
+        m: [["nano", 49.1, 60.6, 63.4, null, null], ["deepseek", 65.0, 76.5, 68.4, null, null], ["luna", 68.2, 79.1, 76.2, null, null]]
+      },
+      {
+        key: "pupa", name: "PUPA", type: "none", verdict: "No shortcut in the grader",
+        measures: "Privacy-conscious delegation: rewrite a user&rsquo;s request for an external model without leaking personal details.",
+        source: "Programs released with the GEPA paper.",
+        shortcut: "No shortcut found in the released evaluation.",
+        example: null,
+        how: "The evolved gain is reproduced by one sentence that states the target behavior directly.",
+        rule: "Never copy user-specific details into the external request: replace them with generic descriptions or placeholders, while keeping the task fully specified.",
+        ruleNote: "One sentence recovers 90% or more of the evolved gain for all three models.",
+        repair: null,
+        after: "Little headroom: evolved artifacts reach 96&ndash;97 for DeepSeek-V4-Flash and GPT-5.6 Luna, and the one-sentence baseline reaches the same level.",
+        lesson: "A gain that one sentence reproduces is not necessarily a hack, but it tells you the benchmark rewards a single behavior; check headroom before comparing methods on it.",
+        m: [["nano", 73.6, 91.9, 92.9, null, null], ["deepseek", 86.8, 97.2, 96.2, null, null], ["luna", 85.7, 96.4, 97.3, null, null]]
+      },
+      {
+        key: "hover", name: "HoVer", type: "none", verdict: "No shortcut · real retrieval gain",
+        measures: "Multi-hop fact verification: retrieve the Wikipedia articles needed to check a claim.",
+        source: "Programs released with the GEPA paper.",
+        shortcut: "No shortcut found in the released evaluation.",
+        example: null,
+        how: "Gains of 8&ndash;13 pp come from multi-hop retrieval strategies.",
+        rule: "Target the Wikipedia articles that have not been retrieved yet: name the specific entities whose own pages are still missing, instead of restating the claim.",
+        ruleNote: "One sentence recovers only 43% and 41% of the gain for nano and Luna, because the gain is spread over several strategies; for DeepSeek-V4-Flash it recovers 91%.",
+        repair: null,
+        after: "The gain survives; its source can be named (retrieval).",
+        lesson: "When one sentence does not reproduce a gain, the gain may be genuinely distributed, and that is where careful selection matters.",
+        m: [["nano", 50.3, 58.2, 53.7, null, null], ["deepseek", 42.9, 56.2, 55.0, null, null], ["luna", 51.2, 60.7, 55.1, null, null]]
+      },
+      {
+        key: "ifbench", name: "IFBench", type: "none", verdict: "No shortcut · gains near noise",
+        measures: "Instruction following, with each instruction checked by code.",
+        source: "Programs released with the GEPA paper (GEPA+Merge for two models).",
+        shortcut: "No shortcut found: grading the same outputs more strictly, on the model&rsquo;s original response only, makes the gains larger rather than smaller.",
+        example: null,
+        how: "Gains are 2.7&ndash;3.8 pp, comparable to the single-run standard deviation measured in our variance grid.",
+        rule: null,
+        ruleNote: "No one-rule test: no evaluation requirement for a rule to state, and the gains are too small to interpret a recovered share.",
+        repair: null,
+        after: "An example of the small improvements that remain when a gain does not come from a shortcut: real or not, they are at the resolution limit of a single run.",
+        lesson: "Small gains need repeated runs before they can be ranked.",
+        m: [["nano", 70.3, 74.1, null, null, null], ["deepseek", 77.2, 80.4, null, null, null], ["luna", 66.1, 68.8, null, null, null]]
+      }
+    ];
+    const ATLAS_CHECKS = [
+      { t: "Grade by meaning, with the official scorer.", tz: "按语义打分，并使用官方评分器。", b: ["hotpotqa", "officeqa", "spreadsheetbench"] },
+      { t: "Check whether the answer leaks through the format.", tz: "检查答案是否通过题目格式泄漏。", b: ["livemath"] },
+      { t: "Try one sentence first: if it recovers the gain, name that behavior.", tz: "先试一句话：如果它能复现增益，先说清是哪种行为。", b: ["aime", "pupa"] },
+      { t: "Repeat runs and report the spread.", tz: "重复运行，并报告波动。", b: ["ifbench"] }
+    ];
+    const ATLAS_MODEL = { nano: "GPT-5.4 nano", deepseek: "DeepSeek-V4-Flash", luna: "GPT-5.6 Luna" };
+    const ATLAS_ZH = {"type.format.label":"评分器因格式拒绝正确答案","type.format.short":"答案格式","type.recalc.label":"评分器不重新计算公式","type.recalc.short":"公式未求值","type.leak.label":"答案通过某个选项泄露","type.leak.short":"答案泄露","type.port.label":"Benchmark 移植版本丢掉了一条官方指令","type.port.short":"移植版改动","type.none.label":"未发现 shortcut","type.none.short":"无 shortcut","spreadsheetbench.verdict":"Shortcut · 增益大部分消失","spreadsheetbench.measures":"电子表格操作：智能体编写 Python 脚本来编辑 <code>.xlsx</code> 文件，使目标单元格得到正确结果。","spreadsheetbench.source":"我们网格实验中演化出的 artifacts（最佳方法，8 次演化运行的均值）。SkillOpt-Lite 论文报告，在四个 GPT-5 模型上该 benchmark 提升 +36 到 +45 pp。","spreadsheetbench.shortcut":"已发布的评分器用 openpyxl 的 <code>data_only=True</code> 打开输出文件，这会返回公式单元格的<em>缓存</em>值。由 Python 写出的工作簿不含缓存值，因此每个公式都读为空并被判错。官方评测会先重新计算公式再比较。","spreadsheetbench.how":"在已发布的评分器下，<b>未演化的基线本身</b>就丢掉了大部分以公式作答的答案：33.5 / 43.4 / 35.3，而重新计算公式后为 58.0 / 66.9 / 69.4。写入数值而非公式约值 30 pp，演化也找到了这一点：GPT-5.4 nano 上 SkillOpt-Lite 的全部八次运行都发现了它。","spreadsheetbench.ruleNote":"一句话在三个模型上都达到了演化出的增益。","spreadsheetbench.repair":"与官方评测一样，比较前用 LibreOffice 重新计算每个工作簿。","spreadsheetbench.after":"重新计算后仍保留 +5.7 到 +6.7 pp，但重新演化出的 artifacts 只有适应重算引擎（写入数值、避开 LibreOffice 无法求值的函数）才能保住增益。在修复后的评分器下重新演化 GEPA 和 SkillOpt-Lite，增益至多 1.9 pp，唯一例外是 DeepSeek-V4-Flash 上的 SkillOpt-Lite（+5.8）。harness 方法 AHE 增益 11&ndash;13 pp，但只来自 281 个任务中指令要求写公式的 151 个：评分器比较的是数值，所以写入计算结果仍能通过。","spreadsheetbench.lesson":"如果输出是文件，就按 benchmark 作者的方式端到端评分。检查<em>未演化的</em>基线因正确但未被求值的输出损失了多少分。","spreadsheetbench.rule_gloss":"在答案单元格中写入计算好的字面值，绝不写 Excel 公式字符串：在 Python 中算出结果，写入得到的数字或文本。检查器以 data_only=True 读取单元格，因此公式不会被求值。","spreadsheetbench.ex.note":"机制示意；单元格和数值仅为示例。","spreadsheetbench.ex.r0.label":"答案单元格写成公式","spreadsheetbench.ex.r0.result":"读为空","spreadsheetbench.ex.r1.label":"同一单元格写成计算出的数字","spreadsheetbench.ex.r1.result":"与参考答案一致","aime.verdict":"Shortcut · 增益消失","aime.measures":"竞赛数学：30 道题，每题答案为整数。","aime.source":"GEPA 论文发布的程序（针对 GPT-4.1-mini 演化），迁移到我们的模型上。","aime.shortcut":"已发布的指标是 <code>int(answer) == gold</code>。正确答案若包在 LaTeX 中或后面跟有任何文字，就无法解析，得 0 分；因此该 benchmark 在很大程度上衡量的是答案字段是否只是一个整数。","aime.how":"演化之前，GPT-5.4 nano 有 56.2% 的答案、GPT-5.6 Luna 有 84.5% 的答案无法解析。GEPA 程序的主要作用是让答案可被解析：nano 的解析失败率降到 0.5%。","aime.ruleNote":"这句话在 nano 上复现了 99% 的增益，在 Luna 上得分<b>高于</b>演化出的程序（69.3 vs. 51.0）：它消除了更多解析器读不出的答案。","aime.repair":"去掉 LaTeX 包装后检查数学等价性。","aime.after":"使用修复后的检查，基线为 85.8 / 96.7 / 80.3，所有增益都在 2.5 pp 以内，与 30 题测试集的置信区间相当。DeepSeek-V4-Flash 不经演化就已解出 96.5% 的尝试。","aime.lesson":"统计有多少“错误”答案其实是无法解析的。如果这一比例很大，该 benchmark 奖励的就是输出格式。","aime.rule_gloss":"严格按要求的格式给出最终答案：单个整数、最简分数或精确的闭式表达式，不附加任何说明或格式。","aime.ex.note":"答案字符串与我们评测日志中的原样一致。","aime.ex.r0.result":"无法解析 &rarr; 0","aime.ex.r1.result":"DSPy 结束标记混入答案 &rarr; 0","aime.ex.r2.result":"解析成功 &rarr; 计分","livemath.verdict":"Shortcut · 增益消失","livemath.measures":"由近期 arXiv 论文中的定理构造的五选一题：选出可以证明的最强命题。","livemath.source":"SkillOpt-Lite 发布的 skills。SkillOpt-Lite 论文报告该 benchmark 上提升 +20 到 +37 pp。","livemath.shortcut":"部分题目包含这样一个选项：“One of the remaining options is correct, but a stronger result can be proven.” 在已发布的 177 道题中，它出现了 85 次，且<b>这 85 次全都</b>是正确答案；106 道测试题中有 46 道包含它。总是选它，不读数学内容也能答对这 46 道。","livemath.how":"已发布 skill 的全部增益都来自这 46 道题。它的第一节标题是 <em>The “stronger result” meta-option (check first)</em>，要求模型“default to this meta-option whenever it is present”，理由是“the concrete options are almost always deliberately understated”。使用该 skill 后，在该选项为正确答案的题目上，各模型选中它的比例分别为 67%、86% 和 92%。","livemath.ruleNote":"这里一句话只复现了 0&ndash;51% 的增益：在这些题目上，模型遵循它的比例只有 4%、54% 和 27%。演化出的 skill 给出理由、把该选项设为默认、列出它的各种措辞，并在作答前重复这条指令。<b>演化优化的不只是走哪条 shortcut，还有如何表述它才能让模型照做。</b>","livemath.repair":"只用不含该选项的 60 道测试题衡量能力。","livemath.after":"在这 60 道题上，基线为 50&ndash;61，没有任何 artifact 带来提升（置信区间约为 ±5 pp）。把该选项平衡为只有一半情况下正确后再重新演化，shortcut 只是减半，并未消除。","livemath.lesson":"使用多选题 benchmark 之前，检查在已发布的各个数据划分中，是否有任何选项文本、位置或模板与答案相关。","livemath.rule_gloss":"如果某个选项说其余选项之一正确、但可以证明更强的结果，就选这个选项。","livemath.ex.text":"一道测试题由这样一条定理构造：每个可容许流、圈 5-边连通的三正则符号图都有处处非零 6-流。定理本身不在选项中：","livemath.ex.r0.option":"把结论减弱为 ℤ₆-流","livemath.ex.r1.option":"加强为圈 4-边连通","livemath.ex.r2.option":"加强为 5-流","livemath.ex.r3.option":"去掉可容许流条件","officeqa.verdict":"Shortcut · 增益消失","officeqa.measures":"基于文档库的问答：找到正确的文件，提取数值并计算所求的量。","officeqa.source":"我们网格实验中演化出的 artifacts，使用随 SkillOpt-Lite 发布的 benchmark 版本评测。","officeqa.shortcut":"随 SkillOpt-Lite 发布的版本删去了要求只答纯数值的官方指令，而奖励仍按纯数值比较。正确答案若带单位、百分号或文字，就会判错。","officeqa.how":"演化出的增益恰好是这条被删指令的价值：在 GPT-5.6 Luna 上，演化出的 artifact 得 56.6，基线为 35.5（+21.1），而基线加上一句重申纯数值格式的话就达到 56.9。","officeqa.ruleNote":"一句话在 DeepSeek-V4-Flash 和 Luna 上达到了演化出的增益。GPT-5.4 nano 报告的增益（+1.0）在噪声范围内，因此没有对它做修复后的评测。","officeqa.repair":"恢复官方指令和奖励。","officeqa.after":"在官方评测下增益消失（+0.2 / &minus;0.1）。该 benchmark 仍有 35&ndash;39 pp 的提升空间，但已发布的 artifacts 和重新演化的文本 artifact 方法都没有任何增益，重新演化的 harness 方法增益至多 3.7 pp。","officeqa.lesson":"把你的 benchmark 移植版本与官方发布版逐项比对：prompt、答案格式和奖励。被删掉的指令会变成演化会重新发现的增益。","officeqa.rule_gloss":"在 <answer>…</answer> 内只放纯数值：不加单位、货币符号、% 或解释性文字，除非题目明确要求。保留所要求的小数位数。例如：写 27.67，而不是 27.67% 或 27.67 percent。","officeqa.ex.note":"一句话测试中使用的例子。","officeqa.ex.r0.label":"带单位的答案","officeqa.ex.r0.result":"判错","officeqa.ex.r1.label":"纯数值","officeqa.ex.r1.result":"判对","docvqa.verdict":"Shortcut · 增益消失","docvqa.measures":"扫描文档上的视觉问答。","docvqa.source":"SkillOpt-Lite 发布的 skill。DeepSeek-V4-Flash 不接受图像输入，因此只测试了两个模型。","docvqa.shortcut":"已发布的指标是近乎精确的字符串匹配（ANLS ≥ 0.999）。正确答案若多一个词、带字段标签、单位或句末句号，就会判错。","docvqa.how":"按语义评分，未演化的基线已达到 88.3（nano）和 93.9（Luna），而在已发布指标下分别为 61.0 和 73.1。该 skill 的 +21.0 / +14.1 pp 增益来自把答案裁剪为文档中原样印出的片段。","docvqa.ruleNote":"一句话复现了 90% 和 110% 的增益。","docvqa.repair":"语义评分：答案若精确匹配，或两个只看到问题、参考答案和抽取出的答案的 LLM judge（DeepSeek-V4-Flash 和 GPT-5.6 Luna）都判为正确，即算对。","docvqa.after":"在语义评分下，已发布的 skill 没有带来任何提升（&minus;0.2 / &minus;0.7），且基线留下的提升空间很小。","docvqa.lesson":"在字符串匹配分数旁同时报告基于语义的分数。两者差距大，说明你衡量的是答案格式。","docvqa.rule_gloss":"在 <answer> 内只输出文档中原样印出的最小片段，不要完整句子、字段标签、单位、限定语或句末句号。","hotpotqa.verdict":"Shortcut · 另有真实的检索增益","hotpotqa.measures":"基于维基百科检索的多跳问答。","hotpotqa.source":"GEPA 论文发布的程序，迁移到我们的模型上。","hotpotqa.shortcut":"精确匹配会拒绝写法与简短参考答案不同的正确答案。","hotpotqa.how":"按语义评分，基线为 77.0 / 78.3 / 83.8，而不是 40.2 / 57.4 / 51.2。演化出的增益大部分只需把答案缩短到参考答案片段即可复现。","hotpotqa.ruleNote":"一句话在 nano 和 DeepSeek-V4-Flash 上分别复现了 78% 和 71% 的增益，在 Luna 上则超过了它。","hotpotqa.repair":"语义评分（精确匹配，或两个 LLM judge 都判为正确）。","hotpotqa.after":"与这里的大多数 benchmark 不同，<b>5.5&ndash;7.6 pp 的真实增益保留了下来</b>。重新演化把它追溯到检索：支持性文章的召回率提高约 10 pp，在语义评分下重新演化的 GEPA 在三个模型上都有提升（+8.6 / +8.9 / +3.5）。","hotpotqa.lesson":"Shortcut 和真实增益可以并存。先修复评分器，剩下的增益才能被归因。","hotpotqa.rule_gloss":"答案按与简短参考答案的精确匹配评分。只输出最小的答案片段，不要完整句子、解释或限定语。","hotpotqa.ex.note":"取自我们日志的基线答案：精确匹配判为错误，两个 LLM judge 都判为正确。","searchqa.verdict":"Shortcut · 增益消失","searchqa.measures":"根据检索到的搜索摘要回答 Jeopardy 风格的问题。","searchqa.source":"SkillOpt-Lite 发布的 skill。","searchqa.shortcut":"精确匹配会拒绝写法不同的正确答案。此外，模型在<em>没有</em>摘要时也答得一样好，因此该 benchmark 已不再考察检索。","searchqa.how":"按语义评分，基线为 84.2 / 89.4 / 89.8，而不是 52.0 / 69.3 / 63.9。去掉所有摘要后，这些分数变为 81.9 / 90.2 / 90.7。","searchqa.ruleNote":"一句话复现了 45&ndash;78% 的增益。在语义评分下，它甚至让 nano 的得分<b>降低</b>了 2.0 pp：被要求只写一个简短片段时，模型有时会在含多种说法的答案中保留错误的那部分。","searchqa.repair":"语义评分（精确匹配，或两个 LLM judge 都判为正确）。","searchqa.after":"已发布的 skill 至多带来 1.6 pp。在 100 个剩余错误中，有 36 个源于错误或有歧义的标准答案（例如丢失了类别的 Jeopardy 线索），或其实是可接受的答案。该 benchmark 无法区分 DeepSeek-V4-Flash 和 GPT-5.6 Luna（&minus;0.4 pp，95% CI [&minus;1.5, 0.8]）。","searchqa.lesson":"对 benchmark 声称考察的证据做消融。如果去掉检索到的上下文后分数不下降，它衡量的就是别的东西。","searchqa.rule_gloss":"在答案标签内只写恰好回答问题的最短片段：不加括号说明、翻译或缩写展开，不加引号，句末不加句号。","searchqa.ex.note":"取自我们的日志。","searchqa.ex.r0.label":"含多种说法但正确的答案","searchqa.ex.r0.result":"未通过精确匹配，按语义评分时判为正确","livebench.verdict":"Shortcut · 增益始终很小","livebench.measures":"数学题，包括答案为符号表达式的 AMPS 题。","livebench.source":"GEPA 论文发布的程序（其中两个模型为 GEPA+Merge）。","livebench.shortcut":"AMPS 题的匹配依赖特定格式：以另一种形式写出的等价答案会被判错。","livebench.how":"在已发布的评测下增益很小（0.9 / 1.3 / 3.9 pp），只有最后一个的 95% 置信区间不包含零。","livebench.ruleNote":"未做一句话测试：增益太小，复现比例无法解读。","livebench.repair":"按数学等价性评分。","livebench.after":"按等价性评分，基线升至 82.7 / 88.6 / 85.2，留下 11&ndash;17 pp 的提升空间，但修复后的增益只有 0.2 到 1.3 pp。","livebench.lesson":"对符号答案使用等价性检查；否则方法之间的分数差异有一部分反映的是记法。","alfworld.verdict":"评分器中没有 shortcut","alfworld.measures":"基于文本的家务任务：在房间之间移动并操作物体以达成目标。","alfworld.source":"我们网格实验中演化出的 artifacts。","alfworld.shortcut":"在已发布的评测中未发现 shortcut。增益来自更好的搜索流程，一条规则就能表述。","alfworld.how":"有两点发现对评测很重要：（1）初始智能体只保留历史中的最后两步，一次仅改动这一设置的 harness 运行就获得 29 pp 增益；Meta-Harness 和 AHE 让 DeepSeek-V4-Flash 和 GPT-5.6 Luna 提升 16&ndash;32 pp，原因正是这一设置。（2）对强模型而言，该 benchmark 已饱和：Gemini-3.7-flash 起点就是 96.3；在 SkillOpt 论文中，SkillOpt 及其最强对比方法在 GPT-5.4-mini、GPT-5.4 和 GPT-5.5 上都得 100.0。","alfworld.ruleNote":"这是一个搜索流程，而不是关于评测的陈述。它在 nano 上复现了增益，在 DeepSeek-V4-Flash 上却只复现 30%，因为该模型不遵循它，而更长的演化出的 artifact 确实改变了它的行为。","alfworld.after":"增益是真实的，但来自一个同时帮助大多数任务的改动，正是演化能够识别的那类增益。","alfworld.lesson":"在把功劳归于某个方法之前，先审查 harness 设置（历史窗口、步数上限）；并检查强基线是否已使该 benchmark 饱和。","alfworld.rule_gloss":"系统地搜索：先按编号顺序查看每个开放的表面，再打开封闭的容器；绝不重访空的位置。你只能拿一个物体：绝不拿起任何不是目标的东西。对于“两个 X”类任务，先把第一个放到目的地，再去找第二个。","pupa.verdict":"评分器中没有 shortcut","pupa.measures":"注重隐私的任务委托：为外部模型改写用户的请求，且不泄露个人信息。","pupa.source":"GEPA 论文发布的程序。","pupa.shortcut":"在已发布的评测中未发现 shortcut。","pupa.how":"演化出的增益可由一句直接说明目标行为的话复现。","pupa.ruleNote":"一句话在三个模型上都复现了演化增益的 90% 或更多。","pupa.after":"提升空间很小：演化出的 artifacts 在 DeepSeek-V4-Flash 和 GPT-5.6 Luna 上达到 96&ndash;97，一句话基线也达到同一水平。","pupa.lesson":"一句话就能复现的增益不一定是取巧，但它说明该 benchmark 奖励的是单一行为；在用它比较方法之前，先检查提升空间。","pupa.rule_gloss":"绝不把用户特有的细节复制到外部请求中：用泛化的描述或占位符替换它们，同时保持任务表述完整。","hover.verdict":"无 shortcut · 真实的检索增益","hover.measures":"多跳事实核查：检索核查一条论断所需的维基百科文章。","hover.source":"GEPA 论文发布的程序。","hover.shortcut":"在已发布的评测中未发现 shortcut。","hover.how":"8&ndash;13 pp 的增益来自多跳检索策略。","hover.ruleNote":"一句话在 nano 和 Luna 上只复现了 43% 和 41% 的增益，因为增益分散在多条策略中；在 DeepSeek-V4-Flash 上则复现了 91%。","hover.after":"增益保留了下来，其来源可以指明（检索）。","hover.lesson":"当一句话无法复现某个增益时，该增益可能确实是分散的，而这正是审慎选择起作用的地方。","hover.rule_gloss":"瞄准尚未检索到的维基百科文章：点出那些自身页面仍缺失的具体实体，而不是复述论断。","ifbench.verdict":"无 shortcut · 增益接近噪声","ifbench.measures":"指令遵循，每条指令都由代码检查。","ifbench.source":"GEPA 论文发布的程序（其中两个模型为 GEPA+Merge）。","ifbench.shortcut":"未发现 shortcut：对同样的输出采用更严格的评分（只看模型的原始回复），增益反而变大而不是变小。","ifbench.how":"增益为 2.7&ndash;3.8 pp，与我们方差网格实验中测得的单次运行标准差相当。","ifbench.ruleNote":"未做一句话测试：没有需要规则表述的评测要求，且增益太小，复现比例无法解读。","ifbench.after":"这是增益并非来自 shortcut 时剩下的那种小幅改进的一个例子：无论真实与否，它们都处于单次运行的 resolution 极限。","ifbench.lesson":"小增益需要重复运行才能排序。"};
+    const AZ = (e, f) => (PAGE_LANG === "zh" && ATLAS_ZH[`${e.key}.${f}`]) || e[f];
+    const ATYPE = (k, f) => (PAGE_LANG === "zh" && ATLAS_ZH[`type.${k}.${f}`]) || ATLAS_TYPES[k][f];
+    const ATLAS_STATE = { filter: "all", sel: "spreadsheetbench", bound: false };
+    function atlasStats(e) {
+      const mean = a => { const v = a.filter(x => x != null && !isNaN(x)); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+      return { rep: mean(e.m.map(r => r[2] - r[1])), rule: mean(e.m.map(r => r[3] == null ? null : r[3] - r[1])), fix: mean(e.m.map(r => (r[4] == null || r[5] == null) ? null : r[5] - r[4])) };
+    }
+    function atlasExample(e) {
+      const x = e.example; if (!x) return "";
+      const ex = (i, f, en) => (PAGE_LANG === "zh" && ATLAS_ZH[`${e.key}.ex.r${i}.${f}`]) || en;
+      const mark = ok => ok === true ? '<span class="ax-ok">&#10003;</span>' : ok === false ? '<span class="ax-no">&#10007;</span>' : '<span class="ax-mid">~</span>';
+      let h = `<div class="atlas-ex"><div class="ax-hd">${L("What the grader sees", "评分器看到的")}</div>`;
+      if (x.kind === "cells") h += `<table class="ax-t cells">${x.rows.map((r, i) => `<tr><td>${ex(i, "label", r[0])}</td><td>${r[1]}</td><td>${mark(r[3])} ${ex(i, "result", r[2])}</td></tr>`).join("")}</table>`;
+      if (x.kind === "parse") h += `<table class="ax-t parse">${x.rows.map((r, i) => `<tr><td>${r[0]}</td><td>${mark(r[2])} ${ex(i, "result", r[1])}</td></tr>`).join("")}</table>`;
+      if (x.kind === "mcq") h += `<p class="ax-p">${(PAGE_LANG === "zh" && ATLAS_ZH[`${e.key}.ex.text`]) || x.text}</p><ol class="ax-opts">${x.rows.map((r, i) => `<li class="${r[1] ? "right" : ""}">${ex(i, "option", r[0])}${r[1] ? ` <span class="ax-tag">${L("correct answer", "正确答案")}</span>` : ""}</li>`).join("")}</ol>`;
+      if (x.kind === "qa") h += `<table class="ax-t qa"><tr><th>${L("Question", "问题")}</th><th>${L("Reference", "标准答案")}</th><th>${L("Model answer", "模型回答")}</th></tr>${x.rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}<div class="ax-verdicts"><span class="ax-no">&#10007;</span> ${L("exact match", "精确匹配")} <span class="ax-ok">&#10003;</span> ${L("both judges", "两个 LLM judge")}</div></td></tr>`).join("")}</table>`;
+      const note = (PAGE_LANG === "zh" && ATLAS_ZH[`${e.key}.ex.note`]) || x.note;
+      if (note) h += `<div class="ax-note">${note}</div>`;
+      return h + "</div>";
+    }
+    function atlasBars(e) {
+      const W = 380, rowH = 50, top = 22, H = top + rowH * e.m.length + 6, x0 = 108, x1 = 318, lo = -5, hi = 62;
+      const X = v => x0 + (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo) * (x1 - x0);
+      let h = "";
+      [0, 20, 40, 60].forEach(v => { h += `<line x1="${X(v)}" y1="${top - 4}" x2="${X(v)}" y2="${H - 4}" stroke="${v === 0 ? "rgba(20,20,19,0.35)" : "rgba(20,20,19,0.08)"}"/><text x="${X(v)}" y="12" text-anchor="middle" font-size="12" fill="#73726c" ${PF.sans}>${v}${v === 60 ? " pp" : ""}</text>`; });
+      e.m.forEach((r, i) => {
+        const y = top + i * rowH, [md, b0, ev, ru, rb, re] = r, g = ev - b0, gr = ru == null ? null : ru - b0, gf = (rb == null || re == null) ? null : re - rb;
+        const tip = `${ATLAS_MODEL[md]} &middot; ${L("released evaluation", "随方法发布的评测")}: ${L("baseline", "基线")} ${b0.toFixed(1)}, ${L("evolved", "演化后")} ${ev.toFixed(1)}${ru == null ? "" : `, ${L("baseline + one rule", "基线 + 一句话")} ${ru.toFixed(1)}`}${rb == null ? "" : ` &middot; ${L("repaired", "修复后")}: ${L("baseline", "基线")} ${rb.toFixed(1)}, ${L("evolved", "演化后")} ${re.toFixed(1)}`}`;
+        h += `<g class="ab-row" data-tip="${tip}"><rect x="0" y="${y - 2}" width="${W}" height="${rowH - 4}" fill="transparent"/>`;
+        h += `<text x="0" y="${y + 13}" font-size="13" fill="#141413" ${PF.sans}>${ATLAS_MODEL[md].replace("DeepSeek-V4-Flash", "DeepSeek-V4")}</text>`;
+        h += `<rect x="${Math.min(X(0), X(g))}" y="${y + 2}" width="${Math.abs(X(g) - X(0))}" height="14" rx="2" fill="#cfcbbd"/>`;
+        if (gr != null) h += `<line x1="${X(gr)}" y1="${y - 1}" x2="${X(gr)}" y2="${y + 18}" stroke="#141413" stroke-width="2.4"/>`;
+        if (gf != null) h += `<rect x="${Math.min(X(0), X(gf))}" y="${y + 21}" width="${Math.max(1.5, Math.abs(X(gf) - X(0)))}" height="14" rx="2" fill="#4d7c55"/>`;
+        else h += `<text x="${X(0) + 4}" y="${y + 32}" font-size="12.5" fill="#73726c"${PAGE_LANG === "zh" ? "" : ' font-style="italic"'} ${PF.serif}>${rb == null && e.type !== "none" ? L("repair not run", "未运行修复") : L("no repair needed", "无需修复")}</text>`;
+        h += `<text x="${x1 + 8}" y="${y + 13}" font-size="13" fill="#3d3d3a" ${PF.sans}>${pfSigned(g)}</text>`;
+        if (gf != null) h += `<text x="${x1 + 8}" y="${y + 32}" font-size="13" fill="#4d7c55" font-weight="600" ${PF.sans}>${pfSigned(gf)}</text>`;
+        h += `</g>`;
+      });
+      return `<svg class="atlas-bars" viewBox="0 0 ${W} ${H}" role="img" aria-label="${L("Gains by model", "各模型的增益")}">${h}</svg>
+        <div class="fn-leg-row atlas-leg"><span><i style="background:#cfcbbd"></i>${L("Gain under the released evaluation", "随方法发布的评测下的增益")}</span><span><svg width="10" height="14" viewBox="0 0 10 14"><line x1="5" y1="0" x2="5" y2="14" stroke="#141413" stroke-width="2.4"/></svg>${L("Baseline + one rule", "基线 + 一句话")}</span><span><i style="background:#4d7c55"></i>${L("Gain after repair", "修复后的增益")}</span></div>`;
+    }
+    function renderAtlas() {
+      const root = document.getElementById("atlas"); if (!root) return;
+      const st = ATLAS_STATE, list = document.getElementById("atlas-list"), det = document.getElementById("atlas-detail"), fil = document.getElementById("atlas-filters"), cl = document.getElementById("atlas-checklist");
+      const fmt = v => v == null ? "&ndash;" : pfSigned(v);
+      const drawFilters = () => {
+        const counts = {}; ATLAS.forEach(e => { counts[e.type] = (counts[e.type] || 0) + 1; });
+        fil.innerHTML = [["all", L("All benchmarks", "全部 benchmark"), ATLAS.length]].concat(Object.keys(ATLAS_TYPES).map(k => [k, ATYPE(k, "label"), counts[k] || 0]))
+          .map(([k, l, n]) => `<button type="button" role="tab" data-f="${k}" class="${k === st.filter ? "on" : ""}" aria-selected="${k === st.filter}">${l} <span>${n}</span></button>`).join("");
+      };
+      const drawList = () => {
+        list.innerHTML = ATLAS.map(e => {
+          const s = atlasStats(e), hide = st.filter !== "all" && e.type !== st.filter;
+          return `<button type="button" role="option" class="atlas-item t-${e.type}${e.key === st.sel ? " on" : ""}${hide ? " dim" : ""}" data-k="${e.key}" aria-selected="${e.key === st.sel}">
+            <span class="ai-name">${e.name}</span><span class="ai-type">${ATYPE(e.type, "short")}</span>
+            <span class="ai-num">${fmt(s.rep)}${s.fix != null ? ` <span class="ai-arrow">&rarr;</span> <b>${fmt(s.fix)}</b>` : ""}</span></button>`;
+        }).join("");
+      };
+      const drawDetail = () => {
+        const e = ATLAS.find(x => x.key === st.sel), s = atlasStats(e), gloss = PAGE_LANG === "zh" && ATLAS_ZH[`${e.key}.rule_gloss`];
+        det.innerHTML = `
+          <header class="ad-head"><div><div class="ad-type t-${e.type}">${ATYPE(e.type, "label")}</div><h3>${e.name}</h3><p class="ad-measures">${AZ(e, "measures")}</p></div>
+            <div class="ad-kpi"><div><span>${L("Reported", "报告的")}</span><b>${fmt(s.rep)}</b></div>${s.rule != null ? `<div><span>${L("One rule", "一句话")}</span><b>${fmt(s.rule)}</b></div>` : ""}<div><span>${L("After repair", "修复后")}</span><b class="${s.fix == null ? "na" : ""}">${s.fix == null ? "n/a" : fmt(s.fix)}</b></div><em>${L("mean over models, pp", "各模型平均，pp")}</em></div></header>
+          <p class="ad-verdict t-${e.type}">${AZ(e, "verdict")}</p>
+          <p class="ad-source"><b>${L("Audited artifacts.", "审计的 artifact：")}</b> ${AZ(e, "source")}</p>
+          <div class="ad-cols">
+            <div class="ad-main">
+              <section><h4>${L("The loophole", "漏洞")}</h4><p>${AZ(e, "shortcut")}</p></section>
+              ${atlasExample(e)}
+              <section><h4>${L("How the gain was obtained", "增益从哪里来")}</h4><p>${AZ(e, "how")}</p></section>
+              ${e.rule ? `<section><h4>${L("The sentence that reproduces it", "复现增益的那一句话")}</h4><blockquote>${e.rule.replace(/</g, "&lt;")}</blockquote>${gloss ? `<p class="ad-gloss">${L("", "中文释义：")}${gloss.replace(/</g, "&lt;")}</p>` : ""}<p class="ad-note">${AZ(e, "ruleNote")}</p></section>` : `<section><h4>${L("One-rule test", "一句话测试")}</h4><p class="ad-note">${AZ(e, "ruleNote")}</p></section>`}
+            </div>
+            <div class="ad-side">
+              <section><h4>${L("Gains by model", "各模型的增益")}</h4>${atlasBars(e)}</section>
+              <section><h4>${L("The repair", "修复方法")}</h4><p>${e.repair ? AZ(e, "repair") : L("None needed: no shortcut was found in the released evaluation.", "无需修复：随方法发布的评测中没有发现 shortcut。")}</p></section>
+              <section><h4>${L("What is left", "修复后还剩什么")}</h4><p>${AZ(e, "after")}</p></section>
+            </div>
+          </div>
+          <p class="ad-lesson"><b>${L("For your own evaluation.", "给你自己的评测：")}</b> ${AZ(e, "lesson")}</p>`;
+        const tipEl = root.querySelector(".fn-tip");
+        det.querySelectorAll(".ab-row").forEach(row => {
+          row.onpointerenter = () => { tipEl.innerHTML = row.getAttribute("data-tip"); tipEl.classList.remove("hidden"); const svg = row.ownerSVGElement, r = row.getBoundingClientRect(), sr = svg.getBoundingClientRect(); pfPlaceTip(root, tipEl, svg, (r.left - sr.left + r.width * 0.55) * svg.viewBox.baseVal.width / sr.width, (r.top - sr.top) * svg.viewBox.baseVal.width / sr.width, "top"); };
+          row.onpointerleave = () => tipEl.classList.add("hidden");
+        });
+      };
+      const drawChecks = () => { if (cl) cl.innerHTML = ATLAS_CHECKS.map(c => `<li>${L(c.t, c.tz)} <span class="ac-links">${c.b.map(k => `<button type="button" data-k="${k}">${ATLAS.find(e => e.key === k).name}</button>`).join(", ")}</span></li>`).join(""); };
+      const select = (k, scroll) => {
+        if (!ATLAS.some(e => e.key === k)) return;
+        st.sel = k; drawList(); drawDetail();
+        try { history.replaceState(null, "", location.pathname + location.search + "#atlas-" + k); } catch (err) {}
+        if (scroll) root.scrollIntoView({ behavior: "smooth", block: "start" });
+      };
+      drawFilters(); drawList(); drawDetail(); drawChecks();
+      if (st.bound) return;
+      st.bound = true;
+      fil.addEventListener("click", ev => {
+        const b = ev.target.closest("button[data-f]"); if (!b) return;
+        st.filter = b.dataset.f; drawFilters();
+        const cur = ATLAS.find(e => e.key === st.sel); if (st.filter !== "all" && cur.type !== st.filter) st.sel = ATLAS.find(e => e.type === st.filter).key;
+        drawList(); drawDetail();
+      });
+      list.addEventListener("click", ev => { const b = ev.target.closest(".atlas-item"); if (b) select(b.dataset.k, window.innerWidth < 900); });
+      list.addEventListener("keydown", ev => {
+        if (ev.key !== "ArrowDown" && ev.key !== "ArrowUp") return; ev.preventDefault();
+        const vis = ATLAS.filter(e => st.filter === "all" || e.type === st.filter), i = vis.findIndex(e => e.key === st.sel);
+        const n = vis[(i + (ev.key === "ArrowDown" ? 1 : vis.length - 1)) % vis.length]; select(n.key); const b = list.querySelector(`[data-k="${n.key}"]`); if (b) b.focus();
+      });
+      if (cl) cl.addEventListener("click", ev => { const b = ev.target.closest("button[data-k]"); if (b) { st.filter = "all"; drawFilters(); select(b.dataset.k, true); } });
+      const fromHash = () => { const m = (location.hash || "").match(/^#atlas-([a-z]+)$/); if (m) select(m[1], true); };
+      fromHash(); window.addEventListener("hashchange", fromHash);
     }
     function renderAuditChart() {
       const defectOnly = document.getElementById("chk-defect-only").checked;
@@ -3187,7 +3778,7 @@
         html += `<line x1="${m.l}" y1="${y}" x2="${W - m.r}" y2="${y}" stroke="${v === 0 ? C.slate : C.grid}" stroke-width="1"/>`;
         html += `<text x="${m.l - 8}" y="${y + 4}" text-anchor="end" font-size="12" fill="${C.text}" ${MONO}>${v}</text>`;
       });
-      html += `<text x="14" y="${m.t + ch / 2}" transform="rotate(-90 14 ${m.t + ch / 2})" text-anchor="middle" font-size="12.5" fill="${C.label}" ${FS}>Gain over baseline (pp)</text>`;
+      html += `<text x="14" y="${m.t + ch / 2}" transform="rotate(-90 14 ${m.t + ch / 2})" text-anchor="middle" font-size="12.5" fill="${C.label}" ${FS}>${L("Gain over baseline (pp)", "相对基线的增益（pp）")}</text>`;
 
       const groupW = cw / Math.max(1, items.length);
       const barW = Math.min(14, (groupW - 12) / 3);
@@ -3202,7 +3793,7 @@
         });
         html += `<text x="${gx}" y="${m.t + ch + 14}" transform="rotate(30 ${gx} ${m.t + ch + 14})" text-anchor="start" font-size="12" fill="${d.defect ? C.ink : C.text}" ${FS}>${d.bench}${d.defect ? '' : '*'}</text>`;
       });
-      html += `<text x="${W - m.r}" y="${H - 6}" text-anchor="end" font-size="12" fill="${C.text}" ${FS}>* no evaluation shortcut found (reported and one-rule bars only)</text>`;
+      html += `<text x="${W - m.r}" y="${H - 6}" text-anchor="end" font-size="12" fill="${C.text}" ${FS}>${L("* no evaluation shortcut found (reported and one-rule bars only)", "* 未发现评测 shortcut（只有报告值和一句话两根柱）")}</text>`;
       svg.innerHTML = html;
     }
 
@@ -3259,7 +3850,7 @@
         html += `<text x="${m.l - 8}" y="${y + 4}" text-anchor="end" font-size="12" fill="${C.text}" ${MONO}>${v}%</text>`;
       });
       html += logAxes(m, W, ch, cw, xScale);
-      html += `<text x="${m.l + cw / 2}" y="${H - 6}" text-anchor="middle" font-size="12.5" fill="${C.label}" ${FS}>Candidate budget K (log scale)</text>`;
+      html += `<text x="${m.l + cw / 2}" y="${H - 6}" text-anchor="middle" font-size="12.5" fill="${C.label}" ${FS}>${L("Candidate budget K (log scale)", "候选预算 K（对数刻度）")}</text>`;
 
       const upper = PROP_KS.map((k, i) => `${xScale(k).toFixed(1)},${yScale(d.hi[i]).toFixed(1)}`);
       const lower = PROP_KS.map((k, i) => `${xScale(k).toFixed(1)},${yScale(d.lo[i]).toFixed(1)}`).reverse();
@@ -3301,7 +3892,7 @@
         html += `<text x="${m.l - 8}" y="${y + 4}" text-anchor="end" font-size="12" fill="${C.text}" ${MONO}>+${v}</text>`;
       });
       html += logAxes(m, W, ch, cw, xScale);
-      html += `<text x="${m.l + cw / 2}" y="${H - 6}" text-anchor="middle" font-size="12.5" fill="${C.label}" ${FS}>Candidate budget K (log scale) \u00b7 gain over baseline (pp)</text>`;
+      html += `<text x="${m.l + cw / 2}" y="${H - 6}" text-anchor="middle" font-size="12.5" fill="${C.label}" ${FS}>${L("Candidate budget K (log scale) \u00b7 gain over baseline (pp)", "候选预算 K（对数刻度）· 相对基线的增益（pp）")}</text>`;
 
       const series = [
         { key: "random", color: C.grey, dash: "5,4", w: 1.6 },
@@ -3320,14 +3911,14 @@
         html += `<circle cx="${ax}" cy="${yScale(SELECTION_CURVES[k][activeIdx])}" r="3.5" fill="${c}" stroke="#fff" stroke-width="1.5"/>`;
       });
       html += `<text x="${W - m.r}" y="${yScale(SELECTION_CURVES.oracle[11]) - 8}" text-anchor="end" font-size="12" fill="${C.navy}" ${FS}>Oracle</text>`;
-      html += `<text x="${W - m.r}" y="${yScale(8.55) + 16}" text-anchor="end" font-size="12" fill="${C.text}" ${FS}>Practical selectors \u2248 random</text>`;
+      html += `<text x="${W - m.r}" y="${yScale(8.55) + 16}" text-anchor="end" font-size="12" fill="${C.text}" ${FS}>${L("Practical selectors \u2248 random", "实际可用的 selector \u2248 随机")}</text>`;
       svg.innerHTML = html;
     }
 
     function renderPerTaskTable() {
       let html = `<thead><tr>
-        <th>Task</th><th class="num">Baseline</th><th class="num">Oracle@100</th><th class="num">Random</th>
-        <th class="num">Exec (n=1)</th><th class="num">SkillOpt (n=2)</th><th class="num">LLM pointwise</th><th class="num">ACE judge</th>
+        <th>${L("Task", "任务")}</th><th class="num">${L("Baseline", "基线")}</th><th class="num">Oracle@100</th><th class="num">${L("Random", "随机")}</th>
+        <th class="num">${L("Exec (n=1)", "执行（n=1）")}</th><th class="num">SkillOpt (n=2)</th><th class="num">${L("LLM pointwise", "LLM 逐点评分")}</th><th class="num">ACE judge</th>
       </tr></thead><tbody>`;
       PER_TASK_K100.forEach(r => {
         html += `<tr>
@@ -3370,7 +3961,7 @@
           if (maxR > 6 && idx % 2 === 1) return;
           h += `<text x="${xS(r)}" y="${m.t + ch + 16}" text-anchor="middle" font-size="12" fill="${C.text}" ${MONO}>${r}</text>`;
         });
-        return h + `<text x="${m.l + cw / 2}" y="${H - 4}" text-anchor="middle" font-size="12" fill="${C.label}" ${FS}>Evolution round t</text>`;
+        return h + `<text x="${m.l + cw / 2}" y="${H - 4}" text-anchor="middle" font-size="12" fill="${C.label}" ${FS}>${L("Evolution round t", "演化轮次 t")}</text>`;
       };
 
       // (a) drift: -5..+12
@@ -3386,8 +3977,8 @@
       hD += `<polygon points="${inPts.concat([...frPts].reverse()).join(' ')}" fill="rgba(217,119,6,0.12)"/>`;
       hD += `<polyline fill="none" stroke="${C.ochre}" stroke-width="2" points="${inPts.join(' ')}"/>`;
       hD += `<polyline fill="none" stroke="${C.navy}" stroke-width="2" points="${frPts.join(' ')}"/>`;
-      hD += `<text x="${W - m.r - 2}" y="${yS(d.inloop[last]) - 8}" text-anchor="end" font-size="12" fill="#b45309" ${FS}>In-loop (${sgn(d.inloop[last])} pp)</text>`;
-      hD += `<text x="${W - m.r - 2}" y="${yS(d.fresh[last]) + 15}" text-anchor="end" font-size="12" fill="${C.navy}" ${FS}>8\u00d7 re-eval (${sgn(d.fresh[last])} pp)</text>`;
+      hD += `<text x="${W - m.r - 2}" y="${yS(d.inloop[last]) - 8}" text-anchor="end" font-size="12" fill="#b45309" ${FS}>${L("In-loop", "in-loop")} (${sgn(d.inloop[last])} pp)</text>`;
+      hD += `<text x="${W - m.r - 2}" y="${yS(d.fresh[last]) + 15}" text-anchor="end" font-size="12" fill="${C.navy}" ${FS}>${L("8\u00d7 re-eval", "8 次重新评测")} (${sgn(d.fresh[last])} pp)</text>`;
       document.getElementById("svg-s7-drift").innerHTML = hD;
 
       // (b) variance diffusion
@@ -3416,18 +4007,18 @@
     function skillHtml(s) {
       return `
         <div class="skill-head">
-          <div class="skill-title">${s.id} &mdash; software engineering skill</div>
+          <div class="skill-title">${s.id} &mdash; ${L("software engineering skill", "软件工程 skill")}</div>
           <span class="skill-badge ${s.badgeClass}">${s.badge}</span>
         </div>
-        <span class="skill-lbl">Core checklist</span>
+        <span class="skill-lbl">${L("Core checklist", "核心检查项")}</span>
         <ul>${s.coreBullets.map(b => `<li>${escapeHtml(b)}</li>`).join("")}</ul>
-        <span class="skill-lbl">Concrete pitfall corrections (verbatim, Appendix E)</span>
+        <span class="skill-lbl">${L("Concrete pitfall corrections (verbatim, Appendix E)", "具体的陷阱修正（原文，附录 E）")}</span>
         ${s.pitfalls.map((p, idx) => `
           <div class="pitfall">
-            <div><span class="k">Pitfall ${idx + 1}</span>${escapeHtml(p.pitfall)}</div>
-            <div><span class="k">Trigger</span>${escapeHtml(p.trigger)}</div>
-            <div><span class="k">Correction</span>${escapeHtml(p.correction)}</div>
-            <div><span class="k">Check</span>${escapeHtml(p.check)}</div>
+            <div><span class="k">${L("Pitfall", "陷阱")} ${idx + 1}</span>${escapeHtml(p.pitfall)}</div>
+            <div><span class="k">${L("Trigger", "触发条件")}</span>${escapeHtml(p.trigger)}</div>
+            <div><span class="k">${L("Correction", "修正")}</span>${escapeHtml(p.correction)}</div>
+            <div><span class="k">${L("Check", "检查")}</span>${escapeHtml(p.check)}</div>
           </div>`).join("")}`;
     }
     function showSkill(key, btn) {
@@ -3467,9 +4058,20 @@
         let cur = 0;
         targets.forEach((t, i) => { if (t.offsetTop <= y) cur = i; });
         links.forEach((a, i) => a.classList.toggle("active", i === cur));
+        // keep the active link visible inside the horizontally scrollable nav row
+        const row = document.getElementById("navlinks"), a = links[cur];
+        if (row && a && row.scrollWidth > row.clientWidth + 2 && row.dataset.cur !== String(cur)) {
+          row.dataset.cur = String(cur);
+          const l = a.offsetLeft - row.offsetLeft, r = l + a.offsetWidth;
+          if (l < row.scrollLeft || r > row.scrollLeft + row.clientWidth) row.scrollTo({ left: Math.max(0, l - 24), behavior: "smooth" });
+        }
       };
       window.addEventListener("scroll", onScroll, { passive: true });
-      onScroll();
+      // fade the edge of the nav row that hides links, so it reads as scrollable rather than clipped
+      const row = document.getElementById("navlinks");
+      const fade = () => { if (!row) return; const max = row.scrollWidth - row.clientWidth; row.classList.toggle("fade-l", max > 2 && row.scrollLeft > 2); row.classList.toggle("fade-r", max > 2 && row.scrollLeft < max - 2); };
+      if (row) { row.addEventListener("scroll", fade, { passive: true }); window.addEventListener("resize", fade); }
+      onScroll(); fade();
     }
 
     
@@ -3482,7 +4084,7 @@
         [48,52,56,60,64].forEach(v => { const y=yS(v); h += `<line x1="${m.l}" y1="${y}" x2="${W-m.r}" y2="${y}" stroke="rgba(20,20,19,0.08)"/><text x="${m.l-7}" y="${y+4}" text-anchor="end" font-size="11" fill="#73726c" ${MONO}>${v}%</text>`; });
         [1,2,5,10,20,50,100].forEach(k => { h += `<text x="${xS(k)}" y="${m.t+ch+15}" text-anchor="middle" font-size="11" fill="#73726c" ${MONO}>${k}</text>`; });
         h += `<line x1="${m.l}" y1="${m.t+ch}" x2="${W-m.r}" y2="${m.t+ch}" stroke="rgba(20,20,19,0.28)"/>`;
-        h += `<text x="${m.l+cw/2}" y="${H-4}" text-anchor="middle" font-size="11.5" fill="#3d3d3a" ${FS}>Candidate Pool Budget K</text>`;
+        h += `<text x="${m.l+cw/2}" y="${H-4}" text-anchor="middle" font-size="11.5" fill="#3d3d3a" ${FS}>${L("Candidate Pool Budget K", "候选池预算 K")}</text>`;
         const up = PROP_KS.map((k,i)=>`${xS(k).toFixed(1)},${yS(d.hi[i]).toFixed(1)}`), lo = PROP_KS.map((k,i)=>`${xS(k).toFixed(1)},${yS(d.lo[i]).toFixed(1)}`).reverse();
         h += `<polygon points="${up.concat(lo).join(" ")}" fill="rgba(217,119,87,0.16)"/>`;
         h += `<polyline fill="none" stroke="#a3a199" stroke-width="1.8" stroke-dasharray="5,4" points="${PROP_KS.map((k,i)=>`${xS(k).toFixed(1)},${yS(d.nullm[i]).toFixed(1)}`).join(" ")}"/>`;
@@ -3490,7 +4092,7 @@
         const x100=xS(100), yQ=yS(d.q[11]), yN=yS(d.nullm[11]);
         h += `<line x1="${x100}" y1="${yQ}" x2="${x100}" y2="${yN}" stroke="#141413" stroke-width="2"/><circle cx="${x100}" cy="${yQ}" r="4.5" fill="#d97757" stroke="#faf9f5" stroke-width="1.5"/>`;
         h += `<text x="${x100-8}" y="${yQ-7}" text-anchor="end" font-size="11.5" font-weight="700" fill="#b5532f" ${MONO}>Quality@100: 61.8%</text>`;
-        h += `<text x="${x100-8}" y="${yN+14}" text-anchor="end" font-size="11" fill="#3d3d3a" ${MONO}>Null: 58.4% (+3.4 pp)</text>`;
+        h += `<text x="${x100-8}" y="${yN+14}" text-anchor="end" font-size="11" fill="#3d3d3a" ${MONO}>${L("Null: 58.4% (+3.4 pp)", "Null：58.4%（+3.4 pp）")}</text>`;
         pSvg.innerHTML = h;
       }
 
@@ -3498,17 +4100,17 @@
       if (iSvg) {
         let h = "";
         const ax0=98, ax1=236, ay0=26, ay1=182, xAcc=v=>ax0+((v-38)/22)*(ax1-ax0), x50=xAcc(50);
-        const rows = [{lbl:"1-Rollout Gate",v:49.7,c:"#3e6a9e"},{lbl:"2-Rollout Gate",v:48.6,c:"#a8742a"},{lbl:"LLM Pairwise",v:49.0,c:"#b5443a"},{lbl:"LLM ACE",v:46.9,c:"#b5443a"},{lbl:"LLM Pointwise",v:45.4,c:"#b5443a"}];
-        h += `<text x="6" y="15" font-size="11" font-weight="700" fill="#141413" ${FS}>(a) Selector Pairwise Acc.</text>`;
-        h += `<line x1="${x50}" y1="${ay0}" x2="${x50}" y2="${ay1}" stroke="#141413" stroke-dasharray="4,3" stroke-width="1.4"/><text x="${x50}" y="${ay1+14}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141413" ${MONO}>50% Coin Flip</text>`;
+        const rows = [{lbl:L("1-Rollout Gate","1 次 rollout 验证"),v:49.7,c:"#3e6a9e"},{lbl:L("2-Rollout Gate","2 次 rollout 验证"),v:48.6,c:"#a8742a"},{lbl:L("LLM Pairwise","LLM 两两比较"),v:49.0,c:"#b5443a"},{lbl:"LLM ACE",v:46.9,c:"#b5443a"},{lbl:L("LLM Pointwise","LLM 逐点评分"),v:45.4,c:"#b5443a"}];
+        h += `<text x="6" y="15" font-size="11" font-weight="700" fill="#141413" ${FS}>${L("(a) Selector Pairwise Acc.", "(a) selector 两两比较准确率")}</text>`;
+        h += `<line x1="${x50}" y1="${ay0}" x2="${x50}" y2="${ay1}" stroke="#141413" stroke-dasharray="4,3" stroke-width="1.4"/><text x="${x50}" y="${ay1+14}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141413" ${MONO}>${L("50% Coin Flip", "50% 抛硬币")}</text>`;
         rows.forEach((r,idx)=>{ const y=ay0+18+idx*30, vx=xAcc(r.v); h += `<text x="${ax0-6}" y="${y+4}" text-anchor="end" font-size="10.5" fill="#3d3d3a" ${FS}>${r.lbl}</text><line x1="${ax0}" y1="${y}" x2="${vx}" y2="${y}" stroke="${r.c}" stroke-width="2.8" stroke-linecap="round"/><circle cx="${vx}" cy="${y}" r="4.2" fill="${r.c}" stroke="#faf9f5" stroke-width="1.2"/><text x="${vx+7}" y="${y+3.5}" font-size="10.5" font-weight="700" fill="${r.c}" ${MONO}>${r.v.toFixed(1)}%</text>`; });
         h += `<line x1="254" y1="12" x2="254" y2="206" stroke="rgba(20,20,19,0.12)"/>`;
         const bx0=290, bx1=484, by0=30, by1=182, d=SEC7_DATA.gepa_luna, xR=r=>bx0+(r/12)*(bx1-bx0), yG=v=>by0+((9-v)/14)*(by1-by0);
-        h += `<text x="266" y="15" font-size="11" font-weight="700" fill="#141413" ${FS}>(b) Train vs. Test Scissors</text>`;
+        h += `<text x="266" y="15" font-size="11" font-weight="700" fill="#141413" ${FS}>${L("(b) Train vs. Test Scissors", "(b) 训练与测试的剪刀差")}</text>`;
         [-4,0,4,8].forEach(v=>{const y=yG(v); h+=`<line x1="${bx0}" y1="${y}" x2="${bx1}" y2="${y}" stroke="rgba(20,20,19,0.08)"/><text x="${bx0-5}" y="${y+3.5}" text-anchor="end" font-size="10" fill="#73726c" ${MONO}>${v>0?"+":""}${v}</text>`;});
         const inPts=d.rounds.map((r,i)=>`${xR(r).toFixed(1)},${yG(d.inloop[i]).toFixed(1)}`), frPts=d.rounds.map((r,i)=>`${xR(r).toFixed(1)},${yG(d.fresh[i]).toFixed(1)}`);
         h += `<polygon points="${inPts.concat([...frPts].reverse()).join(" ")}" fill="rgba(181,68,58,0.10)"/><polyline fill="none" stroke="#a8742a" stroke-width="2.4" points="${inPts.join(" ")}"/><polyline fill="none" stroke="#b5443a" stroke-width="2.4" points="${frPts.join(" ")}"/>`;
-        h += `<text x="${bx1}" y="${yG(d.inloop[12])-6}" text-anchor="end" font-size="10.5" font-weight="700" fill="#a8742a" ${MONO}>Train +6.9 pp</text><text x="${bx1}" y="${yG(d.fresh[12])+13}" text-anchor="end" font-size="10.5" font-weight="700" fill="#b5443a" ${MONO}>Test &minus;3.2 pp</text>`;
+        h += `<text x="${bx1}" y="${yG(d.inloop[12])-6}" text-anchor="end" font-size="10.5" font-weight="700" fill="#a8742a" ${MONO}>${L("Train +6.9 pp", "训练 +6.9 pp")}</text><text x="${bx1}" y="${yG(d.fresh[12])+13}" text-anchor="end" font-size="10.5" font-weight="700" fill="#b5443a" ${MONO}>${L("Test &minus;3.2 pp", "测试 &minus;3.2 pp")}</text>`;
         iSvg.innerHTML = h;
       }
     }
@@ -6149,7 +6751,10 @@
 
 
     // Init
-    document.getElementById("bench-note").textContent = BENCHMARKS.terminalbench.note;
+    i18nCollect();
+    PAGE_LANG = i18nResolveLang();
+    i18nApplyStatic();
+    document.getElementById("bench-note").textContent = L(BENCHMARKS.terminalbench.note, BENCHMARKS.terminalbench.noteZh);
     updatePowerSim();
     renderAuditChart();
     updateProposalReadout();
@@ -6160,7 +6765,9 @@
     initNavSpy();
     renderHeroCharts();
     renderNativeFigures();
+    try { renderAtlas(); } catch (e) { console.error("atlas failed", e); }
     initRhGame();
+    if (G.lang !== PAGE_LANG) setGameLang(PAGE_LANG);
     initScrollMechanics();
   </script>
 </body>
