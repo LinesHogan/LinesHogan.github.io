@@ -1820,9 +1820,9 @@
     }
     html.skin-pudding body { background: #ffffff; color: #111111; }
     html.skin-pudding .topnav { background: rgba(255, 255, 255, 0.96); border-bottom: 2px solid #111111; }
-    html.skin-pudding .brand { font-family: var(--font-display); font-weight: 900; font-size: 1.08rem; letter-spacing: -0.03em; color: #111111; }
-    html.skin-pudding .navlinks { gap: 15px; }
-    html.skin-pudding .navlinks a { color: #333333; font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.03em; }
+    html.skin-pudding .brand { font-family: var(--font-display); font-weight: 900; font-size: 1.02rem; letter-spacing: -0.03em; color: #111111; }
+    html.skin-pudding .navlinks { gap: 11px; }
+    html.skin-pudding .navlinks a { color: #333333; font-weight: 600; text-transform: uppercase; font-size: 0.67rem; letter-spacing: 0.015em; }
     html.skin-pudding .navlinks a.active { color: #111111; border-bottom: 2.5px solid #e62b2b; font-weight: 700; }
     html.skin-pudding .lang-switch { border: 1.5px solid #111111; border-radius: 999px; background: #ffffff; }
     html.skin-pudding .lang-switch button.on { background: #111111; color: #ffffff; }
@@ -1945,11 +1945,16 @@
     html.skin-pudding a.br-item:hover { background: #fefce8; transform: translate(-1px, -1px); box-shadow: 6px 6px 0 #111111; }
     html.skin-pudding section.block, html.skin-pudding section.block.band { background: #ffffff; border-bottom: 1.5px solid #e5e5e5; }
     html.skin-pudding .sec-num {
-      display: inline-block; padding: 3px 12px; border: 1.5px solid #111111; border-radius: 999px;
-      background: #ffffff; color: #111111; font-family: var(--font-mono); font-size: 0.74rem; font-weight: 700;
-      margin-bottom: 10px;
+      display: inline-flex; align-items: center; gap: 8px;
+      align-self: start; justify-self: start;
+      width: fit-content; height: fit-content;
+      padding: 5px 13px; margin-top: 6px;
+      border: 1.5px solid #111111; border-radius: 999px;
+      background: #ffffff; color: #111111; box-shadow: 2px 2px 0 #111111;
+      font-family: var(--font-mono); font-size: 0.74rem; font-weight: 700;
+      line-height: 1.2; white-space: nowrap;
     }
-    html.skin-pudding .sec-num b { color: #e62b2b; font-weight: 700; }
+    html.skin-pudding .sec-num b { display: inline; color: #e62b2b; font-weight: 700; font-size: 0.74rem; }
     html.skin-pudding .fig-native, html.skin-pudding .fig-frame, html.skin-pudding .panel,
     html.skin-pudding .exp-toggle, html.skin-pudding .atlas, html.skin-pudding .am-card,
     html.skin-pudding .qa details, html.skin-pudding .metrics, html.skin-pudding .stats,
