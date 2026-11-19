@@ -5928,7 +5928,7 @@
       lang: "en",
       sound: true, music: true,
       deck: [], round: 0, budget: RH.BUDGET, picks: [], loop: 0, loopPoints: [0], auditDrop: 0, auditDone: false,
-      locked: false, finished: false, isBot: false, botTimer: null, roundTimer: null, roundDeadline: 0, lastTick: -1,
+      locked: false, finished: false, isBot: false, botTimer: null, botTimers: [], advanceTimer: null, auditTimer: null, runId: 0, roundTimer: null, roundDeadline: 0, lastTick: -1,
       startMs: 0, elapsedMs: 0, results: null, challenge: null, tipIdx: 0, tipTimer: null, probesUsed: 0
     };
     const G = gameState;
@@ -6181,8 +6181,15 @@
       $("bc-play-view").style.display = "flex";
       renderStatic(); renderHud(); renderRound(false); renderAutoBar();
     }
-    function stopTimers() {
+    function clearBotTimers() {
       if (G.botTimer) { clearTimeout(G.botTimer); G.botTimer = null; }
+      if (G.botTimers && G.botTimers.length) { G.botTimers.forEach(id => clearTimeout(id)); G.botTimers = []; }
+    }
+    function stopTimers() {
+      G.runId = (G.runId || 0) + 1;
+      clearBotTimers();
+      if (G.advanceTimer) { clearTimeout(G.advanceTimer); G.advanceTimer = null; }
+      if (G.auditTimer) { clearTimeout(G.auditTimer); G.auditTimer = null; }
       if (G.roundTimer) { cancelAnimationFrame(G.roundTimer); G.roundTimer = null; }
     }
     function canAct() { return G.engaged && !G.finished && !G.locked && !G.isBot && !G.traceOpen && !G.lbOpen && !G.posterOpen; }
@@ -6363,8 +6370,12 @@
       if (c) { flyChips($("bc-card-" + i)); sfx.select(); haptic(25); floatText(fmtPp(obs) + " pp", $("hud-loop"), obs >= 0 ? "#4d7c55" : "#b5443a"); const p = $("hud-loop-panel"); p.classList.remove("flash"); void p.offsetWidth; p.classList.add("flash"); }
       else { sfx.reject(); }
       if (opts.timeout) toast(T().timeout, 2000);
-      G.botTimer = setTimeout(() => {
-        G.botTimer = null;
+      clearBotTimers();
+      if (G.advanceTimer) clearTimeout(G.advanceTimer);
+      const rid = G.runId;
+      G.advanceTimer = setTimeout(() => {
+        G.advanceTimer = null;
+        if (G.runId !== rid || G.finished) return;
         if (G.round === RH.AUDIT_AFTER) runAudit(advanceRound); else advanceRound();
       }, G.isBot ? 650 : 950);
     }
@@ -6415,9 +6426,18 @@
         <button type="button" class="bc-ov-btn" id="bc-audit-go">${t.cont}</button>
       </div></div>`;
       if (hit) setTimeout(() => { tween($("bc-audit-num"), before, G.loop, 900, v => fmtPp(v) + " pp"); renderHud(before); }, 450);
-      let done = false; const go = () => { if (done) return; done = true; host.innerHTML = ""; next(); };
+      const rid = G.runId;
+      let done = false;
+      const go = () => {
+        if (done || G.runId !== rid) return;
+        done = true;
+        if (G.auditTimer) { clearTimeout(G.auditTimer); G.auditTimer = null; }
+        host.innerHTML = "";
+        next();
+      };
       $("bc-audit-go").onclick = go;
-      setTimeout(go, G.isBot ? 2600 : 9000);
+      if (G.auditTimer) clearTimeout(G.auditTimer);
+      G.auditTimer = setTimeout(go, G.isBot ? 2600 : 9000);
     }
 
     // ------------------------------------------------------------------
@@ -6630,15 +6650,27 @@
         : `<span class="bc-auto-lbl">${t.autoLbl}</span><div class="bc-strats">${stratChips()}</div>`;
     }
     function scheduleBot() {
-      if (G.botTimer) clearTimeout(G.botTimer);
+      clearBotTimers();
+      const rid = G.runId, round = G.round;
       G.botTimer = setTimeout(() => {
-        G.botTimer = null; if (!botOk()) return;
+        G.botTimer = null; if (G.runId !== rid || G.round !== round || !botOk()) return;
         const rd = G.deck[G.round], pl = planRound(G.stratKey, rd, G.round, G.budget, true);
         let delay = 0;
-        rd.cands.forEach((c, i) => { const extra = pl.ns[i] - c.n; if (extra > 0) { setTimeout(() => addRuns(i, extra, { bot: true }), delay); delay += 380; } });
-        rd.cands.forEach((c, i) => { if (pl.pr[i] && !c.probed) { setTimeout(() => runProbe(i, { bot: true }), delay); delay += 650; } });
+        rd.cands.forEach((c, i) => {
+          const extra = pl.ns[i] - c.n;
+          if (extra > 0) {
+            G.botTimers.push(setTimeout(() => { if (G.runId === rid && G.round === round && botOk()) addRuns(i, extra, { bot: true }); }, delay));
+            delay += 380;
+          }
+        });
+        rd.cands.forEach((c, i) => {
+          if (pl.pr[i] && !c.probed) {
+            G.botTimers.push(setTimeout(() => { if (G.runId === rid && G.round === round && botOk()) runProbe(i, { bot: true }); }, delay));
+            delay += 650;
+          }
+        });
         if (delay === 0) rd.cands.forEach((c, j) => sfx.roll(meanOf(c), j * 0.07));
-        G.botTimer = setTimeout(() => { G.botTimer = null; if (botOk()) pickCandidate(pl.pick, { bot: true }); }, delay + 420);
+        G.botTimer = setTimeout(() => { G.botTimer = null; if (G.runId === rid && G.round === round && botOk()) pickCandidate(pl.pick, { bot: true }); }, delay + 420);
       }, 420);
     }
     function runStrategy(key) {
@@ -6649,7 +6681,9 @@
       renderAutoBar(); updateButtons(); if (!G.locked) scheduleBot();
     }
     function takeOverNow() {
-      if (!G.isBot) return; G.isBot = false; if (G.botTimer) { clearTimeout(G.botTimer); G.botTimer = null; }
+      if (!G.isBot) return;
+      G.isBot = false;
+      clearBotTimers();
       renderAutoBar(); updateButtons(); if (!G.locked) startRoundTimer(); sfx.ui();
     }
     function startGatePresetDemo() { runStrategy("greedy"); }
