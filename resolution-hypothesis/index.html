@@ -1062,7 +1062,6 @@
     .bc-stage { overflow-x: hidden; }
     #bc-play-view { justify-content: center; }
     .bc-cards { flex: 0 0 auto; }
-    @media (min-width: 769px) { .bc-meter svg { height: 92px; } }
     .bc-hud > *, .bc-toolbar > *, .b3-ctrl-bar, .bc-cards > * { min-width: 0; }
     .bc-foot { display: flex; flex-direction: column; gap: 7px; margin-top: auto; }
     .bc-act { display: flex; flex-direction: column; gap: 6px; }
@@ -1098,8 +1097,8 @@
       .bc-tag { font-size: 0.64rem; }
       .bc-judge { display: none; }
       .bc-judge-mini { display: inline-block; flex: 0 0 auto; font-family: var(--font-mono); font-weight: 900; font-size: 0.64rem; color: #fde68a; background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.3); padding: 1px 6px; border-radius: 999px; }
-      .bc-meter { padding: 2px 4px 0; }
-      .bc-meter svg { height: 44px; }
+      .bc-meter { padding: 3px 6px 2px; }
+      .bc-meter svg { width: 100%; height: auto; max-height: 62px; }
       .bc-probe { font-size: 0.64rem; padding: 3px 7px; }
       .bc-foot { flex-direction: row !important; align-items: center; gap: 6px !important; }
       .bc-read { flex: 0 0 auto; flex-direction: column; gap: 0; align-items: flex-start; min-width: 64px; }
@@ -1422,7 +1421,8 @@
     .bc-name { font-family: var(--font-sans); font-weight: 600; font-size: 1.02rem; letter-spacing: -0.01em; color: var(--ink); text-shadow: none; }
     .bc-tag { color: var(--muted); }
     .bc-rule { font-family: var(--font-serif); font-style: italic; font-size: 0.86rem; line-height: 1.45; color: var(--ink-2); background: none; border: 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); border-radius: 0; padding: 8px 2px; }
-    .bc-meter { background: var(--paper-2); border: 1px solid var(--border); border-radius: 10px; }
+    .bc-meter { background: var(--paper-2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px 4px; }
+    .bc-meter svg { width: 100%; height: auto; aspect-ratio: 300 / 76; display: block; overflow: visible; }
     .bc-mean { font-family: var(--font-mono); font-weight: 500; font-size: 1.3rem; letter-spacing: -0.02em; }
     .bc-mean.pos { color: var(--pos); } .bc-mean.neg { color: var(--neg); }
     .bc-ci { color: var(--muted); font-weight: 400; }
@@ -1781,8 +1781,8 @@
                 <button type="button" class="g-pill-btn" id="btn-seed-rand" onclick="setSeedType('random')">&#128256;</button>
               </div>
               <div class="g-pill-group" role="group" aria-label="Language">
+                <button type="button" class="g-pill-btn active" id="btn-lang-en" onclick="setGameLang('en')">EN</button>
                 <button type="button" class="g-pill-btn" id="btn-lang-zh" onclick="setGameLang('zh')">中</button>
-                <button type="button" class="g-pill-btn" id="btn-lang-en" onclick="setGameLang('en')">EN</button>
               </div>
               <button type="button" class="g-icon-btn" id="btn-sound" onclick="toggleSound()" title="Sound effects">&#128266;</button>
               <button type="button" class="g-icon-btn" id="btn-music" onclick="toggleMusic()" title="Music">&#127925;</button>
@@ -4856,11 +4856,11 @@
     // =====================================================================
     // 🪙 BEAT THE COIN — The Selection Game (Resolution Hypothesis)
     // Each round: K candidate skills. Each has a hidden true effect d (pp).
-    // A validation run returns d + N(0, SIGMA²). Two runs are free (standard
-    // loops use 1–2 rollouts); extra runs and low-noise process probes cost
-    // compute. Greedy picking ≈ the paper's 49.7% coin-flip selector.
+    // A validation run returns d + bias + tau + N(0, SIGMA²), where tau ~ N(0, TAU²)
+    // is candidate-level validation drift (Eq. 1: Var = sigma²/n + tau²). Extra
+    // rollouts only shrink sigma²/n; low-noise Audit resolves both drift and bias.
     // =====================================================================
-    const RH = { ROUNDS: 8, K: 3, SIGMA: 8, FREE: 2, BUDGET: 24, PROBE_COST: 5, PROBE_SIG: 1.6, AUDIT_AFTER: 4, BLITZ_SEC: 14, AXIS: 24, MAXN: 32, EXPLOIT_BIAS: 12 };
+    const RH = { ROUNDS: 8, K: 3, SIGMA: 10, TAU: 4.5, FREE: 2, BUDGET: 24, PROBE_COST: 3, PROBE_SIG: 1.3, AUDIT_AFTER: 4, BLITZ_SEC: 14, AXIS: 26, MAXN: 32, EXPLOIT_BIAS: 12 };
     const RH_GLOBAL_API_URL = "";
     const POSTER_SHARE_URL = "https://lineshogan.github.io/resolution-hypothesis/";
     const CALLSIGN_KEY = "rh_vc_callsign_v7";
@@ -4914,10 +4914,10 @@
     const PAPER_BASELINES = {
       classic: [
         { player: "👑 Oracle selector (knows the truth)", trueScore: 21.2, elapsedMs: 0, gateAcc: 100, seed: "sim avg", isAi: true },
-        { player: "🔬 Probe-first strategy", trueScore: 8.5, elapsedMs: 0, gateAcc: 52, seed: "sim avg", isAi: true },
-        { player: "🤖 Greedy AI loop (2 runs, pick max)", trueScore: 4.8, elapsedMs: 0, gateAcc: 48, seed: "sim avg", isAi: true },
-        { player: "🪙 Coin flip", trueScore: -2.3, elapsedMs: 0, gateAcc: 31, seed: "sim avg", isAi: true },
-        { player: "🧑‍⚖️ Trust the LLM judge", trueScore: -3.9, elapsedMs: 0, gateAcc: 28, seed: "sim avg", isAi: true }
+        { player: "🔬 Audit-first strategy", trueScore: 11.2, elapsedMs: 0, gateAcc: 58, seed: "sim avg", isAi: true },
+        { player: "🤖 Greedy AI loop (2 runs, pick max)", trueScore: 2.5, elapsedMs: 0, gateAcc: 43, seed: "sim avg", isAi: true },
+        { player: "🪙 Coin flip", trueScore: -2.4, elapsedMs: 0, gateAcc: 31, seed: "sim avg", isAi: true },
+        { player: "🧑‍⚖️ Trust the LLM judge", trueScore: -3.7, elapsedMs: 0, gateAcc: 29, seed: "sim avg", isAi: true }
       ]
     };
     PAPER_BASELINES.blitz = PAPER_BASELINES.classic;
@@ -4950,7 +4950,7 @@
           "Overlapping bars = you can&rsquo;t tell.",
           "LLM judge &asymp; coin flip (45&ndash;49%).",
           "16 tests would fix it &mdash; at 16&times; cost.",
-          "&#129658; Audit: ~25&times; less noise.",
+          "&#129658; Audit cuts both noise &amp; drift (~40&times; lower variance).",
           "Some rounds have no real upgrade.",
           "Big number after 2 tests? Probably luck."
         ],
@@ -5046,7 +5046,7 @@
           "误差条重叠 = 分不出来。",
           "LLM 裁判 &asymp; 抛硬币（45&ndash;49%）。",
           "测 16 次能分清——但成本 16 倍。",
-          "&#129658; 审计：噪声低约 25 倍。",
+          "&#129658; 审计同时消除噪声与漂移（方差低约 40 倍）。",
           "有些轮次根本没有真升级。",
           "测 2 次就分数很高？多半是运气。"
         ],
@@ -5124,7 +5124,7 @@
       engaged: false, inViewport: false, lbOpen: false, posterOpen: false, traceOpen: false,
       lbMode: "classic", lbScope: "all", lbSubmitted: false, lbRankText: "",
       mode: "classic", seedType: "daily", seedStr: "",
-      lang: (typeof navigator !== "undefined" && navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en",
+      lang: "en",
       sound: true, music: true,
       deck: [], round: 0, budget: RH.BUDGET, picks: [], loop: 0, loopPoints: [0], auditDrop: 0, auditDone: false,
       locked: false, finished: false, isBot: false, botTimer: null, roundTimer: null, roundDeadline: 0, lastTick: -1,
@@ -5142,11 +5142,11 @@
     function todayStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
     function fmtPp(v, dig = 1) { const x = Number(v) || 0; return (x >= 0 ? "+" : "\u2212") + Math.abs(x).toFixed(dig); }
 
-    function makeCand(base, d, bias, judge, z, pz, kind) {
+    function makeCand(base, d, bias, judge, z, pz, tau, kind) {
       const alias = STARTUP_ALIASES[base.id] || { ico: base.ico || base.icon || "&#129513;", brand: base.brand || base.id, zhBrand: base.brand || base.id, tagEn: base.tagEn || base.ruleEn, tagZh: base.tagZh || base.ruleZh };
       return { base, id: base.id, ico: alias.ico, brand: alias.brand, zhBrand: alias.zhBrand || alias.brand, tagEn: alias.tagEn, tagZh: alias.tagZh,
         ruleEn: base.ruleEn || "", ruleZh: base.ruleZh || base.ruleEn || "", judgeQEn: (base.judgeQuoteEn || "\"Clean, general, commit.\"").replace(/^"|"$/g, ""), judgeQZh: base.judgeQuoteZh || "结构清晰，建议合并。",
-        d, bias, judge, z, pz, kind, n: RH.FREE, probed: false };
+        d, bias, judge, z, pz, tau, kind, n: RH.FREE, probed: false };
     }
 
     function buildDeck(seedStr) {
@@ -5168,16 +5168,16 @@
           else { base = bads.pop() || GAME_CARDS[1]; d = Math.max(-6, Math.min(0.8, -1.5 + 1.5 * gauss(rng))); kind = "bad"; }
           const judge = Math.min(9.8, Math.round((6.6 + 2.8 * rng() + (bias ? 1.2 : 0)) * 10) / 10);
           const z = []; for (let k = 0; k < RH.MAXN; k++) z.push(gauss(rng));
-          cands.push(makeCand(base, d, bias, judge, z, gauss(rng), kind));
+          cands.push(makeCand(base, d, bias, judge, z, gauss(rng), RH.TAU * gauss(rng), kind));
         }
         rounds.push({ cands, dry: r === dry, exploitIdx });
       }
       return rounds;
     }
-    function runVal(c, k) { return c.d + c.bias + RH.SIGMA * c.z[k]; }
+    function runVal(c, k) { return c.d + c.bias + (c.tau || 0) + RH.SIGMA * c.z[k]; }
     function meanN(c, n) { let s = 0; for (let k = 0; k < n; k++) s += runVal(c, k); return s / Math.max(1, n); }
     function meanOf(c) { return meanN(c, c.n); }
-    function ciOf(c) { return 1.96 * RH.SIGMA / Math.sqrt(Math.max(1, c.n)); }
+    function ciOf(c) { return 1.96 * Math.sqrt((RH.SIGMA * RH.SIGMA) / Math.max(1, c.n) + RH.TAU * RH.TAU); }
     function probeEst(c) { return c.d + RH.PROBE_SIG * c.pz; }
     function bestIdx(rd) { let b = -1, bd = 0; rd.cands.forEach((c, i) => { if (c.d > bd) { bd = c.d; b = i; } }); return b; }
 
@@ -5464,7 +5464,7 @@
           <div class="bc-name"><span class="bc-ico-inline">${c.ico}</span>${escapeHtml(cName(c))}</div>
           <div class="bc-tag">${escapeHtml(zh ? c.tagZh : c.tagEn)}</div>
           <div class="bc-rule">&ldquo;${escapeHtml(zh ? c.ruleZh : c.ruleEn)}&rdquo;</div>
-          <div class="bc-meter"><svg id="bc-meter-${i}" viewBox="0 0 300 76" preserveAspectRatio="none"></svg></div>
+          <div class="bc-meter"><svg id="bc-meter-${i}" viewBox="0 0 300 76" preserveAspectRatio="xMidYMid meet"></svg></div>
           <div class="bc-probe hidden" id="bc-probe-${i}"></div>
           <div class="bc-foot">
             <div class="bc-read"><b class="bc-mean" id="bc-mean-${i}">+0.0</b><span class="bc-ci" id="bc-ci-${i}"></span><span class="bc-n" id="bc-n-${i}"></span></div>
