@@ -1698,7 +1698,11 @@
     .ax-t th { font-family: var(--font-sans); font-size: 0.72rem; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 600; }
     .ax-t td:first-child { color: var(--ink-2); }
     .ax-t.qa td { font-family: var(--font-serif); }
-    .ax-t code { font-size: 0.8rem; white-space: nowrap; }
+    .ax-t { table-layout: fixed; }
+    .ax-t code { font-size: 0.8rem; white-space: normal; overflow-wrap: anywhere; }
+    .ax-t.cells td:nth-child(1) { width: 30%; } .ax-t.cells td:nth-child(2) { width: 38%; }
+    .ax-t.parse td:nth-child(1) { width: 52%; }
+    .atlas-ex { overflow-x: auto; }
     .ax-ok { color: var(--pos); font-weight: 700; } .ax-no { color: var(--neg); font-weight: 700; } .ax-mid { color: var(--c-amber); font-weight: 700; }
     .ax-verdicts { font-family: var(--font-sans); font-size: 0.74rem; color: var(--muted); margin-top: 3px; }
     .ax-p { margin: 0 0 6px; font-family: var(--font-serif); font-size: 0.94rem; color: var(--ink-2); }
@@ -3566,8 +3570,8 @@
       if (!x) return "";
       const mark = ok => ok === true ? '<span class="ax-ok" aria-label="scored correct">&#10003;</span>' : ok === false ? '<span class="ax-no" aria-label="scored wrong">&#10007;</span>' : '<span class="ax-mid">~</span>';
       let h = '<div class="atlas-ex"><div class="ax-hd">What the grader sees</div>';
-      if (x.kind === "cells") h += `<table class="ax-t">${x.rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${mark(r[3])} ${r[2]}</td></tr>`).join("")}</table>`;
-      if (x.kind === "parse") h += `<table class="ax-t">${x.rows.map(r => `<tr><td>${r[0]}</td><td>${mark(r[2])} ${r[1]}</td></tr>`).join("")}</table>`;
+      if (x.kind === "cells") h += `<table class="ax-t cells">${x.rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${mark(r[3])} ${r[2]}</td></tr>`).join("")}</table>`;
+      if (x.kind === "parse") h += `<table class="ax-t parse">${x.rows.map(r => `<tr><td>${r[0]}</td><td>${mark(r[2])} ${r[1]}</td></tr>`).join("")}</table>`;
       if (x.kind === "mcq") h += `<p class="ax-p">${x.text}</p><ol class="ax-opts">${x.rows.map(r => `<li class="${r[1] ? "right" : ""}">${r[0]}${r[1] ? ' <span class="ax-tag">correct answer</span>' : ""}</li>`).join("")}</ol>`;
       if (x.kind === "qa") h += `<table class="ax-t qa"><tr><th>Question</th><th>Reference</th><th>Model answer</th></tr>${x.rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}<div class="ax-verdicts"><span class="ax-no">&#10007;</span> exact match <span class="ax-ok">&#10003;</span> both judges</div></td></tr>`).join("")}</table>`;
       if (x.note) h += `<div class="ax-note">${x.note}</div>`;
