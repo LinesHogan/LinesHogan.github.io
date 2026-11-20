@@ -56,8 +56,7 @@ $$
 
 过去大家发论文，几乎都在卷 $$\text{Propose}$$（设计更精巧的反思提示词、引入树搜索或群体档案），却默认了 $$\hat{Y}$$ 是可靠的。但稍微想一想就会发现不对劲：由于模型权重是冻结的，一段文本 $$A$$ 只能通过微调模型在推理时的行为倾向来发挥作用，而 LLM 每跑一次轨迹本身就有巨大的采样随机性。
 
-![分辨率假说概念图：高噪声与低噪声评估下的爬山对比及进化循环](/resolution-hypothesis/assets/teaser.png)
-{: style="display: block; width: auto; max-width: 100%; max-height: min(380px, 44vh); margin: 1rem auto; object-fit: contain; border-radius: 8px;" }
+![分辨率假说概念图：高噪声与低噪声评估下的爬山对比及进化循环](/resolution-hypothesis/assets/teaser.png){: style="display: block; max-width: 100%; width: auto; height: auto; max-height: 620px; margin: 1.5rem auto; object-fit: contain; border-radius: 8px;" }
 
 我们可以用一个很直观的物理图景来类比（图 1a）：假设你在浓雾笼罩的山区爬山，提议器决定了你每迈出一步的真实高度差 $$\Delta$$（比如 $$+1$$ 米或 $$-1$$ 米），而评估系统则是你手里那块带有测量误差的海拔表（比如随机抖动 $$\pm 5$$ 米）。**当单步的真实改进 $$\Delta$$ 小于海拔表的测量误差时，你看表选路就和抛硬币没两样了。**
 
@@ -86,8 +85,7 @@ $$
 
 为了给 $$\sigma$$ 和 $$\tau$$ 定量，我们在 ALFWorld、SpreadsheetBench、OfficeQA 和 Terminal-Bench v2.1 上，把上述 7 种方法和 6 个模型组成的 150 个配置全部跑了 $$R=8\sim 16$$ 次独立进化，并对每个生成的产物在测试集上做了 $$M=8\sim 16$$ 次独立评估，用方差分析（ANOVA）的无偏矩估计量分离出了 $$\hat{\sigma}$$ 和 $$\hat{\tau}$$。
 
-![方法差距与单次运行标准差对比以及所需运行次数](/resolution-hypothesis/assets/noise.png)
-{: style="display: block; width: auto; max-width: 100%; max-height: min(380px, 44vh); margin: 1rem auto; object-fit: contain; border-radius: 8px;" }
+![方法差距与单次运行标准差对比以及所需运行次数](/resolution-hypothesis/assets/noise.png){: style="display: block; max-width: 100%; width: auto; height: auto; max-height: 620px; margin: 1.5rem auto; object-fit: contain; border-radius: 8px;" }
 
 把算出来的数字和现有文献放在一起对比，有三个结论非常直观：
 

@@ -28,8 +28,7 @@ related_posts: true
 
 由于有限次二元采样仍有波动，我们采用经验贝叶斯层级模型（Empirical-Bayes Hierarchical Model）跨候选池化信息，对每个候选 $$i$$ 在任务上的真实潜在成功率 $$\theta_i \sim \text{Beta}(a,b)$$ 进行后验估计，并观察从池中随机抽取 $$K$$ 个候选时最优候选的期望质量（`Quality@K`）。为了消除“候选越多、碰巧抽中幸运极值的统计期望自然越高”的假象，我们用等质量零假设（Equal-Quality Null，即假设所有候选真实成功率完全相同）进行了校准。
 
-![Proposal Pool Quality@K 与 Selection Pool 选择曲线](/resolution-hypothesis/assets/quality_selection.png)
-{: style="display: block; width: auto; max-width: 100%; max-height: min(380px, 44vh); margin: 1rem auto; object-fit: contain; border-radius: 8px;" }
+![Proposal Pool Quality@K 与 Selection Pool 选择曲线](/resolution-hypothesis/assets/quality_selection.png){: style="display: block; max-width: 100%; width: auto; height: auto; max-height: 620px; margin: 1.5rem auto; object-fit: contain; border-radius: 8px;" }
 
 实验结果非常明确地支持了我们的第一个候选级推论（**P1：候选池中存在真实有效的改进产物**）：
 
@@ -76,11 +75,9 @@ related_posts: true
 
 当单步选择退化为抛硬币时，把它放进多轮进化循环里反复迭代，就会产生我们在第一篇里提到过的两个累积效应（验证推论 **P3**）：
 
-![循环内验证分虚高与 8 倍重评估持平](/resolution-hypothesis/assets/optimism_drift.png)
-{: style="display: block; width: auto; max-width: 100%; max-height: min(380px, 44vh); margin: 1rem auto; object-fit: contain; border-radius: 8px;" }
+![循环内验证分虚高与 8 倍重评估持平](/resolution-hypothesis/assets/optimism_drift.png){: style="display: block; max-width: 100%; width: auto; height: auto; max-height: 620px; margin: 1.5rem auto; object-fit: contain; border-radius: 8px;" }
 
-![运行间方差随轮次单调膨胀](/resolution-hypothesis/assets/variance_diffusion.png)
-{: style="display: block; width: auto; max-width: 100%; max-height: min(380px, 44vh); margin: 1rem auto; object-fit: contain; border-radius: 8px;" }
+![运行间方差随轮次单调膨胀](/resolution-hypothesis/assets/variance_diffusion.png){: style="display: block; max-width: 100%; width: auto; height: auto; max-height: 620px; margin: 1.5rem auto; object-fit: contain; border-radius: 8px;" }
 
 *（上图展示循环内验证分虚高与重评估持平；下图展示运行间方差随轮次膨胀）*
 

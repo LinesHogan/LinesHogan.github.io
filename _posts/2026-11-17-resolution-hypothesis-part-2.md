@@ -37,8 +37,7 @@ related_posts: true
 1. **一句话测试（The One-Rule Test）**：进化出来的 Skill 或 Prompt 往往包含几十条指令。我们通过 LLM 辅助筛查加人工核对，从中只挑出**一句话**，直接拼到未进化的 Baseline 后面（其余一字不改）；
 2. **修复评估测试（Repaired Evaluation）**：我们将评测脚本中违背基准原意的漏洞修好（例如恢复官方公式重算、将死板的字符串匹配改为语义等价判分、剔除题目泄露项），再用同一批进化产物重新测分。
 
-![一句话复现与修复评估后的涨幅对比](/resolution-hypothesis/assets/gain_ledger.png)
-{: style="display: block; width: auto; max-width: 100%; max-height: min(380px, 44vh); margin: 1rem auto; object-fit: contain; border-radius: 8px;" }
+![一句话复现与修复评估后的涨幅对比](/resolution-hypothesis/assets/gain_ledger.png){: style="display: block; max-width: 100%; width: auto; height: auto; max-height: 620px; margin: 1.5rem auto; object-fit: contain; border-radius: 8px;" }
 
 实验结果非常离谱地整齐：在所有原涨幅超过 $$3\text{ pp}$$ 的 27 个“模型-基准”对中，**仅往 Baseline 后面追加一句话，就复现了完整进化算法中位数 90% 的涨幅**（图 3a）；而一旦把评测器的漏洞修好，**中位数涨幅立刻从 17.6 pp 跌到了 0.8 pp**（图 3b）。哪怕我们在修复后的评测器下从头重新运行进化算法，昔日的暴涨也再没有回来。
 
