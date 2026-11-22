@@ -1,23 +1,256 @@
 ---
 layout: page
-title: "03 decode 时训练：ESamp"
-description: "pLLM · Step-by-Step Tutorials (00–05) (交互式入门教程 (00–05))"
+title: "03 Decode-Time Training: ESamp"
+description: "pLLM Documentation · Step-by-Step Tutorials (00–05)"
 permalink: /pllm/docs/tutorials/03_decode_training/
 nav: false
 ---
 
-<div class="zine-dispatch">
+<link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
+
+<div class="zine-dispatch" data-title-zh="03 decode 时训练：ESamp" data-title-en="03 Decode-Time Training: ESamp">
   <div class="zine-dispatch-links">
-    <a class="zine-pill-link primary" href="/pllm/#docs">← pLLM Project &amp; Docs</a>
-    <a class="zine-pill-link" href="/pllm/docs/">All Docs Index</a>
-    <span class="zine-lang-badge">Notebook (.ipynb)</span>
+    <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
+    <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>
+    <span class="zine-lang-badge" data-i18n-zh="可执行教程 (.ipynb)" data-i18n-en="Notebook (.ipynb)">Notebook (.ipynb)</span>
   </div>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/tutorials/03_decode_training.ipynb" target="_blank" rel="noopener">Open .ipynb on GitHub ↗</a>
+  <a class="zine-pill-link" data-i18n-zh="在 GitHub 打开 .ipynb ↗" data-i18n-en="Open .ipynb on GitHub ↗" href="https://github.com/LinesHogan/pLLM/blob/main/doc/tutorials/03_decode_training.ipynb" target="_blank" rel="noopener">Open .ipynb on GitHub ↗</a>
 </div>
 
-<div id="markdown-content" markdown="1">
+<div id="markdown-content">
 
-<div id="sec-1"></div>
+<div class="zine-lang-panel" data-lang-panel="en" lang="en" markdown="1">
+
+<div id="en-sec-1"></div>
+
+**Scenario**: A growing family of algorithms **learns while generating**: each request carries a small set of fast weights, updates them at every generated token using a signal from that token, and lets the updated weights shape subsequent tokens. Many test-time training variants follow this exact pattern. Here we use **ESamp** as our example:
+
+> Each request trains a small network (a distiller) online to predict the final-layer hidden state from layer 0's hidden state. During sampling, logits computed from that shallow prediction are subtracted from the model's logits with strength `beta`: tokens already predictable from shallow features are suppressed, while tokens where deeper layers add new information are boosted.
+
+Implementing this by hand inside an inference engine is painful: autograd must run inside inference mode; each request needs its own parameters and AdamW optimizer state allocated and reclaimed as requests arrive and finish; backward and optimizer steps must overlap with the next forward pass or throughput collapses by half; and all of it still needs to stay inside CUDA graphs.
+
+Here, all you write is the small network (a plain `nn.Module`), one loss function, and one prediction method. Then we measure two things across 128 concurrent requests: whether sampling diversity changes, and how much throughput remains.
+
+```python
+import os
+
+os.environ["VLLM_LOGGING_LEVEL"] = "ERROR"  # Show only vLLM errors to suppress startup logs
+
+from dataclasses import dataclass
+
+import torch
+from torch import nn
+from torch.nn import functional as F
+from vllm import SamplingParams
+
+import pllm
+from pllm import testing
+from pllm.benchmark import throughput
+
+# We benchmark throughput on 7B: on 0.5B a single decode step takes only a few milliseconds, which exaggerates fixed overhead; 7B is the
+# typical deployment scale for this class of algorithms. bf16 7B weights take ~15 GiB, requiring a 24 GiB GPU.
+MODEL = "Qwen/Qwen2.5-7B-Instruct"
+# 128 concurrent requests (8 prompts x 16 samples each).
+CONFIG = pllm.ModelConfig(MODEL, max_model_len=512, max_num_seqs=128, max_num_batched_tokens=8192,
+                          gpu_memory_utilization=0.85, seed=7)
+```
+
+## Step 1: The Small Network Is Plain PyTorch {#en-step-1-the-small-network-is-plain-pytorch}
+
+A low-rank residual block followed by layer norm. `up` is zero-initialized, so before training begins it acts as a plain layer norm over the input.
+
+```python
+class Distiller(nn.Module):
+    def __init__(self, width: int, rank: int) -> None:
+        super().__init__()
+        self.down = nn.Linear(width, rank, bias=False)
+        self.up = nn.Linear(rank, width, bias=False)
+        nn.init.zeros_(self.up.weight)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x + self.up(F.silu(self.down(x)))
+        return F.layer_norm(y, y.shape[-1:])
+```
+
+## Step 2: The Workload {#en-step-2-the-workload}
+
+- `distiller` is a `pllm.RequestState`: **one copy per request**. `init=pllm.FromModule(...)` tells pLLM how to build the network (`m` supplies dimensions known only after model loading; `m.hidden_size` is 3584 for this 7B model), its parameters become the state, and `optimizer=` specifies how to update them. When a request finishes, both its weights and AdamW moments are reclaimed automatically.
+- `loss` is decorated with `@pllm.train(state="distiller")`: it returns **one loss per row** (one row per active request token). The framework masks padding rows, reduces losses (`reduction="mean"` averages within each request state first), runs backward, applies AdamW, and publishes a new version. `pllm.module("distiller")` gives you a module where each row runs against its own request's parameters.
+- `predict` is decorated with `@pllm.guide_sampling(beta=...)`: the returned hidden representation is projected through the LM head, turning the sampling distribution into `(1 + beta) * logits - beta * predicted_logits`. `rows="trained"` leaves untrained requests untouched; the `trained` selector reads how many times each request's state has been updated via `pllm.version`.
+
+```python
+@dataclass(frozen=True)
+class MiniESamp(pllm.Workload):
+    beta: float
+    rank: int = 4
+
+    @property
+    def distiller(self) -> pllm.RequestState:
+        return pllm.RequestState(
+            init=pllm.FromModule(lambda m: Distiller(m.hidden_size, self.rank)), optimizer=pllm.AdamW(1e-3)
+        )
+
+    def trained(self, versions: torch.Tensor = pllm.version("distiller")) -> torch.Tensor:
+        return versions > 0
+
+    @pllm.train(state="distiller")
+    def loss(self, shallow: torch.Tensor = pllm.hidden(0), deep: torch.Tensor = pllm.hidden(-1),
+             f: Distiller = pllm.module("distiller")) -> torch.Tensor:
+        return (f(shallow) - deep).square().mean(-1)
+
+    def strength(self) -> float:
+        return self.beta
+
+    @pllm.guide_sampling(beta=strength, rows="trained")
+    def predict(self, shallow: torch.Tensor = pllm.hidden(0), f: Distiller = pllm.module("distiller")) -> torch.Tensor:
+        return f(shallow)
+```
+
+Because the workload is a frozen dataclass with `beta` and `rank` as fields, `beta=strength` delegates the decorator argument to the method defined right above it. pLLM calls `strength()` once when binding the workload instance to read that instance's `beta`, allowing multiple instances of the same class to carry different `beta` values. Your IDE can jump directly from `strength` to the method definition, and type checkers verify it returns `float`. Avoid writing `beta=beta` directly inside the class body—that binds the class default rather than the instance value.
+
+## Step 3: 128 Requests—Throughput and Outputs {#en-step-3-128-requeststhroughput-and-outputs}
+
+Eight prompts, 16 continuations each, 256 tokens per sample. Three configurations:
+
+- **Plain vLLM**: no workload;
+- **ESamp, beta = 0**: each request trains its distiller normally, without guiding sampling. Training alone should not change a single sampled token;
+- **ESamp, beta = 0.5**: training plus sampling guidance.
+
+Each configuration generates once to record outputs using the same random seed so samples can be compared one-for-one. Throughput is measured via `pllm.benchmark.throughput`: one warmup run followed by three timed runs taking the median, timing full `generate` calls (including prefill) divided by actual generated tokens.
+
+```python
+prompts = [f"Explain the mathematical idea numbered {i}:" for i in range(8)]
+sampling = SamplingParams(n=16, max_tokens=256, temperature=0.8, top_p=0.95, ignore_eos=True, seed=7)
+
+
+def samples(llm) -> list[str]:
+    return [sample.text for output in llm.generate(prompts, sampling, use_tqdm=False) for sample in output.outputs]
+
+
+with pllm.make_llm(CONFIG) as plain:
+    plain_texts = samples(plain)
+    plain_rate = throughput(plain, prompts, sampling)
+print(f"原生 vLLM        : {plain_rate:6.0f} token/s")
+
+for beta in (0.0, 0.5):
+    with pllm.make_llm(CONFIG, workload=MiniESamp(beta)) as llm:
+        texts = samples(llm)
+        rate = throughput(llm, prompts, sampling)
+        report = llm.diagnostics()
+    same = sum(a == b for a, b in zip(texts, plain_texts))
+    print(f"ESamp beta={beta:<4}: {rate:6.0f} token/s，为原生的 {rate / plain_rate:.0%}；"
+          f"{same}/{len(texts)} 个样本与原生相同；累计训练 {report.trained_rows} 行；"
+          f"eager 原因 {report.eager_reason!r}")
+```
+
+```text
+原生 vLLM        :   5896 token/s
+ESamp beta=0.0 :   5786 token/s，为原生的 98%；128/128 个样本与原生相同；累计训练 163200 行；eager 原因 ''
+ESamp beta=0.5 :   5729 token/s，为原生的 97%；3/128 个样本与原生相同；累计训练 163200 行；eager 原因 ''
+```
+
+Three takeaways from these three lines:
+
+- **Training does not perturb generation**: At `beta = 0`, every request trains ("total trained rows" counts all request-token rows across the five `generate` runs on that engine), yet all 128 samples match plain vLLM word-for-word. Occasionally one or two samples may diverge mid-generation due to floating-point rounding: an engine with a workload extracts intermediate hidden states, altering the compiled graph slightly, so stochastic sampling over 256 tokens can tip across a near-tie;
+- **Overhead is tiny**: Running a forward, backward, and AdamW step per token per request drops throughput by only 2–3% compared to plain vLLM, because training runs on a side stream overlapped with the next forward pass;
+- **Guidance takes effect**: At `beta = 0.5`, 125 of 128 samples diverge from the baseline, with the small extra cost coming from projecting predictions through the LM head and modifying the sampling distribution each step.
+
+These numbers come from a single run on a local RTX 4090 (Qwen2.5-7B-Instruct, bf16, vLLM 0.32.0, CUDA graphs; 8 prompts × 16 samples = 128 concurrent requests, 256 tokens each; median of 3 runs after 1 warmup), so individual machines and runs vary by a percentage point or two. Benchmarks for the full ESamp workload under the same setup are recorded in [measurements.toml](https://github.com/LinesHogan/pLLM/blob/main/doc/reference/measurements.toml): 97.4% of plain vLLM for training only, and 96.3% with training plus guidance.
+
+## What the Framework Handled for You {#en-what-the-framework-handled-for-you}
+
+- **Per-request parameters and optimizer state**: 128 small networks plus their AdamW momentum buffers are paged inside GPU memory budgeted at startup and reclaimed as soon as each request completes;
+- **CUDA graphs**: An empty `eager_reason` confirms the model forward, your loss, backward pass, and AdamW updates all run inside CUDA graphs;
+- **Overlap**: Training executes on a side stream concurrently with the next forward pass, trading one step of latency—an update computed at step $$N$$ is visible to `predict` starting at step $$N + 2$$. For strict step-to-step ordering, set `pllm.ExecutionOptions(publish_lag=0)`;
+- **Scheduling**: You never specified which stream training uses or when to synchronize. pLLM's planner infers from your declarations that `loss` writes `distiller` while `predict` reads it, and schedules ordering and overlap automatically.
+
+The full ESamp implementation lives in `pllm.workloads.ESampWorkload`—the same structure as `MiniESamp` here, with gating added to the small network.
+
+## Common Mistakes {#en-common-mistakes}
+
+Three common mistakes in training workloads: reducing the loss to a single scalar yourself, writing `beta=beta` in the class body, and passing `rows=` to a standalone training method. `testing.check` catches the first two on CPU; the third is rejected at build time.
+
+```python
+class ScalarLoss(MiniESamp):
+    @pllm.train(state="distiller")
+    def loss(self, shallow: torch.Tensor = pllm.hidden(0), deep: torch.Tensor = pllm.hidden(-1),
+             f: Distiller = pllm.module("distiller")) -> torch.Tensor:
+        return (f(shallow) - deep).square().mean()  # Averaged all rows into a single scalar
+
+
+@dataclass(frozen=True)
+class ClassDefault(MiniESamp):
+    beta: float = 0.5
+
+    @pllm.guide_sampling(beta=beta, rows="trained")  # Reads the class default 0.5 rather than the instance beta
+    def predict(self, shallow: torch.Tensor = pllm.hidden(0), f: Distiller = pllm.module("distiller")) -> torch.Tensor:
+        return f(shallow)
+
+
+class SelectedTraining(MiniESamp):
+    @pllm.train(state="distiller", rows="trained")  # Trying to train only already-trained requests
+    def loss(self, shallow: torch.Tensor = pllm.hidden(0), deep: torch.Tensor = pllm.hidden(-1),
+             f: Distiller = pllm.module("distiller")) -> torch.Tensor:
+        return (f(shallow) - deep).square().mean(-1)
+
+
+SMALL = pllm.ModelConfig(MODEL, max_num_seqs=8)
+for name, run in (("ScalarLoss", lambda: testing.check(ScalarLoss(0.5), SMALL)),
+                  ("ClassDefault", lambda: testing.check(ClassDefault(), SMALL, neutral=ClassDefault(beta=0.0))),
+                  ("SelectedTraining", lambda: pllm.explain(SelectedTraining(0.5), SMALL))):
+    try:
+        run()
+    except testing.ContractError as error:
+        print(f"{name}: {error.failures[0]}\n")
+    except ValueError as error:
+        print(f"{name}: {error}\n")
+```
+
+```text
+ScalarLoss: [compile] ValueError: training methods return one loss per row; pLLM reduces the selected rows per state
+while shape tracing method 'loss'; methods run inside CUDA graphs: use tensor operations such as torch.where, not .item() or Python branches on tensor values
+
+ClassDefault: [neutral] guide_sampling still declares a sampler stage; set its beta to zero.
+
+SelectedTraining: rows= and update_rows= on request training require a model effect without sampler guidance, or @pllm.add_logits; standalone training and @pllm.guide_sampling update every selected state, so remove rows= and update_rows=
+```
+
+**Why `loss` must return one value per row.** How many rows belong to a given request state in a step depends on scheduling: one row during decode, multiple rows during chunked prefill, or rows from multiple requests when sharing state. Only pLLM knows which rows map to which state copy, so pLLM performs the per-state reduction (`reduction="mean"` or `"sum"`). Calling `.mean()` yourself mixes losses across different requests.
+
+**Why `beta=beta` is wrong.** When the class body executes, no instance exists yet, so `beta` resolves to the class default `0.5`—meaning an instance created with `beta=0` still guides sampling. The `neutral=` contract check ("disabling the knob must not alter sampling") catches this immediately. Wrapping the setting in a method (`def strength(self)`) and passing that method to the decorator lets pLLM evaluate it per instance.
+
+**Why standalone training rejects `rows=`.** When training runs alone or alongside `@pllm.guide_sampling`, it uses a fast path designed for "every request learns on every step": each active request state receives one optimizer update per step, publishes a new version, and overlaps with the next forward pass. Skipping updates per row would require conditional version publication, which that path does not implement, so pLLM rejects it at build time instead of silently ignoring your mask. To exclude rows from contributing, filter with `rows=` on the sampling method (as `predict` does here), or switch to `reduction="sum"` and multiply excluded rows by `0` (with the default `"mean"`, zeroed rows still count in the denominator). When paired with `@pllm.add_logits` or model edits (`Adapter`, etc.), training uses conditional updates and `rows=` is supported.
+
+## Self-Check {#en-self-check}
+
+1. Under default settings, if a training update is computed at step 10, which step is the earliest `predict` can read it? Why is there a delay?
+
+<details><summary>Answer</summary>
+
+Step 12. With the default `publish_lag=1`, training runs on a side stream overlapped with step 11's forward pass, so step 11 cannot read it yet. That one-step lag buys overlap between training and generation; if you need strict sequential visibility, set `pllm.ExecutionOptions(publish_lag=0)` at the cost of no overlap.
+</details>
+
+2. At `beta = 0`, every request is still training—why do sampled outputs match plain vLLM?
+
+<details><summary>Answer</summary>
+
+Training only updates the `distiller` state without touching logits, and `guide_sampling` with `beta=0` schedules no sampler work. Both the model forward and sampling match plain vLLM, so tokens match word-for-word (occasional single-sample divergence comes from minor rounding differences between compiled graphs).
+</details>
+
+3. What happens to newly arrived requests if you remove `rows="trained"`?
+
+<details><summary>Answer</summary>
+
+For a request that hasn't trained yet, the small network is just an unlearned layer norm whose "prediction" is noise, yet it would still steer sampling by `beta`. `rows="trained"` leaves version-0 requests on standard sampling until their state has been updated at least once.
+</details>
+
+Next up, [04 Custom Forward](/pllm/docs/tutorials/04_custom_forward/) takes a different angle: instead of adding side computations, we change which layers the model itself executes.
+
+</div>
+
+<div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN" markdown="1">
+
+<div id="zh-sec-1"></div>
 
 **场景**：有一类算法要在**生成的同时学习**：每个请求带着自己的一小份参数，每生成一个 token
 就用这个 token 上的信号更新一次，更新后的参数再影响后面的生成。测试时训练（test-time training）
@@ -58,7 +291,7 @@ CONFIG = pllm.ModelConfig(MODEL, max_model_len=512, max_num_seqs=128, max_num_ba
                           gpu_memory_utilization=0.85, seed=7)
 ```
 
-## 第一步：小网络就是普通的 PyTorch {#sec-2}
+## 第一步：小网络就是普通的 PyTorch {#zh-sec-2}
 
 一个低秩残差块加 layer norm。`up` 初始化为零，所以训练开始前它只是把输入做一次 layer norm。
 
@@ -75,7 +308,7 @@ class Distiller(nn.Module):
         return F.layer_norm(y, y.shape[-1:])
 ```
 
-## 第二步：负载 {#sec-3}
+## 第二步：负载 {#zh-sec-3}
 
 - `distiller` 是一份 `pllm.RequestState`：**每个请求一份**。`init=pllm.FromModule(...)` 给出怎么构造这个网络
   （`m` 是加载模型后才知道的维度，`m.hidden_size` 对这里的 7B 模型是 3584），它的参数就是状态，
@@ -120,7 +353,7 @@ pLLM 在绑定负载时调用它一次，读到这个实例的 `beta`，这样�
 `strength` 跳到方法定义，类型检查器也会核对它返回 `float`。注意不要直接写 `beta=beta`：类体里的字段名
 指向的是类默认值，不是实例的值。
 
-## 第三步：128 个请求，看吞吐和输出 {#sec-4}
+## 第三步：128 个请求，看吞吐和输出 {#zh-sec-4}
 
 8 个 prompt，每个采样 16 个续写，各 256 个 token。三组对照：
 
@@ -177,7 +410,7 @@ ESamp beta=0.5 :   5729 token/s，为原生的 97%；3/128 个样本与原生相
 = 128 个并发请求、各 256 token；预热 1 轮后 3 轮取中位数），不同机器、不同轮次会有一两个百分点的浮动。同样设置下对完整 ESamp 的基准测量见
 [实测记录](https://github.com/LinesHogan/pLLM/blob/main/doc/reference/measurements.toml)：只训练为原生的 97.4%，训练加引导为 96.3%。
 
-## 框架替你做了什么 {#sec-5}
+## 框架替你做了什么 {#zh-sec-5}
 
 - **每个请求的参数和优化器状态**：128 份小网络加各自的 AdamW 动量，按页分配在启动时就预算好的显存里，
   请求结束即回收；
@@ -189,7 +422,7 @@ ESamp beta=0.5 :   5729 token/s，为原生的 97%；3/128 个样本与原生相
 
 完整的 ESamp 在 `pllm.workloads.ESampWorkload`，和这里的 `MiniESamp` 是同一个结构，只是小网络多了门控。
 
-## 常见错误 {#sec-6}
+## 常见错误 {#zh-sec-6}
 
 训练负载有三个常见错误：自己把 loss 平均成一个数；在类体里直接写 `beta=beta`；以及给训练方法加 `rows=`。前两个
 `testing.check` 能在 CPU 上抓到，第三个在构建时就被拒绝。
@@ -254,7 +487,7 @@ SelectedTraining: rows= and update_rows= on request training require a model eff
 乘以 0（用默认的 `"mean"` 时，乘 0 的行仍算在分母里）。与 `@pllm.add_logits` 或模型改写（`Adapter` 等）一起
 时，训练是有条件的更新，`rows=` 可以用。
 
-## 自测 {#sec-7}
+## 自测 {#zh-sec-7}
 
 1. 默认设置下，第 10 步算出的训练更新，`predict` 最早在第几步读到？为什么要晚这一步？
 
@@ -285,7 +518,11 @@ forward 和采样都和原生一样，所以样本逐字相同（个别样本的
 
 </div>
 
-<div class="zine-doc-footer">
-  <a class="zine-pill-link" href="/pllm/#docs">← Back to pLLM Documentation Hub</a>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/tutorials/03_decode_training.ipynb" target="_blank" rel="noopener">Edit / View on GitHub ↗</a>
 </div>
+
+<div class="zine-doc-footer">
+  <a class="zine-pill-link" data-i18n-zh="← 返回 pLLM 项目与文档中心" data-i18n-en="← Back to pLLM Project &amp; Docs" href="/pllm/#docs">← Back to pLLM Project &amp; Docs</a>
+  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/tutorials/03_decode_training.ipynb" target="_blank" rel="noopener">GitHub &middot; doc/tutorials/03_decode_training.ipynb ↗</a>
+</div>
+
+<script defer src="/assets/js/bilingual-post.js"></script>

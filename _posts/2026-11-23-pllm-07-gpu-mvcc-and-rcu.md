@@ -4,7 +4,7 @@ title: "当上百个在线请求各自边跑边改权重：在 GPU 显存里手�
 title_en: "When a Hundred Live Requests Mutate Weights Concurrently: Building Lock-Free MVCC and Async RCU in GPU Memory"
 date: 2026-11-23 03:04:00 +0800
 description: "深入落地显存多版本状态的五道硬关卡：融合“写时重定向”省掉 AdamW 预拷贝并砍掉 30% 动量显存、用无锁代次账本抓出 ABA 悬空槽、靠两级非阻塞 wait_event 与 abort() 栅栏实现零冗余页回收、跨进程 CUDA IPC 远端凭证隔离、以及五行集合交集划定抢占回滚边界（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
-description_en: "Carrying param.add_() in-place weight updates from a single-stream script into a concurrent serving engine triggers four simultaneous failures: frozen CUDA Graph pointers, two-stream torn reads... (pLLM Engineering Series · Bilingual EN / 中文)"
+description_en: "Carrying param.add_() in-place weight updates from a single-stream script into a concurrent serving engine triggers four simultaneous failures: frozen CUDA Graph pointers, two-stream torn... (pLLM Engineering Series · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
 categories: systems
 pllm_synced: true
@@ -15,10 +15,7 @@ related_posts: true
 ---
 
 <div class="zine-dispatch" data-title-zh="当上百个在线请求各自边跑边改权重：在 GPU 显存里手搓无锁 MVCC 与异步 RCU" data-title-en="When a Hundred Live Requests Mutate Weights Concurrently: Building Lock-Free MVCC and Async RCU in GPU Memory">
-  <div class="zine-dispatch-links">
-    <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档" data-i18n-en="pLLM Project &amp; Docs" href="/pllm/">pLLM 项目主页与文档</a>
-    <a class="zine-pill-link" data-i18n-zh="GitHub · pLLM ↗" data-i18n-en="GitHub &middot; pLLM ↗" href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">GitHub · pLLM ↗</a>
-  </div>
+  <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <div class="zine-lang-switch" role="group" aria-label="Language">
     <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
     <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
@@ -33,7 +30,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（7/10 · 极客拆解 · 显存并发状态）** · [pLLM 项目介绍与文档中心](/pllm/) · [专栏目录与系统解剖图](/pllm/#blog) · [仓库源码原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/07-gpu-mvcc-and-rcu.md)
+> **pLLM 技术随笔与机制拆解（7/10 · 极客拆解 · 显存并发状态）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/07-gpu-mvcc-and-rcu.md)
 
 在单请求研究脚本里，在线更新参数根本算不上一个系统问题：建一个字典 `states[req_id]`，每步算完梯度调一句 `param.add_(delta)` 原地覆盖，请求结束 `del` 掉就完事了。
 
@@ -62,16 +59,7 @@ related_posts: true
 
 按字段切槽立刻带来两项实打实的收益。第一是**字段级零拷贝共享与“写时重定向（Redirect-on-Write）”**：
 
-```text
-版本根 v7 (主流无锁读取)                  版本根 v8 (旁路流刚写完发布)
-┌──────────────────────┐                ┌──────────────────────┐
-│ bias   ──► 槽 #00 ───┼────────────────┼──► 槽 #00 (未改写字段，引用计数+1，零拷贝共享)
-│ weight ──► 槽 #00    │                │    weight ──► 槽 #03 (领新槽写入)
-└──────────────────────┘                └──────────────────────┘
-
-朴素写时复制 (Copy-on-Write):    先把 槽#00 拷进 槽#03 ──► 再在 槽#03 上原地跑 AdamW (多一趟显存读写!)
-融合写时重定向 (Redirect):       分页 AdamW 内核直接从 sources[槽#00] 读旧值入寄存器，算完直写 destinations[槽#03]!
-```
+![字段级零拷贝共享与融合写时重定向示意图](/assets/img/pllm/blog/assets/07-gpu-mvcc-and-rcu-fig1-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 看上面最后两行的区别：常规 COW 在修改前要先调一次拷贝把旧页复制到新页（`fill_versions`）；但对于 `AdamW` 这样全量覆写参数与动量的操作，我们的分页 `AdamW` 内核直接拿着路由表里的源槽号 `0` 读入旧参数和动量，在寄存器里算完一步更新后，直接落盘到目标新槽号 `3`——**连写时复制事先拷旧页的那趟显存往返都省掉了**（只有局部修改部分行的任务才需要声明 `copy_fields` 预拷贝）。
 
@@ -110,17 +98,7 @@ pub(crate) struct Pool {
 
 看看 `Pool::allocate` 是怎么用**两级非阻塞分配（`ready` + `reuse`）**化解这个死结的：
 
-```text
-当写者向字段池申请新槽位时，扫描所有 holders == 0 的逻辑空闲槽：
-
-  第一优先级：ready 槽（holders == 0，且不在任何未完成 Event 的 fences 位图里）
-              ──► 直接拿走！CPU 零等待，GPU 流上也无需插入任何等待指令。
-
-  第二优先级：reuse 槽（holders == 0，但仍挂在某个旧流 Event #42 的 fences 位图上）
-              ──► 照样立刻分给新写者，绝不阻塞 CPU！
-              ──► 账本顺手返回 waits = [Event #42]，由新写者所在 CUDA Stream 执行流间等待：
-                  writer_stream.wait_event(event_42)  (纯 GPU 硬件队列内排队，宿主线程继续向下发射!)
-```
+![两级非阻塞物理槽位回收机制示意图](/assets/img/pllm/blog/assets/07-gpu-mvcc-and-rcu-fig2-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 这套两级机制带来了一个极漂亮的系统性质：**我们的显存容量公式不需要为“GPU 队列里还没跑完的在途内核”多预留哪怕一页冗余显存！** 逻辑一释放，槽位立即可再分配，跨流物理安全全由硬件流上的 `wait_event` 兜底。
 
@@ -177,7 +155,7 @@ return "reset" if (applied & _rewritten(graph)) or custom or probe.custom_attent
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (7/10 · Deep Dive · GPU MVCC & RCU)** · [pLLM Project & Docs Hub](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [Markdown Source on GitHub ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/07-gpu-mvcc-and-rcu.md)
+> **pLLM Engineering Essays & Deep Dives (7/10 · Deep Dive · GPU MVCC & RCU)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/07-gpu-mvcc-and-rcu.md)
 
 In a single-request research script, mutating online state barely registers as a design problem: keep a Python dict `states[req_id]`, call `param.add_(delta)` in place after each step, and `del` it when generation finishes.
 
@@ -206,16 +184,7 @@ So each field owns one contiguous fixed-base tensor `pool[capacity, *field_shape
 
 Whole-field slots unlock two immediate wins. First is **zero-copy untouched sharing plus Redirect-on-Write**:
 
-```text
-Root v7 (read lock-free on main stream)    Root v8 (published by side stream)
-┌──────────────────────┐                   ┌──────────────────────┐
-│ bias   ──► slot #00 ─┼───────────────────┼──► slot #00 (untouched: refcount +1, zero-copy!)
-│ weight ──► slot #00  │                   │    weight ──► slot #03 (fresh private slot)
-└──────────────────────┘                   └──────────────────────┘
-
-Naive Copy-on-Write:       Copy slot #00 -> slot #03 first ──► run in-place AdamW on slot #03 (extra HBM pass!)
-Fused Redirect-on-Write:   Paged AdamW loads old values from sources[slot #00] into registers & stores straight to destinations[slot #03]!
-```
+![Zero-copy field sharing and fused Redirect-on-Write](/assets/img/pllm/blog/assets/07-gpu-mvcc-and-rcu-fig1-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Standard COW copies the old page before mutating (`fill_versions`). For full-tensor writers like `AdamW`, our paged optimizer kernel reads `sources[0]` into registers, computes the step, and writes straight out to `destinations[3]`—**skipping the pre-copy HBM round-trip altogether** (only partial-row writers opt into `copy_fields`).
 
@@ -252,17 +221,7 @@ In a CPU database, `holders == 0` means memory is immediately reusable. On an as
 
 Calling `event.synchronize()` on the CPU before reusing a slot would stall the host launch pipeline. Look at how `Pool::allocate` avoids CPU stalls completely via **two-tier non-blocking allocation (`ready` vs. `reuse`)**:
 
-```text
-Writer requests a free physical slot; allocator scans all slots with `holders == 0`:
-
-  Tier 1 — `ready` slots (`holders == 0` AND absent from every active Event bitmap in `fences`)
-           ──► Hand out immediately! Zero CPU wait, zero GPU stream wait.
-
-  Tier 2 — `reuse` slots (`holders == 0`, but still guarded by uncompleted Event #42 in `fences`)
-           ──► Still hand out immediately without blocking the CPU!
-           ──► Ledger returns `waits = [Event #42]`; Python enqueues a device-side fence on the writer stream:
-               writer_stream.wait_event(event_42)  (GPU hardware queues order themselves; host keeps running!)
-```
+![Two-tier non-blocking slot reclamation (ready vs. reuse)](/assets/img/pllm/blog/assets/07-gpu-mvcc-and-rcu-fig2-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 This two-tier handoff yields a remarkable capacity property: **our memory budget reserves zero extra slack pages for in-flight GPU kernels!** Once logical ownership ends, slots are immediately reallocatable behind GPU-side `wait_event` ordering.
 

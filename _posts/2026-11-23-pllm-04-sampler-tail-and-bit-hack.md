@@ -4,7 +4,7 @@ title: "解码尾声的带宽账，与 5 行 IEEE 754 保序位变换"
 title_en: "Bandwidth Accounting at the Decode Tail—and a 5-Line IEEE 754 Order-Preserving Bit Trick"
 date: 2026-11-23 03:07:00 +0800
 description: "从 top-p 过滤后平均仅剩 4.83 个幸存词出发降维词表计算；对照 IEEE 754 位图推导单条 uint64 整数比较实现“浮点降序 + 同分下标升序”，并提炼“锁种子逐词对账”与“盯批次最大耗时行”两把排障尺子（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
-description_en: "Autoregressive decode ends in a memory-bandwidth bottleneck over the vocabulary matrix, where a few innocent lines of logit rescoring can run slower than lm_head itself. (pLLM Engineering Series · Bilingual EN / 中文)"
+description_en: "Autoregressive decode ends in a memory-bandwidth bottleneck over the vocabulary matrix, where a few innocent lines of logit rescoring can run slower than lm_head itself (pLLM Engineering Series · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
 categories: systems
 pllm_synced: true
@@ -15,10 +15,7 @@ related_posts: true
 ---
 
 <div class="zine-dispatch" data-title-zh="解码尾声的带宽账，与 5 行 IEEE 754 保序位变换" data-title-en="Bandwidth Accounting at the Decode Tail—and a 5-Line IEEE 754 Order-Preserving Bit Trick">
-  <div class="zine-dispatch-links">
-    <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档" data-i18n-en="pLLM Project &amp; Docs" href="/pllm/">pLLM 项目主页与文档</a>
-    <a class="zine-pill-link" data-i18n-zh="GitHub · pLLM ↗" data-i18n-en="GitHub &middot; pLLM ↗" href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">GitHub · pLLM ↗</a>
-  </div>
+  <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <div class="zine-lang-switch" role="group" aria-label="Language">
     <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
     <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
@@ -33,7 +30,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（4/10 · 极客拆解 · 尾声与位运算）** · [pLLM 项目介绍与文档中心](/pllm/) · [专栏目录与系统解剖图](/pllm/#blog) · [仓库源码原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/04-sampler-tail-and-bit-hack.md)
+> **pLLM 技术随笔与机制拆解（4/10 · 极客拆解 · 尾声与位运算）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/04-sampler-tail-and-bit-hack.md)
 
 往大模型解码循环末尾加一点自定义采样逻辑——比如用在线训练的轻量小网络预测值 $$g$$ 去压低主模型隐藏状态 $$h$$ 里的平庸候选词——公式通常只有一行：在主模型做完 `top-k` / `top-p` 过滤留下的候选词上，按 $$(1 + \beta) s_i - \beta g_i$$ 重新打分，再抽样生成下一个词。
 
@@ -51,18 +48,7 @@ scores = torch.where(torch.isfinite(s), (1.0 + beta) * s - beta * pred, s)
 
 拿 7B 模型、128 条并发解码请求来说，词表大小约 15.2 万，隐藏层维度 3584。数据在进入最终抽样前要穿过这样一条带宽漏斗：
 
-```text
-  隐藏状态 h [128, 3584] (不足 1 MB)
-        │
-        ▼  乘 lm_head 权重 [3584, 152064] (BF16, 约 1.1 GB 显存读取!)
-  原始词表得分 [128, 152064]
-        │
-        ▼  转为采样工作区 FP32 张量 (约 78 MB 显存读写)
-  温度缩放 + top-k / top-p 过滤 (淘汰词置为 -inf)
-        │
-        ▼
-  Gumbel-Max 随机抽样 ──► 产出 128 个新 token_id
-```
+![解码尾声的显存带宽漏斗](/assets/img/pllm/blog/assets/04-sampler-tail-and-bit-hack-fig1-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 盯着图上的字节数看，瓶颈一目了然。每步只有 128 行时，`[128, 3584] × [3584, 152064]` 的浮点乘加次数对现代 Tensor Core 来说根本塞不满牙缝，耗时几乎全花在把 **1.1 GB** 权重从显存搬进芯片上。出了 `lm_head` 之后，采样器面对的 `[128, 152064]` 单精度工作张量也有近 **80 MB**。
 
@@ -76,11 +62,7 @@ scores = torch.where(torch.isfinite(s), (1.0 + beta) * s - beta * pred, s)
 
 与其拍脑袋猜，不如直接在真实生成流里插个计数器。我们在十几万行解码数据上统计了每行过滤后非 `-inf` 的候选词数量，分布高度偏斜：
 
-```text
-152,064 个词经过 top-p = 0.95 过滤后的幸存词数量分布：
-  • 平均值：        4.83 个词  （超过 99.99% 的列已被置为 -inf）
-  • 65 万行最大值： 2,785 个词 （即便在最发散的位置，也不足总词表的 2%）
-```
+![top-p = 0.95 过滤后的幸存词数量分布](/assets/img/pllm/blog/assets/04-sampler-tail-and-bit-hack-fig2-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 看到 `4.83` 这个数字，算法结构自然就翻过来了：既然绝大多数时候只有四五个候选词能活过过滤，先用 $$g$$ 去乘全部 15 万列权重、再把 99.997% 的乘积扔掉，纯属无用功。
 
@@ -100,41 +82,13 @@ scores = torch.where(torch.isfinite(s), (1.0 + beta) * s - beta * pred, s)
 
 画一张 IEEE 754 `float32` 的内存比特布局图，推导过程一眼就能看清：
 
-```text
-IEEE 754 float32 比特布局（共 32 位）：
-  31 30          23 22                                           0
- ┌──┬──────────────┬──────────────────────────────────────────────┐
- │S │ Exponent(8b) │                 Mantissa (23b)               │
- └──┴──────────────┴──────────────────────────────────────────────┘
-  ▲
-  └── 符号位 S：0 代表正数，1 代表负数（注意：不是补码，而是“符号 + 绝对值”！）
-
-把原始比特直接当成无符号整数 uint32 看时，实数轴是拧着的：
-  数值从小到大：   -inf  ──────►  -0.0   │   +0.0  ──────►  +inf
-  原始比特(hex)： 0xFF800000 ──► 0x80000000 │ 0x00000000 ──► 0x7F800000
-                  (S=1，越负比特反而越大，反序！) (S=0，越正比特越大，本来就保序！)
-
-做一次对称位变换后，整根实数轴变成单调递增的无符号整数：
-  • 负数 (S=1) -> 32 位全部按位取反 (~bits)：最高位变 0 落入下半区，且反序变正序！
-  • 正数 (S=0) -> 仅最高位异或翻转 (^ 0x80000000)：最高位变 1 升入上半区，保持正序！
-
-  变换后(hex)：   0x007FFFFF ──► 0x7FFFFFFF │ 0x80000000 ──► 0xFF800000
-                     (-inf)        (-0)         (+0)           (+inf)
-```
+![IEEE 754 float32 比特布局与保序位变换](/assets/img/pllm/blog/assets/04-sampler-tail-and-bit-hack-fig3-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 看上面这张图，为什么这套位运算如此工整？因为 IEEE 754 设计指数偏置（exponent bias）的初衷，本来就是为了让正浮点数能直接用整数比较器比大小；唯一的障碍是符号位和负数的绝对值反序。把正数翻最高位送去上半区、把负数 32 位全取反送去下半区（变换前先把 `-0.0` 归成 `+0.0` 消除正负零双表示），所有实数就严格按大小排在了 `uint32` 上。
 
 再往外走一步，把变换后的 32 位保序浮点左移塞进 `uint64` 的高 32 位，低 32 位塞进 `0xFFFFFFFF - token_id`（把“下标越小越优先”翻成无符号整数越大），顺手把 `0` 留给已被过滤淘汰的 `-inf`：
 
-```text
-复合排序键 uint64（单条整数指令 key_a > key_b 即可完成复合决胜）：
-  63                              32 31                               0
- ┌──────────────────────────────────┬──────────────────────────────────┐
- │     保序变换后的 float32 得分     │       0xFFFFFFFF - token_id      │
- └──────────────────────────────────┴──────────────────────────────────┘
-        高 32 位决定得分降序                同分时低 32 位决定下标升序
-                     （全 0 专用于已淘汰位置，自动垫底）
-```
+![复合排序键 uint64 比特布局](/assets/img/pllm/blog/assets/04-sampler-tail-and-bit-hack-fig4-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 把整套推导落成 Triton 代码，编码与解码对称工整，加起来不到十行：
 
@@ -192,7 +146,7 @@ _(附带一个用同样方式抓显存水位爬升查出来的 PyTorch 注册陷
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (4/10 · Deep Dive · Bit Tricks & Tail Bandwidth)** · [pLLM Project & Docs Hub](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [Markdown Source on GitHub ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/04-sampler-tail-and-bit-hack.md)
+> **pLLM Engineering Essays & Deep Dives (4/10 · Deep Dive · Bit Tricks & Tail Bandwidth)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/04-sampler-tail-and-bit-hack.md)
 
 Adding custom sampling guidance to the end of an LLM decode loop—say, using an online-trained lightweight predictor $$g$$ to suppress bland candidate tokens in the trunk hidden state $$h$$—usually takes one line of math: over the candidate set surviving the trunk's `top-k` / `top-p` filter, rescore each surviving token as $$(1 + \beta) s_i - \beta g_i$$ before drawing the next token.
 
@@ -210,18 +164,7 @@ To diagnose why, draw the dataflow and byte volumes at the end of a decode step 
 
 Take a 7B model serving 128 concurrent decode requests with a vocabulary of `152,064` and hidden dimension `3,584`. Every step pushes data through this bandwidth funnel:
 
-```text
-  Hidden state h [128, 3584] (< 1 MB)
-        │
-        ▼  Multiply by lm_head weights [3584, 152064] (BF16, ~1.1 GB HBM read!)
-  Raw vocabulary logits [128, 152064]
-        │
-        ▼  Materialize FP32 sampler workspace (~78 MB HBM read/write)
-  Temperature scaling + top-k / top-p mask (rejected columns set to -inf)
-        │
-        ▼
-  Gumbel-Max stochastic draw ──► 128 next token_ids
-```
+![Decode-tail HBM bandwidth funnel](/assets/img/pllm/blog/assets/04-sampler-tail-and-bit-hack-fig1-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Staring at the byte counts makes the bottleneck obvious. At 128 rows per step, the arithmetic in `[128, 3584] × [3584, 152064]` barely warms up modern Tensor Cores; runtime is dominated by streaming **1.1 GB** of weights out of HBM. Once past `lm_head`, the FP32 `[128, 152064]` sampler workspace spans nearly **80 MB**.
 
@@ -235,11 +178,7 @@ How do you avoid reading that 1.1 GB `lm_head` matrix a second time? Flip the qu
 
 Instead of guessing, instrument a live decode stream and count finite entries per row. Across `652,000` real decode rows, the survivor count is heavily skewed:
 
-```text
-Surviving candidates out of 152,064 after top-p = 0.95 filtering:
-  • Mean:               4.83 tokens  (> 99.99% of columns are already -inf)
-  • Max over 652k rows: 2,785 tokens (< 2% of the vocabulary even at peak entropy)
-```
+![Surviving candidates distribution after top-p = 0.95 filtering](/assets/img/pllm/blog/assets/04-sampler-tail-and-bit-hack-fig2-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Seeing `4.83` turns the algorithm upside down: when four or five candidates survive on a typical step, multiplying $$g$$ against all `152,064` columns only to throw away `99.997%` of the dot products is pure waste.
 
@@ -259,41 +198,13 @@ The inspiration comes from two classic systems domains: **floating-point radix s
 
 Draw the bit layout of an IEEE 754 `float32`, and the derivation falls out visually:
 
-```text
-IEEE 754 float32 bit layout (32 bits total):
-  31 30          23 22                                           0
- ┌──┬──────────────┬──────────────────────────────────────────────┐
- │S │ Exponent(8b) │                 Mantissa (23b)               │
- └──┴──────────────┴──────────────────────────────────────────────┘
-  ▲
-  └── Sign bit S: 0 for positive, 1 for negative (sign-magnitude, NOT two's complement!)
-
-Viewed directly as an unsigned integer uint32, the real line is folded backward on negatives:
-  Numeric order:   -inf  ──────►  -0.0   │   +0.0  ──────►  +inf
-  Raw bits (hex): 0xFF800000 ──► 0x80000000 │ 0x00000000 ──► 0x7F800000
-                  (S=1: more negative = larger bits, inverted!) (S=0: already monotonic!)
-
-A symmetric bit transform unfolds the entire real line monotonically onto uint32:
-  • Negatives (S=1) -> bitwise NOT all 32 bits (~bits): MSB flips to 0 (lower half) & order reverses!
-  • Positives (S=0) -> XOR only the sign bit (^ 0x80000000): MSB flips to 1 (upper half), order stays!
-
-  Transformed:    0x007FFFFF ──► 0x7FFFFFFF │ 0x80000000 ──► 0xFF800000
-                     (-inf)        (-0)         (+0)           (+inf)
-```
+![IEEE 754 float32 bit layout and order-preserving bit transform](/assets/img/pllm/blog/assets/04-sampler-tail-and-bit-hack-fig3-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Why does this work so cleanly? IEEE 754 designed its biased exponent specifically so non-negative floats could be compared with integer hardware; the only obstacles are the sign bit and the reversed magnitude of negatives. Canonicalizing `-0.0` to `+0.0` first, flipping the sign bit on non-negatives to lift them into the upper half, and complementing all 32 bits on negatives to drop and reverse them into the lower half maps every finite float strictly in order onto `uint32`.
 
 Take one more step: shift that 32-bit ordered float into the upper half of a `uint64`, pack `0xFFFFFFFF - token_id` into the lower 32 bits (turning smaller token IDs into larger unsigned values), and reserve `0` for masked `-inf` entries:
 
-```text
-Composite uint64 sort key (a single integer key_a > key_b resolves score + tie-break):
-  63                              32 31                               0
- ┌──────────────────────────────────┬──────────────────────────────────┐
- │    Order-preserving float32      │       0xFFFFFFFF - token_id      │
- └──────────────────────────────────┴──────────────────────────────────┘
-       High 32 bits: logit descending     Low 32 bits: token_id ascending
-                   (All-zero key 0 reserved for -inf, sorting last)
-```
+![Composite uint64 sort key bit layout](/assets/img/pllm/blog/assets/04-sampler-tail-and-bit-hack-fig4-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Translated into Triton, encoding and decoding are symmetric and fit in ten lines:
 

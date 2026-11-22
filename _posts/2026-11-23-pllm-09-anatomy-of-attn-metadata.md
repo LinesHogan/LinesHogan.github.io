@@ -4,7 +4,7 @@ title: "连续批处理的行坐标还原：探针实测 vLLM `attn_metadata` �
 title_en: "Reconstructing Token Coordinates in Flattened Batches: Probing vLLM's `attn_metadata` and Sync-Free On-GPU Parsing"
 date: 2026-11-23 03:02:00 +0800
 description: "示范如何用 5 步最小混批探针与单请求 MSE 对账测清 attn_metadata 的真实语义；从 CSR 行偏移出发推导图内零同步 searchsorted 坐标还原、边界夹紧抽页与 slot_mapping = -1 读写控制，并划分与上游三整数路由的职责边界（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
-description_en: "Continuous batching and chunked prefill pack variable-length request slices end to end into a 2D [num_tokens, hidden] tensor—trailed by silent padding rows under static CUDA Graphs. (pLLM Engineering Series · Bilingual EN / 中文)"
+description_en: "Continuous batching and chunked prefill pack variable-length request slices end to end into a 2D [num_tokens, hidden] tensor—trailed by silent padding rows under static CUDA Graphs (pLLM Engineering Series · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
 categories: systems
 pllm_synced: true
@@ -15,10 +15,7 @@ related_posts: true
 ---
 
 <div class="zine-dispatch" data-title-zh="连续批处理的行坐标还原：探针实测 vLLM `attn_metadata` 与图内无同步反解" data-title-en="Reconstructing Token Coordinates in Flattened Batches: Probing vLLM's `attn_metadata` and Sync-Free On-GPU Parsing">
-  <div class="zine-dispatch-links">
-    <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档" data-i18n-en="pLLM Project &amp; Docs" href="/pllm/">pLLM 项目主页与文档</a>
-    <a class="zine-pill-link" data-i18n-zh="GitHub · pLLM ↗" data-i18n-en="GitHub &middot; pLLM ↗" href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">GitHub · pLLM ↗</a>
-  </div>
+  <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <div class="zine-lang-switch" role="group" aria-label="Language">
     <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
     <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
@@ -33,22 +30,13 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（9/10 · 极客拆解 · 批次解包与元数据）** · [pLLM 项目介绍与文档中心](/pllm/) · [专栏目录与系统解剖图](/pllm/#blog) · [仓库源码原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/09-anatomy-of-attn-metadata.md)
+> **pLLM 技术随笔与机制拆解（9/10 · 极客拆解 · 批次解包与元数据）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/09-anatomy-of-attn-metadata.md)
 
 在单请求脚本里编写模型层逻辑时，激活张量的形状是规整的三维 `[batch_size, seq_len, hidden_size]`，请求下标与序列位置直接对应前两个维度。
 
 进入开启了连续批处理（Continuous Batching）与分块预填充（Chunked Prefill）的生产级 vLLM 引擎后，为了不让短请求等待长提示词，调度器在每一步为各活跃请求分配不同数量的待算词，首尾相接拼成二维张量 `[num_tokens, hidden_size]` 送入模型；为了对齐预先录制的静态图尺寸，张量末尾还可能补上若干空行：
 
-```text
-单请求三维张量 [B, S, H]：                连续批处理拼接后的二维张量 [num_tokens, H]：
-┌───────────────────────────┐            ┌──────────────────────────────────────────────┐
-│ 请求 0_0 (解码): [1 词]    │            │ Row 0:     请求 0_0 的第 5 号词 (解码)        │
-├───────────────────────────┤            │ Row 1..2:  其他请求的当前词                   │
-│ 请求 1   (解码): [1 词]    │    ───►    │ Row 3..63: 请求 2 的第 52..112 号词 (分块预填) │
-├───────────────────────────┤            │ Row 64..:  可选的 CUDA Graph 尾部补齐空行     │
-│ 请求 2   (分块): [61 词]   │            └──────────────────────────────────────────────┘
-└───────────────────────────┘
-```
+![连续批处理下的张量降维：从三维切片到二维扁平拼接](/assets/img/pllm/blog/assets/09-anatomy-of-attn-metadata-fig1-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 只要编写与上下文结构相关的定制算子——无论是稀疏注意力、自适应层跳过，还是按请求维护在线状态——在执行张量运算前都必须建立从**扁平行号 `r`** 到 **`(请求序号, 序列逻辑位置 offset, 生命周期阶段)`** 的精确映射。
 
@@ -66,14 +54,7 @@ related_posts: true
 
 在模型执行器的 `prepare_attn` 与元数据构建器外包一层十余行的记录函数（见仓库脚本 `tools/probe_attention_metadata.py`），仅需 **5 个推理步**，就能完整捕获预填充、多样本拆分、解码切换与整图尾部补齐（`FULL` CUDA Graph padding）的真实快照：
 
-```text
-步  图模式   批内请求排列顺序      scheduled    computed     query_start_loc   seq_lens       logits_indices  is_prefilling
-1  NONE    [1, 0_0, 1_0, 2]    [2,5,5,52]   [0,0,0,0]    [0,2,7,12,64]     [2,5,5,52]     [1,6,11,63]     [T,T,T,T]
-2  NONE    [0_0, 1_0, 1, 2]    [1,1,1,61]   [5,5,2,52]   [0,1,2,3,64]      [6,6,3,113]    [0,1,2,63]      [F,F,F,T]
-3  NONE    [0_0, 1_0, 1, 2]    [1,1,1,37]   [6,6,3,113]  [0,1,2,3,40]      [7,7,4,150]    [0,1,2,39]      [F,F,F,T]
-4  FULL图  [0_0, 1_0, 1, 2]    [1,1,1,1]    [7,7,4,150]  [0,1,2,3,4]       [8,8,5,151]    [0,1,2,3]       [F,F,F,F]
-5  FULL图  [0_0, 1_0, 1, pad]  [1,1,1]      [8,8,5]      [0,1,2,3,3]       [9,9,6,0]      [0,1,2]         [F,F,F]
-```
+![五步探针实测快照：attn_metadata 运行期字段演化全貌](/assets/img/pllm/blog/assets/09-anatomy-of-attn-metadata-fig2-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 为了理解为什么表里的字段会出现看似反直觉的数值，需要抓住一个核心建模认知：**`attn_metadata` 并不是给上层业务看的“请求生命周期账本”，而是专门为底层 CUDA 注意力内核准备的“硬件启动参数包”**。从这个视角审视上表，三组关键规律便清晰串了起来：
 
@@ -93,16 +74,7 @@ related_posts: true
 
 要在 GPU 上无循环地把每个行号 `row` 映射回所属请求 `i`，直接对右边界数组 `query_start_loc[1:]` 执行并行二分查找 `torch.searchsorted(..., right=True)`（寻找第一个严格大于 `row` 的右边界下标）即可。更关键的是，需要验证它在第 5 步尾部存在零长度补齐段 `[0, 1, 2, 3, 3]` 时的边界行为：
 
-```text
-第 5 步带静态图补齐的 CSR 前缀和： query_start_loc = [0, 1, 2, 3, 3],  seq_lens = [9, 9, 6, 0]
-截取右边界数组：                   query_start_loc[1:] = [1, 2, 3, 3]
-
-对全部图内行号 rows = [0, 1, 2, 3] 执行 searchsorted(..., right=True)：
-  • row 0 (< 1) ──► 返回 0 (请求 0_0)
-  • row 1 (< 2) ──► 返回 1 (请求 1_0)
-  • row 2 (< 3) ──► 返回 2 (请求 1)
-  • row 3 (不小于末尾 3) ──► 二分越过末尾返回 4 ──► 经 .clamp(max=len(seq_lens)-1) 钳回下标 3 (补齐空槽)!
-```
+![第 5 步静态图补齐下的 CSR 并行二分与边界夹紧](/assets/img/pllm/blog/assets/09-anatomy-of-attn-metadata-fig3-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 拿到每行对应的请求下标 `requests` 后，利用前面测出的恒等式“步末 `seq_lens` 等于该请求本步最后一个词的绝对位置加 1”，只做一次向量加减法就能还原每行的精确序列坐标 `positions`（见 `pllm/execution/attention.py`）：
 
@@ -142,14 +114,7 @@ keys = key_cache[blocks, safe % 16].masked_fill(~valid[..., None, None], 0.0)
 
 因此，对于**第 0 层激活捕获、旁路流状态预取、每请求状态路由以及抢占重算过滤**这类跨层机制，正确的切入点是从注意力层往上游退一步，在 CPU 端的 `GPUModelRunner.prepare_attn` 构造 `attn_metadata` 之前读取 `InputBatch`。那里保存着决定调度的三个基础整数——本步词数 `scheduled`、提示词总长 `prompt`、已算词数 `computed`。配合为每个请求维护的单调递增进度上界 `frontier`，不到 30 行无 GIL 的 Rust 整数循环（单步约 `122 µs`）就能算完所有生命周期标签：
 
-```text
-CPU 上游三整数判定（设某请求提示词总长 prompt = 150，前两步已推进至 frontier = 113）：
-  遍历本步第 k 个词 (0 <= k < scheduled)，序列绝对位置 offset = computed + k ：
-
-  • 提示词完结行：     offset == prompt - 1  (仅在第 149 号词处触发一次，不受前两步分块干扰)
-  • 最新解码生成行：   offset >= prompt 且 k == scheduled - 1
-  • 抢占重算回放识别： 若被驱逐后从 0 重算前 64 词，因 offset (0..63) < frontier (113)，直接标为 RECOMPUTED 跳过重复训练!
-```
+![上游 CPU 三整数判定与单调水位线](/assets/img/pllm/blog/assets/09-anatomy-of-attn-metadata-fig4-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 在 **[pLLM](https://github.com/LinesHogan/pLLM)**（`pllm`）中，这两套机制各司其职：**跨层状态路由与生命周期判定留在上游 CPU，用三个标量整数隔离后端差异；层内自定义注意力留在下游 GPU，用 `searchsorted` 与元数据掩码保持静态图零同步**（唯一前提是不开启单步塞入多个草稿词的投机解码 `num_draft_tokens == 0`，入口处对此有显式断言检查）。先辨清问题属于“跨层调度语义”还是“层内缓存寻址”，就不会在错误的抽象层上绕弯路。
 
@@ -163,22 +128,13 @@ CPU 上游三整数判定（设某请求提示词总长 prompt = 150，前两步
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (9/10 · Deep Dive · Unpacking Jagged Batches)** · [pLLM Project & Docs Hub](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [Markdown Source on GitHub ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/09-anatomy-of-attn-metadata.md)
+> **pLLM Engineering Essays & Deep Dives (9/10 · Deep Dive · Unpacking Jagged Batches)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/09-anatomy-of-attn-metadata.md)
 
 In a single-request research script, activations arrive as a 3D `[batch_size, seq_len, hidden_size]` tensor where request index and token position correspond directly to the first two axes.
 
 Inside a production vLLM engine running continuous batching and chunked prefill, the scheduler assigns each active request a variable token budget per step and concatenates them end to end into a 2D `[num_tokens, hidden_size]` tensor; under static CUDA Graphs, extra padding rows may also trail at the end to match a captured bucket width:
 
-```text
-Single-request 3D tensor [B, S, H]:       Continuous-batching 2D tensor [num_tokens, H]:
-┌───────────────────────────┐            ┌──────────────────────────────────────────────────┐
-│ Req 0_0 (decode): [1 tok] │            │ Row 0:     Req 0_0, token offset 5 (decode)      │
-├───────────────────────────┤            │ Row 1..2:  Other active decode tokens            │
-│ Req 1   (decode): [1 tok] │    ───►    │ Row 3..63: Req 2, offsets 52..112 (prefill chunk)│
-├───────────────────────────┤            │ Row 64..:  Optional trailing CUDA Graph padding  │
-│ Req 2   (chunk):  [61 tok]│            └──────────────────────────────────────────────────┘
-└───────────────────────────┘
-```
+![Flattening batched activations from 3D slices to 2D packed rows](/assets/img/pllm/blog/assets/09-anatomy-of-attn-metadata-fig1-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Any custom operator that depends on sequence structure—sparse or windowed attention, adaptive layer skipping, or per-request stateful adaptation—must first establish an exact mapping from **flat row index `r`** to **`(request_index, logical_offset, lifecycle_phase)`**.
 
@@ -190,14 +146,7 @@ Rather than reading twenty thousand lines of backend code and guessing, a reliab
 
 Setting `max_num_batched_tokens = 64` to force chunked prefill with CUDA Graphs enabled and submitting three small requests—a 5-token prompt with parallel sampling `n = 2` (splitting into `0_0` and `1_0`), a 2-token prompt (`1`), and a 150-token prompt (`2`)—exercises prefill chunking, multi-sample fan-out, decode transitions, and `FULL` CUDA Graph padding within **5 steps** (`tools/probe_attention_metadata.py`):
 
-```text
-Step Graph   Batch req order     scheduled    computed     query_start_loc   seq_lens       logits_indices  is_prefilling
-1    NONE    [1, 0_0, 1_0, 2]    [2,5,5,52]   [0,0,0,0]    [0,2,7,12,64]     [2,5,5,52]     [1,6,11,63]     [T,T,T,T]
-2    NONE    [0_0, 1_0, 1, 2]    [1,1,1,61]   [5,5,2,52]   [0,1,2,3,64]      [6,6,3,113]    [0,1,2,63]      [F,F,F,T]
-3    NONE    [0_0, 1_0, 1, 2]    [1,1,1,37]   [6,6,3,113]  [0,1,2,3,40]      [7,7,4,150]    [0,1,2,39]      [F,F,F,T]
-4    FULL    [0_0, 1_0, 1, 2]    [1,1,1,1]    [7,7,4,150]  [0,1,2,3,4]       [8,8,5,151]    [0,1,2,3]       [F,F,F,F]
-5    FULL    [0_0, 1_0, 1, pad]  [1,1,1]      [8,8,5]      [0,1,2,3,3]       [9,9,6,0]      [0,1,2]         [F,F,F]
-```
+![5-step runtime probe snapshot of vLLM attn_metadata](/assets/img/pllm/blog/assets/09-anatomy-of-attn-metadata-fig2-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Every quirk in that table makes immediate sense once you model what `attn_metadata` actually is: **it is not a high-level request-lifecycle ledger—it is a low-level kernel launch packet shaped around GPU grid partitioning and static graph buckets.** Three structural consequences follow directly:
 
@@ -217,14 +166,7 @@ With the layout clear, consider the in-graph problem: **when custom code runs in
 
 Evaluating `torch.searchsorted(query_start_loc[1:], rows, right=True)` finds the first right endpoint strictly greater than `row` in $$O(\log B)$$ parallel work per thread—and clamping to `len(seq_lens) - 1` handles Step 5's trailing zero-length graph-padding interval `[0, 1, 2, 3, 3]` cleanly:
 
-```text
-Step 5 padded CSR offsets:  query_start_loc = [0, 1, 2, 3, 3],  seq_lens = [9, 9, 6, 0]
-Right endpoints:            query_start_loc[1:] = [1, 2, 3, 3]
-
-torch.searchsorted(query_start_loc[1:], rows=[0, 1, 2, 3], right=True):
-  • row 0 (< 1) ──► 0 (Req 0_0)    • row 1 (< 2) ──► 1 (Req 1_0)    • row 2 (< 3) ──► 2 (Req 1)
-  • row 3 (not < trailing 3) ──► returns 4 ──► `.clamp(max=len(seq_lens)-1)` maps safely to slot 3 (padding)!
-```
+![Step 5 CSR binary search and clamp under static graph padding](/assets/img/pllm/blog/assets/09-anatomy-of-attn-metadata-fig3-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Once `requests` is known, subtracting the request's batch end offset from its post-step `seq_lens` recovers every row's exact logical sequence position `positions` (`pllm/execution/attention.py`):
 
@@ -264,14 +206,7 @@ No. Because `attn_metadata` carries neither original prompt lengths nor eviction
 
 Whenever a workload needs **Layer-0 hidden capture, side-stream state prefetching, per-request state routing, or preemption replay filtering**, stepping one call upstream on the CPU to `GPUModelRunner.prepare_attn`—before `InputBatch` is lowered into `attn_metadata`—exposes three plain CPU integers (`scheduled`, `prompt`, `computed`). Paired with one monotonic per-request high-water mark `frontier`, a 30-line GIL-free Rust loop (`~122 µs`) resolves every lifecycle label deterministically:
 
-```text
-Upstream CPU 3-integer labeling (suppose `prompt = 150`, and Steps 1–2 advanced `frontier = 113`):
-  For token k in 0..scheduled-1, logical offset = computed + k:
-
-  • Exact prompt completion:  offset == prompt - 1  (fires once at offset 149; ignores Step 1 & 2 chunk tails)
-  • Latest decode token:      offset >= prompt and k == scheduled - 1
-  • Preemption replay filter: Evicted & replaying 0..63? `offset < frontier (113)` ──► marked RECOMPUTED!
-```
+![Upstream CPU 3-integer labeling and monotonic frontier](/assets/img/pllm/blog/assets/09-anatomy-of-attn-metadata-fig4-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 In **[pLLM](https://github.com/LinesHogan/pLLM)** (`pllm`), both layers work in tandem: **cross-layer state routing and lifecycle checks stay upstream on three CPU integers, while in-layer custom attention stays on-GPU with `searchsorted` and metadata masks** (guarded at entry by `num_draft_tokens == 0`, since multi-token speculative decoding breaks the one-sample-slot-per-request invariant). Matching each problem to the layer that actually owns its invariant keeps both paths simple.
 

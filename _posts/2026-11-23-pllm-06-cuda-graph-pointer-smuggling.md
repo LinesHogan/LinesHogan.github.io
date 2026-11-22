@@ -4,7 +4,7 @@ title: "图是死的，表是活的：怎么在冻结的 CUDA Graph 里偷渡动
 title_en: "Dead Graphs, Live Tables: Smuggling Dynamic Pointers and Autograd Inside Frozen CUDA Graphs"
 date: 2026-11-23 03:05:00 +0800
 description: "借用无绑定描述符表（Bindless Descriptor Table）与空位吸收槽建模静态图动态寻址，展示如何把外部搬家张量的裸指针当成 int64 填表并在 Triton 内还原，以及从“流事件记录器”视角预判预热污染、跨流 GC 与纯函数编译器克隆冲突（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
-description_en: "Production serving engines capture decode steps into static CUDA Graphs to eliminate Python/driver launch overhead, freezing every kernel's tensor shapes and raw device addresses at warmup. (pLLM Engineering Series · Bilingual EN / 中文)"
+description_en: "Production serving engines capture decode steps into static CUDA Graphs to eliminate Python/driver launch overhead, freezing every kernel's tensor shapes and raw device addresses at warmup (pLLM Engineering Series · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
 categories: systems
 pllm_synced: true
@@ -15,10 +15,7 @@ related_posts: true
 ---
 
 <div class="zine-dispatch" data-title-zh="图是死的，表是活的：怎么在冻结的 CUDA Graph 里偷渡动态指针？" data-title-en="Dead Graphs, Live Tables: Smuggling Dynamic Pointers and Autograd Inside Frozen CUDA Graphs">
-  <div class="zine-dispatch-links">
-    <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档" data-i18n-en="pLLM Project &amp; Docs" href="/pllm/">pLLM 项目主页与文档</a>
-    <a class="zine-pill-link" data-i18n-zh="GitHub · pLLM ↗" data-i18n-en="GitHub &middot; pLLM ↗" href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">GitHub · pLLM ↗</a>
-  </div>
+  <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <div class="zine-lang-switch" role="group" aria-label="Language">
     <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
     <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
@@ -33,23 +30,13 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（6/10 · 极客拆解 · 静态图寻址）** · [pLLM 项目介绍与文档中心](/pllm/) · [专栏目录与系统解剖图](/pllm/#blog) · [仓库源码原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/06-cuda-graph-pointer-smuggling.md)
+> **pLLM 技术随笔与机制拆解（6/10 · 极客拆解 · 静态图寻址）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/06-cuda-graph-pointer-smuggling.md)
 
 在单卡脚本里调通一段在线学习算法（比如每生成一个词，就拿首尾层隐藏状态算一次损失、反向求导并用 `AdamW` 更新当前请求专属的轻量权重）之后，搬进并发推理引擎遇到的第一个性能悬崖，通常不在 GPU 上，而在 CPU 上。
 
 逐字解码时，每个请求每步只处理 1 个词。GPU 执行单个小算子只需几微秒，而 CPU 每发射一个算子都要穿过 Python 解释器、PyTorch 分发器和 CUDA 驱动。在线训练加上反向求导和动量更新，一步里零零碎碎有五六十个小算子：
 
-```text
-即时执行 (Eager —— CPU 逐个发令，发射间隙把 GPU 切碎):
-  CPU: [发 k1][发 k2][发 k3][发 k4]...
-                 \       \       \
-  GPU:           [k1]空转 [k2]空转 [k3]...   (0.5B 模型关掉静态图，吞吐直接掉一半)
-
-静态图回放 (CUDA Graph —— 预热录成驱动指令序列，运行期单次提交):
-  预热期 (1次):  走一遍算子流 ──► 驱动锁死网格尺寸与所有张量的裸显存地址 (data_ptr)
-  运行期 (每步): CPU: [ cudaGraphLaunch ]
-                GPU: [k1][k2][k3][k4][k5]... (硬件队列连续执行，Python 不再介入)
-```
+![即时执行发射瓶颈与静态 CUDA Graph 回放对比图](/assets/img/pllm/blog/assets/06-cuda-graph-pointer-smuggling-fig1-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 为了消掉这笔发射开销，在线训练步也必须像主干模型那样录进静态 CUDA Graph。
 
@@ -75,16 +62,7 @@ related_posts: true
 
 想只录**唯一一张满容量图**，只需在设计路由表的读写列数时做一个不对称切分——源槽表 `sources` 开 `S + 1` 列（`0..S`），而目标写槽表 `destinations` 只开 `S` 列（`0..S-1`），把多出来的第 `S` 列专门留作吸收无效行的哨兵槽：
 
-```text
-固定形状路由表 (满编 R = 128)              固定基地址状态池
-┌────────────────────────────┐
-│ 行 0..29  (active=1)       │──────────► 状态 0..29 : 正常读 sources[s]，写回 destinations[s]
-├────────────────────────────┤
-│ 行 30..127 (active=0)      │──────────► 状态 S (空位吸收槽):
-│ 状态号统一填 S              │            • 读取段 sources[F, S+1]  : 槽号填 -1，掩码读出全 0.0 (防 NaN)
-└────────────────────────────┘            • 求导段 loss * active     : 权重为 0.0，对真实状态零梯度贡献
-                                          • 写入段 destinations[F, S]: 无第 S 列，写内核直接跳过落盘
-```
+![固定形状路由表与空位吸收槽不对称读写示意图](/assets/img/pllm/blog/assets/06-cuda-graph-pointer-smuggling-fig2-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 这样一来，无论本步来 1 个请求还是 128 个请求，静态图执行的永远是同一套规整张量运算，空行既不会算出 `NaN` 污染梯度，也不会触发任何多余的显存写入。（同理，哪怕算法要求按运行时的动态数值条件只更新部分请求，CPU 也不用调 `.tolist()` 同步等结果——直接给在场请求都分配好新槽位，图内内核发现某请求未命中更新条件时，把旧槽位原样拷进新槽位即可。）
 
@@ -100,21 +78,7 @@ related_posts: true
 
 CUDA Graph 只禁止“作为内核入口参数的张量换地址”，从不禁止“固定地址缓冲区里存的整数换数值”。那我们干脆不把外部张量传进图里——每步回放前，让 CPU 调一次 `external_tensor.data_ptr()` 取出它的 64 位裸地址，连同两个维度的步长（`stride0`, `stride1`），当成三个普通 `int64` 填进固定路由表的 `descriptor` 段：
 
-```text
-固定地址路由表 (0xAAAA0000 —— 录制时绑定，永不改变)
-┌────────────────────────────────────────────────────────┐
-│ descriptor[0]: 0x7f8812340000  (本步外部张量的 data_ptr) │
-│ descriptor[1]: 3584            (stride 0)              │
-│ descriptor[2]: 1               (stride 1)              │
-└───────────────────────┬────────────────────────────────┘
-                        │ 1. tl.load(descriptor) 读出 64 位整数
-                        │ 2. .to(tl.pointer_type(...)) 在寄存器内转回设备指针 T*
-                        ▼
-每步动态搬家的上游外部张量 (本步刚分配在 0x7f8812340000)
-┌────────────────────────────────────────────────────────┐
-│ [ row 0 ][ row 1 ][ row 2 ] ...                        │
-└────────────────────────────────────────────────────────┘
-```
+![通过固定地址路由表偷渡外部张量 64 位设备指针示意图](/assets/img/pllm/blog/assets/06-cuda-graph-pointer-smuggling-fig3-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 在 Triton 内核里，只需十行代码就能完成这次“整数还原指针”的间接读取：
 
@@ -165,23 +129,13 @@ def _gather_rows(descriptor, rows, output, width: tl.constexpr):
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (6/10 · Deep Dive · Frozen Graphs)** · [pLLM Project & Docs Hub](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [Markdown Source on GitHub ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/06-cuda-graph-pointer-smuggling.md)
+> **pLLM Engineering Essays & Deep Dives (6/10 · Deep Dive · Frozen Graphs)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/06-cuda-graph-pointer-smuggling.md)
 
 After getting an online learning loop working in a single-request script—say, computing a token-level loss from hidden states, running `autograd` backward, and stepping per-request `AdamW` weights on every decode token—moving it into a concurrent serving engine hits an immediate wall. That first wall isn't on the GPU; it is on the CPU.
 
 During autoregressive decode, each request processes 1 token per step. A tiny GPU kernel finishes in a few microseconds, whereas launching it from Python walks through the interpreter, the PyTorch dispatcher, and the CUDA driver. Add backward gradients and optimizer updates, and a single step fires fifty to sixty small kernels:
 
-```text
-Eager execution (CPU dispatches one kernel at a time; launch gaps starve the GPU):
-  CPU: [launch k1][launch k2][launch k3][launch k4]...
-                    \          \          \
-  GPU:             [k1] idle  [k2] idle  [k3]...   (Disabling CUDA Graphs on 0.5B cuts throughput in half)
-
-Static replay (CUDA Graph — recorded once at warmup, replayed in a single driver call):
-  Warmup (once):   Run stream ──► driver freezes grid dims & every tensor's raw address (data_ptr)
-  Runtime (step):  CPU: [ cudaGraphLaunch ]
-                   GPU: [k1][k2][k3][k4][k5]...    (Hardware queue runs back-to-back, zero Python)
-```
+![Eager execution launch gaps vs. static CUDA Graph replay timeline](/assets/img/pllm/blog/assets/06-cuda-graph-pointer-smuggling-fig1-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 To erase that launch tax, online training has to live inside a static CUDA Graph just like the trunk model.
 
@@ -207,16 +161,7 @@ Suppose capacity is $$R = 128$$ rows and $$S = 128$$ states, yet an off-peak ste
 
 Capturing **one single full-capacity graph** takes an asymmetric column split in the routing table: size the read table `sources` to `S + 1` columns (`0..S`), size the write table `destinations` to only `S` columns (`0..S-1`), and dedicate column `S` as a sentinel **Padding Sink**:
 
-```text
-Fixed-shape routing table (R = 128)        Fixed-base state pool
-┌────────────────────────────┐
-│ Rows 0..29  (active=1)     │──────────► States 0..29 : read sources[s], write destinations[s]
-├────────────────────────────┤
-│ Rows 30..127 (active=0)    │──────────► State S (Padding Sink):
-│ All mapped to state S      │            • Read sources[F, S+1]  : slot -1, masked load returns 0.0 (no NaN)
-└────────────────────────────┘            • Loss * active         : weight 0.0, zero gradient into live states
-                                          • Write destinations[F,S]: no column S, write kernel skips store
-```
+![Fixed-shape routing table and asymmetric Padding Sink sentinel](/assets/img/pllm/blog/assets/06-cuda-graph-pointer-smuggling-fig2-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Whether 1 request or 128 requests show up, the frozen graph runs the exact same dense tensor shapes without generating `NaN`s or stray HBM stores. (By the same token, when a workload updates only requests satisfying a dynamic data-dependent condition, the CPU never calls `.tolist()` to check the mask—it pre-allocates fresh destination slots for every live request, and an in-graph kernel copies old slots forward whenever a row's runtime predicate evaluates false.)
 
@@ -232,21 +177,7 @@ Step beneath PyTorch's `Tensor` wrapper to the hardware truth: **under 64-bit un
 
 CUDA Graphs forbid changing a kernel's entry argument pointers; they never forbid changing `int64` values stored inside a fixed-address buffer. So we never pass the external tensor into the graph at all—before replay, the CPU calls `external_tensor.data_ptr()` and writes its raw 64-bit address plus `(stride0, stride1)` as three plain `int64` integers into the `descriptor` segment of the fixed routing table:
 
-```text
-Fixed-address routing table (0xAAAA0000 — bound once at capture, never moves)
-┌─────────────────────────────────────────────────────────────┐
-│ descriptor[0]: 0x7f8812340000  (external_tensor.data_ptr()) │
-│ descriptor[1]: 3584            (stride 0)                   │
-│ descriptor[2]: 1               (stride 1)                   │
-└───────────────────────┬─────────────────────────────────────┘
-                        │ 1. tl.load(descriptor) loads 64-bit integer
-                        │ 2. .to(tl.pointer_type(...)) casts back to T* in registers
-                        ▼
-Relocated upstream tensor (allocated at 0x7f8812340000 on this step)
-┌─────────────────────────────────────────────────────────────┐
-│ [ row 0 ][ row 1 ][ row 2 ] ...                             │
-└─────────────────────────────────────────────────────────────┘
-```
+![Smuggling relocated upstream tensor pointers via fixed-address descriptor table](/assets/img/pllm/blog/assets/06-cuda-graph-pointer-smuggling-fig3-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Inside Triton, reconstructing the typed device pointer and gathering rows takes ten lines:
 

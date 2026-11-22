@@ -4,7 +4,7 @@ title: "《苦涩的教训》还有后半句：当商业推理退回“脏先验
 title_en: "The Second Half of the Bitter Lesson: Why Commercial Inference Is Returning to Dirty Priors, and Why Engine Forks Break the Economics of Search"
 date: 2026-11-23 03:10:00 +0800
 description: "单晶体管造价企稳与 800:1 算存比把训练与推理拉向相反的经济轨道，促成多元语法查表、跨层索引复用与在线快权重回潮；当编码智能体让局部先验变成可规模化搜索时，无状态引擎征收的“三周拉分支税”成了新瓶颈（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
-description_en: "Richard Sutton's Bitter Lesson rests on the premise that hardware cost per unit of computation falls exponentially. (pLLM Engineering Series · Bilingual EN / 中文)"
+description_en: "Richard Sutton's Bitter Lesson rests on the premise that hardware cost per unit of computation falls exponentially (pLLM Engineering Series · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
 categories: systems
 pllm_synced: true
@@ -15,10 +15,7 @@ related_posts: true
 ---
 
 <div class="zine-dispatch" data-title-zh="《苦涩的教训》还有后半句：当商业推理退回“脏先验”，真正卡脖子的是引擎试错税" data-title-en="The Second Half of the Bitter Lesson: Why Commercial Inference Is Returning to Dirty Priors, and Why Engine Forks Break the Economics of Search">
-  <div class="zine-dispatch-links">
-    <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档" data-i18n-en="pLLM Project &amp; Docs" href="/pllm/">pLLM 项目主页与文档</a>
-    <a class="zine-pill-link" data-i18n-zh="GitHub · pLLM ↗" data-i18n-en="GitHub &middot; pLLM ↗" href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">GitHub · pLLM ↗</a>
-  </div>
+  <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <div class="zine-lang-switch" role="group" aria-label="Language">
     <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
     <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
@@ -33,7 +30,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（1/10 · 观点思辨）** · [pLLM 项目介绍与文档中心](/pllm/) · [专栏目录与系统解剖图](/pllm/#blog) · [仓库源码原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/01-after-the-bitter-lesson.md)
+> **pLLM 技术随笔与机制拆解（1/10 · 观点思辨）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/01-after-the-bitter-lesson.md)
 
 过去十年，理查德·萨顿（Richard Sutton）的《苦涩的教训》在深度学习圈子里近乎公理：凡是往模型里塞人类先验和精巧局部结构的做法，长远看都会输给“干净统一的架构加海量算力”。
 
@@ -59,10 +56,7 @@ assert len(input_ids) == 1, "only support bs=1 for inference"
 
 这笔硅片账，头一回把**训练侧**与**推理侧**拽向了两条相反的经济轨道：
 
-```text
-训练侧经济账： 用户调用量扩张 ──► 头部厂商聚拢资本堆大集群 ──► 预训练结构洁癖让位于上限，仍可统一扩张
-推理侧经济账： 每百万 token 定价决定毛利 ──► 市场倒逼单价年年下探 ──► 硬件不给免费带宽，只能拿结构复杂度换少搬字节
-```
+![芯片经济账把训练与推理拽向两条相反的经济轨道](/assets/img/pllm/blog/assets/01-after-the-bitter-lesson-fig1-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 顺着推理侧这条线看，最近冒出来的代表性工作全在做同一笔置换——**用离散先验或局部状态，换取更少的显存字节搬运**：
 
@@ -84,13 +78,7 @@ assert len(input_ids) == 1, "only support bs=1 for inference"
 
 因为瓶颈从“想出算法数学”转移到了“穿过服务引擎”。以 vLLM 为代表的现代推理引擎，之所以能把单卡吞吐推高一个数量级，靠的是一条严格的静态假设：**除了一本只往后追加的分页 KV 账本之外，整座模型对并发请求是只读且无状态的。**
 
-```text
-研究脚本假设 (bs = 1, 动态可变):
-  单条序列独占模型 ──► Python 逐层可插回调 ──► 权重随时 param.add_() 原地覆盖
-
-生产引擎假设 (百路并发, 静态只读):
-  多租户词元拍扁成二维表 [tokens, H] ──► 算子融合并录死进静态 CUDA Graph ──► 主旁流无锁异步推进
-```
+![研究脚本假设与生产推理引擎假设的架构冲突](/assets/img/pllm/blog/assets/01-after-the-bitter-lesson-fig2-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 一旦新算法带上了每请求可变状态或跨层读写，两条常规路径就都走不通了：留在单流 Hugging Face 循环里，吃不到连续批处理与静态图，来四个并发请求就得排队串行；要是拉一个 vLLM 私有分支进去硬改，为了跑对二十行算法数学，就得手工从扁平表里还原行归属、给静态图预留固定基地址池、防备主旁双流读写撕裂、处理 KV 抢占重算时的状态回滚，还得对齐多卡张量并行分片。花三周排完雷，上游升两个版本改一轮内部签名，分支就成了负资产。每验证一个点子先交三周“引擎改造税”，再快的自动化搜索也转不起来。
 
@@ -151,7 +139,7 @@ class ESampLite(pllm.Workload):
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (1/10 · Position)** · [pLLM Project & Docs Hub](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [Markdown Source on GitHub ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/01-after-the-bitter-lesson.md)
+> **pLLM Engineering Essays & Deep Dives (1/10 · Position)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/01-after-the-bitter-lesson.md)
 
 For most of the past decade, Richard Sutton's _Bitter Lesson_ operated as deep learning's house creed: domain priors and intricate local machinery eventually lose to uniform architectures backed by more compute.
 
@@ -177,10 +165,7 @@ That premise has stalled. Foundry node names keep marching down to two nanometer
 
 That imbalance has pulled **training** and **inference** onto diverging economic tracks:
 
-```text
-Training economics:  User volume grows ──► Labs pool capital into 10x clusters ──► Uniform scaling still pays
-Inference economics: Token price sets margin ──► Annual price cuts required ──► Trade structural purity for fewer bytes moved
-```
+![Silicon unit economics pull training and inference onto diverging tracks](/assets/img/pllm/blog/assets/01-after-the-bitter-lesson-fig1-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Viewed along the inference track, recent architectures are all making variations of the same trade—**spending structural priors or local state to save memory bandwidth**:
 
@@ -202,13 +187,7 @@ Why, then, is the ecosystem still bottlenecked on `bs=1` scripts and abandoned `
 
 Because the bottleneck moved from inventing the math to surviving the serving engine. Production engines like vLLM extract an order-of-magnitude throughput advantage from one strict invariant: **aside from an append-only paged KV cache, the model is stateless and read-only across concurrent requests.**
 
-```text
-Research-script model (bs = 1, mutable):
-  One sequence owns the model ──► Python hooks fire per layer ──► Weights mutate via param.add_() in place
-
-Serving-engine model (100+ concurrent sequences, static & read-only):
-  Tokens flatten into 2D [tokens, H] ──► Fused ops freeze inside CUDA Graphs ──► Lock-free multi-stream pipeline
-```
+![Architecture mismatch between research scripts and production serving engines](/assets/img/pllm/blog/assets/01-after-the-bitter-lesson-fig2-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Drop per-request mutable state into that pipeline and both standard options break down: staying in a single-stream Hugging Face loop forfeits continuous batching and CUDA Graphs, serializing concurrent callers in a queue; forking vLLM recovers hardware efficiency at the price of three weeks of systems plumbing—reconstructing row ownership from flattened batches, reserving constant base pointers for CUDA Graphs, preventing torn reads across streams, rewinding state on KV preemption, and aligning tensor-parallel shards. Pay a three-week engine-surgery tax per candidate and automated search stalls at the starting line.
 

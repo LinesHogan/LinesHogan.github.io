@@ -1,40 +1,216 @@
 ---
 layout: page
-title: "在线服务：AsyncVllmLlm 与 pllm serve"
-description: "pLLM · How-To & Serving Guides (操作与上线指南)"
+title: "Online Serving: AsyncVllmLlm and pllm serve"
+description: "pLLM Documentation · How-To & Serving Guides"
 permalink: /pllm/docs/howto/online-serving/
 nav: false
 ---
 
-<div class="zine-dispatch">
+<link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
+
+<div class="zine-dispatch" data-title-zh="在线服务：AsyncVllmLlm 与 pllm serve" data-title-en="Online Serving: AsyncVllmLlm and pllm serve">
   <div class="zine-dispatch-links">
-    <a class="zine-pill-link primary" href="/pllm/#docs">← pLLM Project &amp; Docs</a>
-    <a class="zine-pill-link" href="/pllm/docs/">All Docs Index</a>
-    <span class="zine-lang-badge">Doc (中文)</span>
+    <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
+    <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>
+    <span class="zine-lang-badge" data-i18n-zh="操作与上线指南" data-i18n-en="How-To &amp; Serving Guides">How-To &amp; Serving Guides</span>
   </div>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/howto/online-serving.md" target="_blank" rel="noopener">View Source on GitHub ↗</a>
+  <a class="zine-pill-link" data-i18n-zh="GitHub 源码 ↗" data-i18n-en="View on GitHub ↗" href="https://github.com/LinesHogan/pLLM/blob/main/doc/howto/online-serving.md" target="_blank" rel="noopener">View on GitHub ↗</a>
 </div>
 
-<div id="markdown-content" markdown="1">
+<div id="markdown-content">
 
-<div id="sec-1"></div>
+<div class="zine-lang-panel" data-lang-panel="en" lang="en" markdown="1">
+
+<div id="en-online-serving-asyncvllmllm-and-pllm-serve"></div>
+
+`pllm.make_llm` and `pllm.make_async_llm` share the same control-plane capabilities—you can combine offline evaluation, batched external tensor imports, concurrent online streaming requests, and live parameter updates. When your service needs to continuously admit arriving concurrent requests, stream tokens as they are generated, immediately cancel requests on client disconnect, or expose an OpenAI `/v1/chat/completions` endpoint directly, use the two online entry points on this page:
+
+- **OpenAI-compatible HTTP server**: CLI `pllm serve` (or `pllm.backends.vllm.serving.serve_openai_llm`)
+- **Async Python engine handle**: `pllm.make_async_llm` (returns `AsyncVllmLlm`)
+
+## Prerequisites {#en-prerequisites}
+
+1. **Place the workload in an importable Python module** with picklable fields (the same multiprocessing rules apply; see [Going to Production: Multiprocessing, Tensor Parallelism, and Quantized Base Models](/pllm/docs/howto/production/#en-multiprocessing-enginecore-isolation-and-serialization-requirements)).
+2. **`multiprocessing="auto"` runs in isolation by default**: `ModelConfig` defaults to `multiprocessing="auto"`, so passing it to `pllm.make_async_llm` or `pllm serve` automatically launches a dedicated EngineCore worker subprocess (no need to pass `multiprocessing=True` manually).
+3. **In-flight concurrency and dynamic updates are supported**: `init=pllm.Imported()`, `init=pllm.Fed(...)`, `pllm.causal_model`, and `pllm.batch` host batch training all work directly with concurrent online streams. In-flight requests read the state version active at their admission time and do not conflict with subsequent `import_state()`, `train_batch()`, or `feed()` calls.
+
+---
+
+## Step 1: Write a Workload and Check It on CPU {#en-step-1-write-a-workload-and-check-it-on-cpu}
+
+As an example, consider an online distillation workload isolated by user session (`route`) that evolves continuously across turns. Requests in the same session share the same `distiller` state (hence `reduction="sum"`; see [Sharing Training Across Requests](/pllm/docs/howto/share-training-across-requests/#en-reduction-for-shared-group-training-why-reductionsum-is-required) for why):
+
+```python
+from dataclasses import dataclass
+
+import torch
+from torch import nn
+
+import pllm
+from pllm import testing
+
+
+@dataclass(frozen=True)
+class SessionDistiller(pllm.Workload):
+    beta: float = 0.5
+    distiller = pllm.RequestState(
+        init=pllm.FromModule(
+            lambda m: nn.Sequential(nn.Linear(m.hidden_size, 4), nn.Linear(4, m.hidden_size))
+        ),
+        optimizer=pllm.AdamW(1e-3),
+        key_fields=("route",),
+    )
+
+    @pllm.train(state="distiller", reduction="sum")
+    def loss(
+        self,
+        shallow: torch.Tensor = pllm.hidden(0),
+        deep: torch.Tensor = pllm.hidden(-1),
+        f: nn.Module = pllm.module("distiller"),
+    ) -> torch.Tensor:
+        return (f(shallow.float()) - deep.float()).square().mean(-1)
+
+    @pllm.guide_sampling(beta=pllm.cfg("beta"))
+    def predict(
+        self,
+        shallow: torch.Tensor = pllm.hidden(0),
+        f: nn.Module = pllm.module("distiller"),
+    ) -> torch.Tensor:
+        return f(shallow.float())
+
+
+# Verify CUDA graph status and multi-request contracts on CPU before starting the GPU server
+async_cfg = pllm.ModelConfig("Qwen/Qwen2.5-0.5B-Instruct", max_num_seqs=16)
+plan = pllm.explain(SessionDistiller(), async_cfg)
+assert plan.eager_reason == ""
+print(testing.check(SessionDistiller(), async_cfg, neutral=SessionDistiller(beta=0.0)))
+```
+
+---
+
+## Step 2: Launch an OpenAI-Compatible Server with `pllm serve` {#en-step-2-launch-an-openai-compatible-server-with-pllm-serve}
+
+Mount any importable workload class or instance (formatted as `module.path:ClassOrObjectName`) onto an HTTP port:
+
+```bash
+pllm serve \
+  --model Qwen/Qwen2.5-0.5B-Instruct \
+  --workload my_project.workloads:SessionDistiller \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --max-num-seqs 64 \
+  --gpu-memory-utilization 0.85
+```
+
+Call it with the standard OpenAI streaming SDK. For workloads declaring `key_fields=("route",)`, pass the session ID in `extra_body` via `vllm_xargs={"pllm_route": ...}`; subsequent turns in the same session automatically resume the state trained in earlier turns:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://127.0.0.1:8000/v1", api_key="unused")
+stream = client.chat.completions.create(
+    model="Qwen/Qwen2.5-0.5B-Instruct",
+    messages=[{"role": "user", "content": "Explain paged attention in two sentences."}],
+    max_tokens=64,
+    stream=True,
+    extra_body={"vllm_xargs": {"pllm_route": "session-42"}},
+)
+for chunk in stream:
+    delta = chunk.choices[0].delta.content
+    if delta:
+        print(delta, end="", flush=True)
+```
+
+> [!IMPORTANT]
+> Request states grouped by `"route"` transition to a dormant state after the current turn finishes so they can be reused by the next turn, and they continue to occupy slots in the `max_num_seqs` capacity budget. Before deploying to production, size `max_num_seqs` for the expected cardinality of coexisting sessions—see [Sharing Training Across Requests](/pllm/docs/howto/share-training-across-requests/#en-sec-5).
+
+If a workload uses only the default `key_fields=("request_id",)` (such as the built-in `pllm.workloads:DoLaWorkload` or `pllm.workloads:ESampWorkload`), clients do not need to pass `pllm_route`, and each request returns its state pages immediately upon completion or disconnect cancellation.
+
+---
+
+## Step 3: Embed `pllm.make_async_llm` in an Async Python Service {#en-step-3-embed-pllmmake_async_llm-in-an-async-python-service}
+
+When embedding streaming inference into custom FastAPI routes, WebSocket services, or async task orchestrators, use `pllm.make_async_llm` directly:
+
+```python
+import asyncio
+from vllm import SamplingParams
+import pllm
+from my_project.workloads import SessionDistiller
+
+config = pllm.ModelConfig(
+    "Qwen/Qwen2.5-0.5B-Instruct",
+    max_num_seqs=16,
+    gpu_memory_utilization=0.5,
+)
+
+
+async def main() -> None:
+    async with pllm.make_async_llm(config, workload=SessionDistiller()) as llm:
+        async def ask(prompt: str, route: str) -> str:
+            last = None
+            async for chunk in llm.stream(prompt, SamplingParams(max_tokens=32), route=route):
+                last = chunk
+            return "" if last is None else last.outputs[0].text
+
+        reply_a, reply_b = await asyncio.gather(
+            ask("Explain gradient descent:", route="user-a"),
+            ask("Explain KV caching:", route="user-b"),
+        )
+        print(reply_a, reply_b)
+
+
+asyncio.run(main())
+```
+
+When the caller breaks out of `async for ... in llm.stream(...)` early (or when the enclosing coroutine is cancelled because the client disconnected), `stream()` automatically issues `abort(request_id)` to the engine on exit, freeing the request's KV blocks and non-persistent request state. When token-by-token streaming is not needed, call `await llm.generate(prompt, params, route=...)` directly.
+
+---
+
+## Verify Runtime Behavior {#en-verify-runtime-behavior}
+
+After starting the service or inside integration tests, call `await llm.diagnostics()` and check three metrics (see [explain and diagnostics Fields](/pllm/docs/reference/diagnostics/) for field definitions):
+
+1. **`diag.eager_reason == ""`**: confirms the model forward runs inside CUDA graphs without silently falling back to eager mode.
+2. **`diag.inference_pins == 0` and `diag.pending_state_releases == 0` (when no requests are in flight)**: confirms completed and cancelled requests have drained and been reclaimed with no state page leaks.
+3. **`diag.active_states`**: for `key_fields=("request_id",)` workloads, returns to `0` when idle; for `key_fields=("route",)` workloads, equals the number of distinct routes visited.
+
+---
+
+## Online Mode Support Scope and Boundaries {#en-online-mode-support-scope-and-boundaries}
+
+| Feature / Pattern | Online Serving (`make_async_llm` / `pllm serve`) | Notes |
+| --- | --- | --- |
+| Hidden / residual / per-layer logits reads, `@pllm.export` | ✓ | Bounded asynchronous export; never blocks the main stream |
+| `@pllm.add_logits`, `@pllm.guide_sampling` | ✓ | Applied row-wise to in-flight requests; supports workload-free inference and online callbacks |
+| `RequestState` (including `request_id`, `prompt_index`, `route`), `@pllm.write`, `@pllm.train`, `@pllm.train_in_forward` | ✓ | Requests arrive and exit independently; state pages are allocated and reclaimed automatically |
+| `ActivationPatch`, `Adapter`, `@pllm.custom_residual`, `@pllm.custom_attention`, `@pllm.custom_forward` | ✓ | Both `RequestState` and shared `InstanceState` stay inside graphs (`@pllm.custom_forward` uses sliced graphs) |
+| `init=pllm.Imported()`, `init=pllm.Fed(...)`, `pllm.causal_model`, `pllm.batch` host batches | ✓ (`make_async_llm` control plane) | Supports in-flight `import_state()`, `feed()`, and `train_batch()` (or per-call `state_import` attached to a request); see the [Support Matrix](/pllm/docs/reference/support-matrix/) for model-level boundaries |
+
+For exact error messages, root causes, and fixes around online admission and runtime limits, see [Requests and run time](/pllm/docs/reference/errors/#en-requests-and-run-time) in the Error Catalog.
+
+</div>
+
+<div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN" markdown="1">
+
+<div id="zh-sec-1"></div>
 
 `pllm.make_llm` 与 `pllm.make_async_llm` 共享同一套控制面能力：无论是离线评测、按批次导入外部张量，还是在线并发流式请求与实时参数更新，都可以组合使用。当服务需要持续接纳新到达的并发请求、按 token 流式推送、在客户端断连时立刻取消请求，或直接暴露 OpenAI `/v1/chat/completions` 接口时，使用本页的两个在线入口：
 
 - **OpenAI 兼容 HTTP 服务**：命令行 `pllm serve`（或 `pllm.backends.vllm.serving.serve_openai_llm`）
 - **异步 Python 引擎句柄**：`pllm.make_async_llm`（返回 `AsyncVllmLlm`）
 
-## 前提条件 {#sec-2}
+## 前提条件 {#zh-sec-2}
 
-1. **负载放在可导入的 Python 模块中**，字段可被序列化（与多进程规则相同，见 [上生产：多进程、张量并行与量化底座](/pllm/docs/howto/production/#sec-2)）。
+1. **负载放在可导入的 Python 模块中**，字段可被序列化（与多进程规则相同，见 [上生产：多进程、张量并行与量化底座](/pllm/docs/howto/production/#zh-sec-2)）。
 2. **`multiprocessing="auto"` 默认隔离运行**：`ModelConfig` 默认 `multiprocessing="auto"`，传给 `pllm.make_async_llm` 与 `pllm serve` 时会自动启动独立的 EngineCore 子进程（无需再手动传 `multiprocessing=True`）。
 3. **支持在途并发与动态更新**：`init=pllm.Imported()`、`init=pllm.Fed(...)`、`pllm.causal_model` 与 `pllm.batch` 宿主批次训练均可直接用于在线并发流；运行中的请求会读取自己准入时的状态版本，不会与后续的 `import_state()`、`train_batch()` 或 `feed()` 冲突。
 
 ---
 
-## 第一步：编写负载并在 CPU 上检查 {#sec-3}
+## 第一步：编写负载并在 CPU 上检查 {#zh-sec-3}
 
-下面以一个按用户会话（`route`）隔离并跨轮次持续演化的在线蒸馏负载为例。相同会话下的请求共享同一份 `distiller` 状态（因此使用 `reduction="sum"`，原因见 [让一组请求共享训练成果](/pllm/docs/howto/share-training-across-requests/#sec-5)）：
+下面以一个按用户会话（`route`）隔离并跨轮次持续演化的在线蒸馏负载为例。相同会话下的请求共享同一份 `distiller` 状态（因此使用 `reduction="sum"`，原因见 [让一组请求共享训练成果](/pllm/docs/howto/share-training-across-requests/#zh-sec-5)）：
 
 ```python
 from dataclasses import dataclass
@@ -84,7 +260,7 @@ print(testing.check(SessionDistiller(), async_cfg, neutral=SessionDistiller(beta
 
 ---
 
-## 第二步：用 `pllm serve` 启动 OpenAI 兼容服务 {#sec-4}
+## 第二步：用 `pllm serve` 启动 OpenAI 兼容服务 {#zh-sec-4}
 
 将任意可导入的负载类或实例（格式为 `模块路径:类名或对象名`）挂载到 HTTP 端口：
 
@@ -118,13 +294,13 @@ for chunk in stream:
 ```
 
 > [!IMPORTANT]
-> 按 `"route"` 分组的请求状态在当前轮结束后会转为休眠保留、供下一轮复用，仍占用 `max_num_seqs` 的状态槽位配额。上线前请按预期并存的会话基数留足 `max_num_seqs`，详见 [让一组请求共享训练成果](/pllm/docs/howto/share-training-across-requests/#sec-12)。
+> 按 `"route"` 分组的请求状态在当前轮结束后会转为休眠保留、供下一轮复用，仍占用 `max_num_seqs` 的状态槽位配额。上线前请按预期并存的会话基数留足 `max_num_seqs`，详见 [让一组请求共享训练成果](/pllm/docs/howto/share-training-across-requests/#zh-sec-12)。
 
 若负载仅使用默认的 `key_fields=("request_id",)`（如内置的 `pllm.workloads:DoLaWorkload` 或 `pllm.workloads:ESampWorkload`），客户端无需传 `pllm_route`，每条请求在完成或断连取消时立即归还状态页。
 
 ---
 
-## 第三步：在异步 Python 服务中嵌入 `pllm.make_async_llm` {#sec-5}
+## 第三步：在异步 Python 服务中嵌入 `pllm.make_async_llm` {#zh-sec-5}
 
 需要将流式推理嵌入自定义 FastAPI 路由、WebSocket 服务或异步任务编排时，直接使用 `pllm.make_async_llm`：
 
@@ -163,7 +339,7 @@ asyncio.run(main())
 
 ---
 
-## 确认运行符合预期 {#sec-6}
+## 确认运行符合预期 {#zh-sec-6}
 
 在服务启动后或集成测试中，调用 `await llm.diagnostics()` 检查三项指标（各字段含义见 [explain 与 diagnostics 字段](/pllm/docs/reference/diagnostics/)）：
 
@@ -173,7 +349,7 @@ asyncio.run(main())
 
 ---
 
-## 在线模式支持范围与边界 {#sec-7}
+## 在线模式支持范围与边界 {#zh-sec-7}
 
 | 写法 | 在线服务（`make_async_llm` / `pllm serve`） | 备注 |
 | --- | --- | --- |
@@ -183,11 +359,15 @@ asyncio.run(main())
 | `ActivationPatch`、`Adapter`、`@pllm.custom_residual`、`@pllm.custom_attention`、`@pllm.custom_forward` | ✓ | `RequestState` 与共享 `InstanceState` 均保留在图内（`@pllm.custom_forward` 使用切片图） |
 | `init=pllm.Imported()`、`init=pllm.Fed(...)`、`pllm.causal_model`、`pllm.batch` 宿主批次 | ✓（`make_async_llm` 控制面） | 支持在途 `import_state()`、`feed()` 与 `train_batch()`（也可按单次调用随请求附带 `state_import`）；与模型能力边界同见[支持矩阵](/pllm/docs/reference/support-matrix/) |
 
-在线准入与运行期限制的报错原文、原因和改法，见报错目录的 [请求与运行时](/pllm/docs/reference/errors/#sec-12)。
+在线准入与运行期限制的报错原文、原因和改法，见报错目录的 [请求与运行时](/pllm/docs/reference/errors/#zh-sec-12)。
+
+</div>
 
 </div>
 
 <div class="zine-doc-footer">
-  <a class="zine-pill-link" href="/pllm/#docs">← Back to pLLM Documentation Hub</a>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/howto/online-serving.md" target="_blank" rel="noopener">Edit / View on GitHub ↗</a>
+  <a class="zine-pill-link" data-i18n-zh="← 返回 pLLM 项目与文档中心" data-i18n-en="← Back to pLLM Project &amp; Docs" href="/pllm/#docs">← Back to pLLM Project &amp; Docs</a>
+  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/howto/online-serving.md" target="_blank" rel="noopener">GitHub &middot; doc/howto/online-serving.md ↗</a>
 </div>
+
+<script defer src="/assets/js/bilingual-post.js"></script>

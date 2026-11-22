@@ -1,23 +1,415 @@
 ---
 layout: page
-title: "状态"
-description: "pLLM · User Guides (用户指南)"
+title: "State"
+description: "pLLM Documentation · User Guides"
 permalink: /pllm/docs/guides/state/
 nav: false
 ---
 
-<div class="zine-dispatch">
+<link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
+
+<div class="zine-dispatch" data-title-zh="状态" data-title-en="State">
   <div class="zine-dispatch-links">
-    <a class="zine-pill-link primary" href="/pllm/#docs">← pLLM Project &amp; Docs</a>
-    <a class="zine-pill-link" href="/pllm/docs/">All Docs Index</a>
-    <span class="zine-lang-badge">Doc (中文)</span>
+    <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
+    <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>
+    <span class="zine-lang-badge" data-i18n-zh="用户指南" data-i18n-en="User Guides">User Guides</span>
   </div>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/guides/state.md" target="_blank" rel="noopener">View Source on GitHub ↗</a>
+  <a class="zine-pill-link" data-i18n-zh="GitHub 源码 ↗" data-i18n-en="View on GitHub ↗" href="https://github.com/LinesHogan/pLLM/blob/main/doc/guides/state.md" target="_blank" rel="noopener">View on GitHub ↗</a>
 </div>
 
-<div id="markdown-content" markdown="1">
+<div id="markdown-content">
 
-<div id="sec-1"></div>
+<div class="zine-lang-panel" data-lang-panel="en" lang="en" markdown="1">
+
+<div id="en-state"></div>
+
+Probe weights, per-request adapters, large tables shared across requests, and running statistics during generation: anything an inference-time algorithm keeps across steps or across requests must be declared as state in pLLM.
+
+**State is the only mutable thing in pLLM.** Whenever a value needs to survive from step to step or across requests, declare it explicitly as state. Once declared, pLLM handles GPU memory allocation, version-safe publishing, CUDA graph capture, and overlapping background training with forward passes.
+
+---
+
+## 1. Why State Is the Only Mutable Thing {#en-sec-1}
+
+Method bodies replay inside CUDA graphs, so Python assignments (`self.mean += 1`) do not execute on each step; input tensors and parameters are shared read-only views that cannot be mutated in-place; and row ordering changes on every step. Therefore, any value that persists across steps must be declared as state and only published as a new version via `@pllm.train` or `@pllm.write`. For the complete set of rules and rationale, see [What Goes in a Method Body](/pllm/docs/guides/workload-anatomy/#en-what-goes-in-a-method-body).
+
+---
+
+## 2. Two Scopes and Routing Keys {#en-sec-2}
+
+When declaring state, the first decision is its **lifetime and sharing scope**. pLLM provides two scopes:
+
+| Scope | Declaration | Semantics & Lifetime | Typical Uses |
+| :--- | :--- | :--- | :--- |
+| **Request scope** | `pllm.RequestState(...)` | Each request (or group of requests) owns a private copy of the state. Allocated upon request admission and freed when the request finishes. | Per-request LoRA, per-request online distillation networks, per-request running token statistics. |
+| **Instance scope** | `pllm.InstanceState(...)` | A single copy of the state shared across the entire inference engine instance. All concurrent requests read and operate on the same physical tensors. | Frozen probe weights, shared embedding/lookup tables, large global tables, engine-wide statistics. |
+
+### Grouping request state with `key_fields` {#en-grouping-request-state-with-key_fields}
+
+By default, `RequestState` is strictly isolated per request—each request gets its own private state copy. When a group of requests should share one copy (for example, multiple candidate samples for the same prompt sharing one adapter, or requests from the same tenant sharing trained updates), specify routing keys via `key_fields`:
+
+- `("request_id",)` (default): One isolated state copy per request.
+- `("prompt_index",)`: All samples (`sample`) drawn for the same prompt within a single `generate` call share one state copy.
+- `("sample_index",)`: Shares state across prompts aligned by relative sample index.
+- `("route",)`: Shares state by an external application routing key. The host passes routing keys via `generate(prompts, routes=...)`, and requests with matching route values join the same state copy. Even after a request finishes, that state copy remains retained for the session so subsequent requests with the same route reuse it. For advanced routing patterns and capacity settings, see [Share Training Across Requests](/pllm/docs/howto/share-training-across-requests/).
+
+---
+
+## 3. Declaring Fields: Shapes, `Dimensions`, and `Field` {#en-sec-3}
+
+State consists of one or more named fields, declared either with a single shape or with a field dictionary:
+
+### Single-field and multi-field state {#en-single-field-and-multi-field-state}
+
+- **Single field**: Pass `shape=(...)` directly; the state gets a single default field named `"value"`:
+  ```python
+  from dataclasses import dataclass
+
+  import torch
+  from torch import nn
+
+  import pllm
+
+  bias = pllm.InstanceState(shape=(896,))
+  ```
+- **Multiple fields**: Pass `fields={"name": spec, ...}` (or pass the dictionary as the first positional argument) to declare named fields:
+  ```python
+  linear = pllm.RequestState({
+      "weight": lambda m: (m.hidden_size, m.hidden_size),
+      "bias": (896,),
+  })
+  ```
+
+### Forms of field shape specs {#en-forms-of-field-shape-specs}
+
+Each field's shape spec accepts three forms:
+1. **Static fixed tuple**: such as `(896,)` or `(4, 896)`.
+2. **Callable taking `pllm.Dimensions`**: such as `lambda m: (m.vocab_size,)`. The argument `m` exposes static model metadata:
+   - `m.hidden_size`: hidden dimension (e.g., 896 for Qwen2.5-0.5B);
+   - `m.vocab_size`: vocabulary size (e.g., 151,936);
+   - `m.layer_count`: number of layers (e.g., 24);
+   - `m.target_shapes`: `(in_features, out_features)` of target projections when the state is read by `pllm.model.Adapter`;
+   - `m.dtype`: the model's compute dtype.
+3. **`pllm.Field`**: Used when a field's shape depends dynamically on each target projection layer (for instance, with `pllm.model.Adapter`):
+   ```python
+   lora_a = pllm.Field(lambda in_features, out_features: (4, in_features))
+   ```
+   `pllm.Field` also lets you override the storage dtype per field (such as `pllm.Field((896,), dtype=torch.float32)`).
+   Plain shape tuples and `pllm.Field` entries can be mixed freely within the same state (for example, `{"w": pllm.Field(lambda width, _: (width,)), "b": (1,)}`).
+
+### Class attribute vs. typed `@property` {#en-class-attribute-vs-typed-property}
+
+- **Class attribute**: If shapes and config are known when writing the class, declare the state directly as a class attribute.
+- **Typed `@property`**: If a state's shape depends on instance parameters (such as a user-supplied `rank` on a `@dataclass(frozen=True)`), declare it as a `@property` **and annotate its return type** (`-> pllm.RequestState` or `-> pllm.InstanceState`):
+
+```python
+@dataclass(frozen=True)
+class DynamicProbe(pllm.Workload):
+    rank: int = 4
+
+    @property
+    def head(self) -> pllm.RequestState:
+        return pllm.RequestState(
+            init=pllm.FromModule(lambda m: nn.Linear(m.hidden_size, self.rank))
+        )
+```
+
+**Why is an explicit return type annotation required?**
+When building the engine and running [`pllm.explain`](/pllm/docs/guides/explain/), pLLM inspects class attributes and methods via static reflection. Type annotations let the planner identify which members are state declarations and their scopes without instantiating unknown code or triggering side effects.
+
+---
+
+## 4. Initial Values: `init=` {#en-sec-4}
+
+Every state must have a well-defined initial value at admission (request arrival or engine startup). That initializer is declared via `init=` (each new request's initial state copy is copied from this source):
+
+| `init=` Option | Scope | Initializer Source & Behavior |
+| :--- | :--- | :--- |
+| `pllm.Zeros()` | Request / Instance | Initializes all fields to zero (the default). |
+| `pllm.Computed(function)` | Request / Instance | Calls `function(fields, generator)` once in-place with a seeded generator at engine build time; subsequent admissions copy that initial buffer. |
+| `pllm.Pretrained(path, placement="device")` | Request / Instance | Loads tensors matching field names from a `.safetensors` file (whose hash enters workload identity). `placement="host"` pins large read-only tables in host pinned memory; the default `"device"` never silently falls back to host if it does not fit. |
+| `pllm.ModelCheckpoint(names)` | `InstanceState` only | Reads extra tensors from the served model checkpoint not used by vLLM's model class (`names` maps `{field: tensor_name}` and may include `{layer}` placeholders); those tensors are excluded from vLLM's own weight load. Read-only, no optimizer. Do not use this to read weights that vLLM itself consumes. |
+| `pllm.FromModule(factory, pretrained="")` | Request / Instance | Uses the parameters of the `nn.Module` returned by `factory(dimensions)` as the state's sole field, initialized by the module itself or loaded from `pretrained`. |
+| `pllm.Fed(order="ordered" \| "latest")` | `InstanceState` only | Dynamically pushed by an external producer process via `llm.feed(state)`; `"ordered"` consumes every published update strictly in order, while `"latest"` keeps only the newest. At most one per workload. |
+| `pllm.Imported()` | Request / Instance | Supplied per inference call via `generate(batch=pllm.io.StateImport(...))` before the request's first forward pass; `RequestState` supplies one row per prompt, while `InstanceState` supplies the whole tensor. |
+
+For loading pretrained weights or external `.safetensors` files and troubleshooting them, see [Load Trained Weights](/pllm/docs/howto/load-trained-weights/).
+
+---
+
+## 5. Frozen State (Read-Only State) {#en-sec-5}
+
+If a state does not need to be updated by `@pllm.train` or `@pllm.write`, omit `optimizer=` (or set `optimizer=None`). This is called **frozen state**.
+
+Frozen state has three key properties:
+1. **Zero extra overhead**: No gradient slots or Adam momentum slots are allocated; physical memory equals only the field tensors themselves.
+2. **Never modified by an optimizer**: Its value comes solely from its initializer, `pllm.io.StateImport`, or new versions written by `@pllm.write`.
+3. **Freely readable anywhere**: Can be read via `pllm.parameter` from any method (including `@pllm.export`, `@pllm.guide_sampling`, `@pllm.custom_residual`, etc.).
+
+---
+
+## 6. Automatic Storage Dtype (`dtype="auto"`) and Explicit Overrides {#en-sec-6}
+
+State parameters default to `dtype="auto"`. At build time, pLLM statically analyzes each field's read/write roles across methods and balances numerical stability against memory cost:
+
+| Role of Field in Methods | Dtype Chosen by `dtype="auto"` | Rationale & Measured Impact |
+| :--- | :--- | :--- |
+| **Parameters updated by an optimizer** (`@pllm.train`) | `torch.float32` | Prevents small gradients and momentum updates from underflowing in low precision. Long-sequence gradient accumulation in BF16 easily diverges. |
+| **Accumulators read and written back** (`@pllm.write`) | `torch.float32` | Cross-step accumulations (such as running means) make small updates each step whose truncation error compounds in low precision. |
+| **Cross-chunk / cross-step carry fields** (`carry`) | `torch.float32` | Sequential cross-step recurrence tests show relative error up to ~ $$1.4 \times 10^{-1}$$ in BF16 vs. ~ $$3.7 \times 10^{-4}$$ in FP32. |
+| **Read-only fields** (frozen probes, steering vectors) or **write-only fields** | Matches model dtype (e.g., `torch.bfloat16`) | Cuts state VRAM and memory bandwidth in half and matches the backbone model's GEMM compute dtype directly. |
+
+### Explicit dtype override {#en-explicit-dtype-override}
+
+If you need to run FP32-only operators directly on a read-only field, set `dtype=torch.float32` on `InstanceState` / `RequestState`, or override a single field in `pllm.Field`:
+
+```python
+state = pllm.InstanceState({
+    "w_fp32": pllm.Field(lambda width, _: (width,), dtype=torch.float32),  # Explicit FP32
+    "w_model": pllm.Field(lambda width, _: (width,)),                     # Auto-follows model dtype (BF16)
+})
+```
+
+---
+
+## 7. Reading State and Visible Versions {#en-sec-7}
+
+Inside workload methods, state and state metadata are read via four input markers (declared as parameter defaults):
+
+| Input Marker | Return Type & Shape | Semantics |
+| :--- | :--- | :--- |
+| `pllm.parameter(state, field, *, per_row=False)` | `torch.Tensor` | Reads a named field of the given state.<br>• **`RequestState`**: Automatically carries a leading row axis `[rows, *S]` aligned to the current op's scheduled rows (each row sees its own request's state).<br>• **`InstanceState`**: Keeps its declared shape `[*S]`; setting `per_row=True` expands a broadcast row axis `[rows, *S]` for batched per-row math. |
+| `pllm.module(state)` | `nn.Module` | Reads a module initialized via `init=pllm.FromModule(...)`.<br>For `RequestState`, each request row runs using that request's private parameter copy. |
+| `pllm.version(state)` | `torch.Tensor` (`int64 [rows]`) | Returns how many updates have been published for each request's state (0 upon admission). Commonly used to gate on "has trained yet" (e.g., `torch.where(version > 0, ...)`). |
+| `pllm.index(state)` | `torch.Tensor` (`int64 [rows]`) | Returns each request's slot index in the underlying state pool, for per-row indexing into external pooled tensors. |
+
+### Which version does a read see? {#en-which-version-does-a-read-see}
+
+Whenever any method reads state during a step, it **always sees the version already published before the current step began** (the pre-publish version).
+- Even if a side stream is training during the current step and preparing a new version, the main stream's forward pass still reads the version published on the previous step;
+- Running requests always observe a consistent snapshot and never read half-updated intermediate data. For the version-publishing timeline and stream overlap model, see [Core Concepts](/pllm/docs/explain/core-concepts/).
+
+---
+
+## 8. Cross-Step Memory: `carry` Fields and `pllm.carry` {#en-sec-8}
+
+When you need to carry non-optimizer continuous memory across decode steps (such as the previous step's prediction error or shallow feature), use **carry fields**:
+
+1. **Declare a carry field**: Configure `carry={"field_name": shape}` on the state. Carry fields allocate no gradient or momentum slots and are not updated by the optimizer.
+2. **Write during training**: Wrap an input marker on `@pllm.train` with `pllm.carry(source, state=..., field=...)`. When the training update publishes, the framework automatically writes each request's last row (latest token) of that input into the corresponding carry field.
+3. **Read on the next step**: Read the previously published value via `pllm.parameter(state, "field_name")`.
+
+**Why is the carry field always zero on step 0?**
+Carry fields are zero-initialized at request admission. Under the rule that reads observe the version published before the current step starts, at the start of step 0 no update has ever been published for that request, so step 0 necessarily sees zeros—a direct consequence of versioned publishing semantics.
+
+---
+
+## 9. `PositionState` and Host Read-Only Tables {#en-sec-9}
+
+Beyond ordinary tensor state, pLLM supports two specialized state layouts:
+
+### `PositionState` {#en-positionstate}
+
+`pllm.PositionState(initial=0.0)` holds one hidden-width vector per KV-cache block, accessible only inside `@pllm.custom_forward` via `layers.load` / `layers.save` (see [Forward Structure](/pllm/docs/guides/forward-structure/)).
+
+### Large host read-only tables (`placement="host"`) {#en-large-host-read-only-tables-placementhost}
+
+When an algorithm uses a massive read-only table (such as a million-entry n-gram prior table or retrieval memory), keeping it in GPU VRAM severely shrinks available KV cache capacity. With `pllm.InstanceState(..., init=pllm.Pretrained(path, placement="host"))`, the table stays in pinned CPU memory:
+- **Overlapped side-stream transfer**: Lookup methods that depend only on token IDs are scheduled during `request.prepare` at the start of each step on a dedicated side CUDA stream (`side` lane). They consume only roughly a quarter of SM capacity to asynchronously stream needed rows over PCIe, hiding transfer latency behind the model forward pass.
+- **Allowed ops**: To guarantee bounded static transfers, host tables allow only row-gathering operations: slice indexing (`table[idx]`, including sliced views such as `table[:, ::2]` before indexing), `torch.index_select`, `torch.nn.functional.embedding`, and `torch.vmap`. Attempting any other op on a host table is rejected at plan time. See [Performance and Memory](/pllm/docs/explain/performance/) for the bandwidth model.
+
+---
+
+## 10. Memory Reservation and Budget Controls {#en-sec-10}
+
+Although state slots are assigned on demand, their total memory must be reserved before engine startup:
+
+- **Why are more pages reserved than `max_num_seqs`?**
+  In [`pllm.explain`](/pllm/docs/guides/explain/) output, the page count per field (`x N pages`) is typically noticeably larger than `max_num_seqs`. Under the default cross-step overlap mode (`publish_lag=1`), the side stream writes step $$n+1$$'s new version while the main stream concurrently reads step $$n$$'s old version, so multiple versions must coexist in memory simultaneously. Old versions retain only fields that readers read: AdamW step counts and first/second moments are read only by the optimizer, so they are reserved only for the latest and currently-being-written versions.
+- **Budget knobs**:
+  `ExecutionOptions.state_page_budget_bytes` caps total state pool memory and raises `ValueError` at compile time if exceeded. `ExecutionOptions.execution_peak_budget_bytes` caps total execution peak memory (including state, method workspaces, and CUDA graph reservations), automatically falling back side-stream tasks to inline main-stream execution under memory pressure to avoid OOM. Inspect runtime memory usage and numerical health via `llm.diagnostics().state_usage` and `numeric_health`; see [Configuration](/pllm/docs/reference/config/) and [explain and diagnostics Fields](/pllm/docs/reference/diagnostics/).
+
+---
+
+## 11. Code Examples {#en-sec-11}
+
+All examples below run and pass verification directly on CPU (no GPU required).
+
+### Example 1: Frozen probe with `Computed` initialization (`InstanceState`) {#en-example-1-frozen-probe-with-computed-initialization-instancestate}
+
+This example declares a frozen linear probe shared across the engine, populates its weights in-place via a seeded generator at build time, and exports per-token scores via `@pllm.export`.
+
+```python
+from dataclasses import dataclass
+
+import torch
+from torch import nn
+
+import pllm
+from pllm import testing
+
+CONFIG = pllm.ModelConfig("Qwen/Qwen2.5-0.5B-Instruct", max_num_seqs=8)
+
+
+def init_probe(fields: dict[str, torch.Tensor], generator: torch.Generator) -> None:
+    fields["weight"].normal_(generator=generator)
+    fields["bias"].zero_()
+
+
+class FrozenProbe(pllm.Workload):
+    # Instance scope + frozen state: initialized once at startup, never updated by an optimizer
+    classifier = pllm.InstanceState(
+        {"weight": lambda m: (m.hidden_size,), "bias": (1,)},
+        init=pllm.Computed(init_probe),
+    )
+
+    @pllm.export(name="probe_score", max_rows=8, max_cols=1)
+    def score(
+        self,
+        h: torch.Tensor = pllm.final_hidden(),
+        w: torch.Tensor = pllm.parameter("classifier", "weight"),
+        b: torch.Tensor = pllm.parameter("classifier", "bias"),
+    ) -> torch.Tensor:
+        # [rows, 896] * [896] -> [rows, 1]
+        return torch.sigmoid((h.float() * w).sum(dim=-1, keepdim=True) + b)
+
+
+print(testing.check(FrozenProbe(), CONFIG).passed)
+```
+
+### Example 2: Per-request neural network module (`RequestState`) {#en-example-2-per-request-neural-network-module-requeststate}
+
+This example declares a small neural module dynamically allocated per request so each request owns independent weights and runs its own private module row-by-row.
+
+```python
+@dataclass(frozen=True)
+class PerRequestHead(pllm.Workload):
+    rank: int = 4
+
+    # Shape depends on instance attribute rank, so declare as a typed property
+    @property
+    def head(self) -> pllm.RequestState:
+        return pllm.RequestState(
+            init=pllm.FromModule(lambda m: nn.Linear(m.hidden_size, self.rank))
+        )
+
+    @pllm.export(name="probe", max_rows=8, max_cols=4)
+    def score(
+        self,
+        h: torch.Tensor = pllm.final_hidden(),
+        head: nn.Module = pllm.module("head"),
+    ) -> torch.Tensor:
+        # head automatically binds each request row to that request's private weights
+        return head(h.float())
+
+
+print(testing.check(PerRequestHead(), CONFIG).passed)
+```
+
+### Example 3: Updating a per-request running mean with `@pllm.write` {#en-example-3-updating-a-per-request-running-mean-with-pllmwrite}
+
+This example updates state with custom tensor math: on each step it reads the previous running mean and current token representation, computes a weighted update, and atomically publishes it via `@pllm.write`.
+
+```python
+class RunningMean(pllm.Workload):
+    stats = pllm.RequestState({"mean": pllm.Field(lambda width, _: (width,))})
+
+    @pllm.write(state="stats", fields=("mean",))
+    def update(
+        self,
+        h: torch.Tensor = pllm.final_hidden(),
+        mean: torch.Tensor = pllm.parameter("stats", "mean"),
+    ) -> tuple[torch.Tensor]:
+        # Accumulator reads and rewrites itself, so dtype="auto" resolves to float32
+        return (0.9 * mean + 0.1 * h.float(),)
+
+    @pllm.export(name="mean_norm", max_rows=8, max_cols=1)
+    def report(
+        self,
+        mean: torch.Tensor = pllm.parameter("stats", "mean"),
+    ) -> torch.Tensor:
+        return mean.norm(dim=-1, keepdim=True)
+
+
+print(testing.check(RunningMean(), CONFIG).passed)
+```
+
+### Example 4: Cross-step memory with a `carry` field {#en-example-4-cross-step-memory-with-a-carry-field}
+
+This example passes information across steps during online training: the training method computes a prediction loss while saving shallow activations into a carry field via `pllm.carry`, then reads that carried vector back on the next step.
+
+```python
+@dataclass(frozen=True)
+class StepMemory(pllm.Workload):
+    beta: float = 0.5
+
+    head = pllm.RequestState(
+        {"w": lambda m: (m.hidden_size, m.hidden_size)},
+        optimizer=pllm.AdamW(lr=1e-3),
+        carry={"prev_act": lambda m: (m.hidden_size,)},
+    )
+
+    def strength(self) -> float:
+        return self.beta
+
+    @pllm.guide_sampling(beta=strength)
+    def predict(
+        self,
+        shallow: torch.Tensor = pllm.hidden(0),
+        w: torch.Tensor = pllm.parameter("head", "w"),
+    ) -> torch.Tensor:
+        return torch.bmm(shallow.float().unsqueeze(1), w).squeeze(1)
+
+    @pllm.train(state="head")
+    def loss(
+        self,
+        # On publish, writes each request's latest shallow row into prev_act
+        shallow: torch.Tensor = pllm.carry(pllm.hidden(0), state="head", field="prev_act"),
+        deep: torch.Tensor = pllm.hidden(-1),
+        w: torch.Tensor = pllm.parameter("head", "w"),
+        # Reads the value published on the previous step (all zeros on step 0)
+        prev: torch.Tensor = pllm.parameter("head", "prev_act"),
+    ) -> torch.Tensor:
+        pred = torch.bmm(shallow.float().unsqueeze(1), w).squeeze(1)
+        return (pred + prev - deep.float()).square().mean(-1)
+
+
+print(pllm.explain(StepMemory(), CONFIG))
+```
+
+---
+
+## 12. Common Errors {#en-sec-12}
+
+When patterns on this page are rejected, exact error messages, causes, and fixes are listed in the [State and training](/pllm/docs/reference/errors/#en-state-and-training) and [Loading and placing state](/pllm/docs/reference/errors/#en-loading-and-placing-state) sections of the error catalog.
+
+---
+
+## 13. Self-Check {#en-sec-13}
+
+<details>
+<summary>1. Why does <code>dtype="auto"</code> pick <code>float32</code> rather than the more memory-efficient <code>bfloat16</code> for optimizer-updated state or accumulator fields?</summary>
+
+During autoregressive decoding, per-step online training gradients and running averages are typically small. In `bfloat16` (only 7 mantissa bits), tiny gradient steps or weighted increments added to existing weights underflow and round straight to zero (update swallowing), preventing learning or causing divergence. Measurements show carry recurrence has ~ $$1.4 \times 10^{-1}$$ relative error in `bfloat16` versus ~ $$3.7 \times 10^{-4}$$ in `float32`. pLLM therefore uses `float32` automatically for fields with small accumulations while keeping read-only and write-only fields in the model dtype (e.g., `bfloat16`) to save memory.
+</details>
+
+<details>
+<summary>2. Why does reading a <code>carry</code> field on step 0 always return all zeros?</summary>
+
+Because of pLLM's version-publishing semantics: any method reading state during step $$n$$ always sees the version already published before step $$n$$ started (i.e., the output published on step $$n-1$$). At the start of step 0 upon request admission, no training update has run yet, and carry fields are zero-initialized at admission—so step 0 necessarily reads zeros.
+</details>
+
+<details>
+<summary>3. Why do fields read from <code>RequestState</code> automatically carry a leading row axis (<code>[rows, *S]</code>), whereas fields read from <code>InstanceState</code> do not by default?</summary>
+
+Under continuous batching, multiple concurrent requests are packed into the same batch. `RequestState` keeps a private parameter copy per request, so on every read pLLM gathers and aligns each scheduled row to its own request's slice, yielding `[rows, *S]`. `InstanceState` has a single global copy shared across the entire engine that does not scale with concurrent request count, so it keeps its declared shape `[*S]` by default (pass `per_row=True` if you want a broadcast row axis for batched per-row math).
+</details>
+
+</div>
+
+<div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN" markdown="1">
+
+<div id="zh-sec-1"></div>
 
 探针的权重、每个请求自己的适配器、跨请求共享的大表、生成过程的滑动统计量：推理期算法里要跨步或跨请求保留的值，在 pLLM 里都声明成状态。
 
@@ -25,15 +417,15 @@ nav: false
 
 ---
 
-## 1. 为什么状态是唯一可变的东西 {#sec-2}
+## 1. 为什么状态是唯一可变的东西 {#zh-sec-2}
 
 方法体在 CUDA graph 里回放，Python 赋值（`self.mean += 1`）不会每步执行；输入和参数是共享的只读视图，不能原地改；
 行的排列每步都变。所以要跨步存活的值都声明成状态，只经 `@pllm.train` 或 `@pllm.write` 发布新版本。完整的规则与原因见
-[方法体里写什么](/pllm/docs/guides/workload-anatomy/#sec-3)。
+[方法体里写什么](/pllm/docs/guides/workload-anatomy/#zh-sec-3)。
 
 ---
 
-## 2. 两种作用域与路由键 {#sec-3}
+## 2. 两种作用域与路由键 {#zh-sec-3}
 
 声明状态时，首要决策是选择其**生命周期与共享范围**。pLLM 提供两种作用域：
 
@@ -42,7 +434,7 @@ nav: false
 | **请求作用域** | `pllm.RequestState(...)` | 每个请求（或每组请求）拥有一份独立的私有状态副本。随请求准入（admission）分配，随请求完成而释放。 | 每请求 LoRA、每个请求的在线蒸馏小网络、每个请求的 token 累加统计。 |
 | **实例作用域** | `pllm.InstanceState(...)` | 整个推理引擎实例共享唯一一份状态。所有并发请求读取并操作同一组物理张量。 | 冻结探针权重、跨请求共享的嵌入词表、全局大表、模型级统计量。 |
 
-### 用 `key_fields` 对请求状态分组 {#sec-4}
+### 用 `key_fields` 对请求状态分组 {#zh-sec-4}
 
 `RequestState` 默认按请求严格隔离，即每个请求独立拥有自己的状态副本。如果需要让一组请求共享同一份状态（例如同一 Prompt 的多个候选采样共享同一个适配器，或者同一租户的请求共享训练成果），可以通过 `key_fields` 声明路由键：
 
@@ -53,11 +445,11 @@ nav: false
 
 ---
 
-## 3. 声明字段：形状、Dimensions 与 Field {#sec-5}
+## 3. 声明字段：形状、Dimensions 与 Field {#zh-sec-5}
 
 状态由一个或多个具名字段组成。字段可以通过单个形状或字典方式声明：
 
-### 单字段与多字段 {#sec-6}
+### 单字段与多字段 {#zh-sec-6}
 
 - **单个字段**：直接传 `shape=(...)`，该状态默认拥有一个名为 `"value"` 的字段。
   ```python
@@ -78,7 +470,7 @@ nav: false
   })
   ```
 
-### 字段形状的声明形式 {#sec-7}
+### 字段形状的声明形式 {#zh-sec-7}
 
 每个字段的形状规范支持三种形式：
 1. **静态固定元组**：如 `(896,)`、`(4, 896)`。
@@ -95,7 +487,7 @@ nav: false
    同时，`pllm.Field` 还支持为单个字段显式指定独立的存储精度（如 `pllm.Field((896,), dtype=torch.float32)`）。
    同一个状态中可以自由混合普通形状元组和 `pllm.Field`（例如 `{"w": pllm.Field(lambda width, _: (width,)), "b": (1,)}`）。
 
-### 类属性 vs 带类型的 property {#sec-8}
+### 类属性 vs 带类型的 property {#zh-sec-8}
 
 - **类属性**：如果状态的形状和配置在类编写时即可确定，直接声明为类属性。
 - **带类型的 property**：如果状态形状依赖于算法的初始化参数（例如在 `@dataclass(frozen=True)` 中由用户传入的 `rank`），必须声明为 `@property`，并且**必须标注返回类型**（`-> pllm.RequestState` 或 `-> pllm.InstanceState`）：
@@ -117,7 +509,7 @@ pLLM 在构建引擎和执行 [`pllm.explain`](/pllm/docs/guides/explain/) 规�
 
 ---
 
-## 4. 初始值来源：`init=` {#sec-9}
+## 4. 初始值来源：`init=` {#zh-sec-9}
 
 每个状态在准入时（请求开始或引擎启动）都必须有明确的初值。初值由 `init=` 参数声明（每条请求的初始副本都拷贝自该来源）：
 
@@ -135,7 +527,7 @@ pLLM 在构建引擎和执行 [`pllm.explain`](/pllm/docs/guides/explain/) 规�
 
 ---
 
-## 5. 冻结状态（只读状态） {#sec-10}
+## 5. 冻结状态（只读状态） {#zh-sec-10}
 
 如果一个状态不需要被 `@pllm.train` 或 `@pllm.write` 更新，只需省略 `optimizer=`（或显式写 `optimizer=None`）。这种状态称为**冻结状态（Frozen State）**。
 
@@ -146,7 +538,7 @@ pLLM 在构建引擎和执行 [`pllm.explain`](/pllm/docs/guides/explain/) 规�
 
 ---
 
-## 6. 存储精度自动规则（`dtype="auto"`）与显式覆盖 {#sec-11}
+## 6. 存储精度自动规则（`dtype="auto"`）与显式覆盖 {#zh-sec-11}
 
 状态参数默认采用 `dtype="auto"`。pLLM 会在构建期静态分析每个字段在各个方法中的读写角色，自动权衡数值稳定性与显存开销：
 
@@ -157,7 +549,7 @@ pLLM 在构建引擎和执行 [`pllm.explain`](/pllm/docs/guides/explain/) 规�
 | **跨块/跨步进位字段**（carry 字段） | `torch.float32` | 跨步连续递推测试表明，carry 采用 BF16 相对误差可高达约 $$1.4 \times 10^{-1}$$，而采用 FP32 仅约 $$3.7 \times 10^{-4}$$。 |
 | **只读字段**（如冻结探针、引导向量）<br>或 **只写字段** | 跟随模型精度（如 `torch.bfloat16`） | 省下一半状态显存与访存带宽，且与主干模型的 GEMM 计算精度自然对齐。 |
 
-### 显式覆盖精度 {#sec-12}
+### 显式覆盖精度 {#zh-sec-12}
 
 如果需要在只读字段上直接执行仅支持单精度的算子，可以在 `InstanceState` / `RequestState` 上指定 `dtype=torch.float32`，或在 `pllm.Field` 中为单个字段覆盖：
 
@@ -170,7 +562,7 @@ state = pllm.InstanceState({
 
 ---
 
-## 7. 读取状态与可见版本 {#sec-13}
+## 7. 读取状态与可见版本 {#zh-sec-13}
 
 在算法方法中，通过以下四种输入标记读取状态及其元数据（作为参数默认值声明）：
 
@@ -181,7 +573,7 @@ state = pllm.InstanceState({
 | `pllm.version(state)` | `torch.Tensor`（int64 `[rows]`） | 返回当前每条请求的状态已完成更新发布的次数（准入时为 0）。常用作“是否已训练过”的条件门控（例如 `torch.where(version > 0, ...)`）。 |
 | `pllm.index(state)` | `torch.Tensor`（int64 `[rows]`） | 返回当前每条请求在底层状态池中的槽位编号，用于对外部池化张量做按行查表。 |
 
-### 读取看到的是哪个版本？ {#sec-14}
+### 读取看到的是哪个版本？ {#zh-sec-14}
 
 任何方法在某一步中读取状态时，看到的**永远是当前步骤开始前已发布的版本**（发布前版本）。
 - 即使当前步骤的旁路流正在训练并准备写入新版本，当前主干流的前向计算依然读取上一步发布的旧版本；
@@ -189,7 +581,7 @@ state = pllm.InstanceState({
 
 ---
 
-## 8. 跨步记忆：carry 字段与 `pllm.carry` {#sec-15}
+## 8. 跨步记忆：carry 字段与 `pllm.carry` {#zh-sec-15}
 
 如果需要在解码步骤之间传递非优化器参数的连续记忆（例如上一步的预测误差、上一步记录的浅层特征），可以使用 **carry 字段**：
 
@@ -202,15 +594,15 @@ state = pllm.InstanceState({
 
 ---
 
-## 9. PositionState 与主机只读表 {#sec-16}
+## 9. PositionState 与主机只读表 {#zh-sec-16}
 
 除了常规的张量状态外，pLLM 还支持两种特定拓扑的状态存储：
 
-### PositionState {#positionstate}
+### PositionState {#zh-positionstate}
 
 `pllm.PositionState(initial=0.0)` 每个 KV cache 块持有一个 hidden 宽度的向量，仅供 `@pllm.custom_forward` 内通过 `layers.load` / `layers.save` 读写（详见 [改写 forward 结构](/pllm/docs/guides/forward-structure/)）。
 
-### 主机只读大表（`placement="host"`） {#sec-17}
+### 主机只读大表（`placement="host"`） {#zh-sec-17}
 
 当算法需要使用超大规模的只读表（如百万级 n-gram 先验表、检索记忆库）时，将其全部常驻 GPU 显存会导致 KV Cache 空间严重缩减。通过 `pllm.InstanceState(..., init=pllm.Pretrained(path, placement="host"))`，可将只读表保留在 CPU 锁页内存中：
 - **旁路重叠搬运**：仅依赖 token ID 的查表方法会被规划器调度在每步最初的 `request.prepare` 阶段、于独立的旁路 CUDA stream（`side` lane）上执行。它只占用约四分之一的 SM 算力通过 PCIe 异步搬运所需行，将传输时间完全隐藏在模型前向计算的背后。
@@ -218,7 +610,7 @@ state = pllm.InstanceState({
 
 ---
 
-## 10. 显存预留与预算控制 {#sec-18}
+## 10. 显存预留与预算控制 {#zh-sec-18}
 
 状态虽然按需分配，但必须在引擎启动前完成显存预留规划：
 
@@ -229,11 +621,11 @@ state = pllm.InstanceState({
 
 ---
 
-## 11. 代码示例 {#sec-19}
+## 11. 代码示例 {#zh-sec-19}
 
 下面的代码示例均可在 CPU 上直接运行校验（无需 GPU）。
 
-### 示例 1：带 `Computed` 初值的冻结探针（`InstanceState`） {#sec-20}
+### 示例 1：带 `Computed` 初值的冻结探针（`InstanceState`） {#zh-sec-20}
 
 该示例声明一个整个引擎共享的冻结探针分类器，在初始化时通过生成器原地填充权重，通过 `@pllm.export` 导出每个 token 的判别分数。
 
@@ -275,7 +667,7 @@ class FrozenProbe(pllm.Workload):
 print(testing.check(FrozenProbe(), CONFIG).passed)
 ```
 
-### 示例 2：每请求独立的神经网络模块（`RequestState`） {#sec-21}
+### 示例 2：每请求独立的神经网络模块（`RequestState`） {#zh-sec-21}
 
 该示例声明一个随请求动态分配的小型神经网络模块，每条请求拥有独立的参数，并在前向计算时逐行调用各自的私有网络。
 
@@ -304,7 +696,7 @@ class PerRequestHead(pllm.Workload):
 print(testing.check(PerRequestHead(), CONFIG).passed)
 ```
 
-### 示例 3：用 `@pllm.write` 更新请求滑动均值 {#sec-22}
+### 示例 3：用 `@pllm.write` 更新请求滑动均值 {#zh-sec-22}
 
 该示例演示如何使用自定义张量数学更新状态：每一步读取上一步的滑动均值与当前 token 的特征向量，计算加权更新后通过 `@pllm.write` 原子发布。
 
@@ -332,7 +724,7 @@ class RunningMean(pllm.Workload):
 print(testing.check(RunningMean(), CONFIG).passed)
 ```
 
-### 示例 4：带 `carry` 进位字段的跨步记忆 {#sec-23}
+### 示例 4：带 `carry` 进位字段的跨步记忆 {#zh-sec-23}
 
 该示例演示在在线训练时跨步记录信息：训练方法计算预测误差，同时通过 `pllm.carry` 将浅层激活记录进 carry 字段，供下一步训练时作为递推输入读出。
 
@@ -377,13 +769,13 @@ print(pllm.explain(StepMemory(), CONFIG))
 
 ---
 
-## 12. 常见错误 {#sec-24}
+## 12. 常见错误 {#zh-sec-24}
 
-这一页的写法被拒绝时的报错原文、原因和改法，见报错目录的[状态与训练](/pllm/docs/reference/errors/#sec-6)、[加载与放置状态](/pllm/docs/reference/errors/#sec-7)几节。
+这一页的写法被拒绝时的报错原文、原因和改法，见报错目录的[状态与训练](/pllm/docs/reference/errors/#zh-sec-6)、[加载与放置状态](/pllm/docs/reference/errors/#zh-sec-7)几节。
 
 ---
 
-## 13. 自测 {#sec-25}
+## 13. 自测 {#zh-sec-25}
 
 <details>
 <summary>1. 为什么在带优化器的状态或累加器字段上，<code>dtype="auto"</code> 会自动选择 <code>float32</code> 而非更省显存的 <code>bfloat16</code>？</summary>
@@ -405,7 +797,11 @@ print(pllm.explain(StepMemory(), CONFIG))
 
 </div>
 
-<div class="zine-doc-footer">
-  <a class="zine-pill-link" href="/pllm/#docs">← Back to pLLM Documentation Hub</a>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/guides/state.md" target="_blank" rel="noopener">Edit / View on GitHub ↗</a>
 </div>
+
+<div class="zine-doc-footer">
+  <a class="zine-pill-link" data-i18n-zh="← 返回 pLLM 项目与文档中心" data-i18n-en="← Back to pLLM Project &amp; Docs" href="/pllm/#docs">← Back to pLLM Project &amp; Docs</a>
+  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/guides/state.md" target="_blank" rel="noopener">GitHub &middot; doc/guides/state.md ↗</a>
+</div>
+
+<script defer src="/assets/js/bilingual-post.js"></script>

@@ -1,23 +1,484 @@
 ---
 layout: page
-title: "结果去哪：导出、logits、采样引导与写状态"
-description: "pLLM · User Guides (用户指南)"
+title: "Where Results Go: Export, Logits, Sampling Guidance, and State Writes"
+description: "pLLM Documentation · User Guides"
 permalink: /pllm/docs/guides/results/
 nav: false
 ---
 
-<div class="zine-dispatch">
+<link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
+
+<div class="zine-dispatch" data-title-zh="结果去哪：导出、logits、采样引导与写状态" data-title-en="Where Results Go: Export, Logits, Sampling Guidance, and State Writes">
   <div class="zine-dispatch-links">
-    <a class="zine-pill-link primary" href="/pllm/#docs">← pLLM Project &amp; Docs</a>
-    <a class="zine-pill-link" href="/pllm/docs/">All Docs Index</a>
-    <span class="zine-lang-badge">Doc (中文)</span>
+    <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
+    <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>
+    <span class="zine-lang-badge" data-i18n-zh="用户指南" data-i18n-en="User Guides">User Guides</span>
   </div>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/guides/results.md" target="_blank" rel="noopener">View Source on GitHub ↗</a>
+  <a class="zine-pill-link" data-i18n-zh="GitHub 源码 ↗" data-i18n-en="View on GitHub ↗" href="https://github.com/LinesHogan/pLLM/blob/main/doc/guides/results.md" target="_blank" rel="noopener">View on GitHub ↗</a>
 </div>
 
-<div id="markdown-content" markdown="1">
+<div id="markdown-content">
 
-<div id="sec-1"></div>
+<div class="zine-lang-panel" data-lang-panel="en" lang="en" markdown="1">
+
+<div id="en-where-results-go-export-logits-sampling-guidance-and-state-writes"></div>
+
+In pLLM, a method reads input tensors and runs tensor math. Under continuous batching and CUDA graph replay, however, the framework cannot know where to send a computed tensor, how long to keep it, or when to publish it to subsequent steps or external processes unless you declare that destination explicitly.
+
+Alongside gradient-based online training via optimizers (see [Online Training](/pllm/docs/guides/training/)), pLLM provides four effect decorators for non-training outputs, each targeting a distinct consumer:
+
+1. **`@pllm.export`**: Bounded, asynchronous device-to-host export to CPU for monitoring, feature logging, and analysis;
+2. **`@pllm.add_logits`**: Injects per-token biases into model logits before sampler filtering (e.g., DoLa contrastive decoding);
+3. **`@pllm.guide_sampling`**: Produces hidden-state predictions projected through the LM head to reweight sampling distributions after top-k / top-p filtering (e.g., ESamp online distillation);
+4. **`@pllm.write`**: Directly computes new state field values with custom tensor math and atomically publishes the next state version without optimizers or backpropagation.
+
+This guide examines each effect's semantics, shape contracts, runtime cost, and constraints.
+
+```python
+from collections import defaultdict
+from dataclasses import dataclass
+
+import torch
+from torch import nn
+
+import pllm
+from pllm import testing
+
+CONFIG = pllm.ModelConfig("Qwen/Qwen2.5-0.5B-Instruct", max_num_seqs=8)
+```
+
+---
+
+## 1. Exporting Observations: `@pllm.export` and `on_export` {#en-sec-1}
+
+### Concept and definition {#en-concept-and-definition}
+
+`@pllm.export` performs bounded, asynchronous copies of tensors computed during the forward pass or side tasks to the host CPU callback `on_export`, enabling feature logging, probe analysis, or SAE activation monitoring without blocking or slowing down GPU inference.
+
+### Minimal runnable example {#en-minimal-runnable-example}
+
+In this example, we read the residual stream after layer 12, compute the L2 norm of each request's current token, and export it to the host:
+
+```python
+seen: dict[int, list[float]] = defaultdict(list)
+
+
+class StreamNorm(pllm.Workload):
+    # Declare export channel: at most 8 rows per step, capped at 1 column per row
+    @pllm.export(name="stream_norm", max_rows=8, max_cols=1)
+    def norm(self, r: torch.Tensor = pllm.residual(12)) -> torch.Tensor:
+        return r.float().norm(dim=-1, keepdim=True)
+
+    # Asynchronous host consumer callback: runs in the engine process
+    def on_export(self, event: pllm.io.TraceEvent) -> None:
+        for identity, row in zip(event.identities, event.tensor().tolist()):
+            seen[identity.prompt_index].append(row[0])
+
+
+print(testing.check(StreamNorm(), CONFIG).passed)
+```
+
+When running on GPU, open `make_llm` with a context manager:
+
+```python
+from vllm import SamplingParams
+
+GPU_CONFIG = pllm.ModelConfig("Qwen/Qwen2.5-0.5B-Instruct", max_num_seqs=8, gpu_memory_utilization=0.3)
+GREEDY = SamplingParams(max_tokens=8, temperature=0.0)
+
+with pllm.make_llm(GPU_CONFIG, workload=StreamNorm()) as llm:
+    llm.generate(["The capital of France is", "One plus one is"], GREEDY)
+    assert llm.diagnostics().eager_reason == ""  # Reading the residual stream preserves CUDA graph capture
+```
+
+### Shape contract and event structure {#en-shape-contract-and-event-structure}
+
+- **Input/output shape**: The method returns a `[rows, cols]` tensor, where dimension 0 indexes request rows under continuous batching.
+- **Truncation and cadence**: Each step exports at most `max_rows` rows and at most the first `max_cols` columns, executing once every `every` steps.
+- **Drop counter `event.dropped_rows`**: If active rows in a step exceed `max_rows`, excess rows are truncated and the dropped count is recorded in `event.dropped_rows`.
+- **Row identities `event.identities`**: A `tuple[RequestIdentity, ...]` aligned one-to-one with the rows of the event tensor:
+  - `prompt_index`: Index of the prompt within the `generate` call (or the explicit index passed via `generate(..., prompt_indices=...)`);
+  - `sample_index`: Relative sample index under that prompt (`0` for the first sample);
+  - `request_id`: pLLM's internal request identifier (distinct from vLLM's `RequestOutput.request_id`).
+- **Token positions `event.positions`**: Integer tuple giving each row's token offset within its request.
+- **CPU tensor `event.tensor()`**: Returns an independent CPU tensor copy.
+- **All-token reads `tokens="all"`**: By default, methods read the latest row per request; to observe every fresh token computed in a step (including all prefill-chunk tokens), pass `tokens="all"` on the input marker (e.g., `pllm.residual(12, tokens="all")`). All-token reads are available only to `@pllm.export` methods.
+
+To export full-width hidden representations (width 896 on Qwen2.5-0.5B) for the last token of each prompt as prefill completes, read `tokens="prefill"`:
+
+```python
+prompt_ends: dict[int, torch.Tensor] = {}
+
+
+class PromptEnd(pllm.Workload):
+    @pllm.export(name="prompt_end", max_rows=4, max_cols=896)
+    def last_token(self, r: torch.Tensor = pllm.residual(12, tokens="prefill")) -> torch.Tensor:
+        return r.float()  # [rows, 896]: last row of each prompt that just finished prefill
+
+    def on_export(self, event: pllm.io.TraceEvent) -> None:
+        assert event.dropped_rows == 0
+        for identity, row in zip(event.identities, event.tensor()):
+            prompt_ends[identity.prompt_index] = row
+
+
+print(testing.check(PromptEnd(), CONFIG).passed)
+```
+
+### Cost and overhead {#en-cost-and-overhead}
+
+- **Device-to-host (D2H) transfer**: Issues a non-blocking asynchronous GPU-to-pinned-CPU copy of $$\text{rows} \times \text{cols} \times \text{element\_size}$$ bytes per step (upper-bounded by $$\text{max\_rows} \times \text{max\_cols} \times 8$$ bytes).
+- **Static cost reporting**: `pllm.explain` prints the per-step row limit, max bytes transferred, and event split count for every export channel.
+
+### Constraints and rationale {#en-constraints-and-rationale}
+
+1. **Whole-row packing and 32 KiB per-event limit**:
+   - **Rule**: Each export event contains whole rows up to 32 KiB (32,768 bytes), and a single row must fit in one event—enforced as `max_cols * 8 <= 32768` (at most 4,096 columns).
+   - **Why**: Export events live in fixed-size ring buffers (256 events, up to 32 KiB each). A single row is never split across two events, so one row must fit; when the rows exported in one step exceed 32 KiB in total, they are automatically split into multiple events.
+2. **256-event queue capacity and `overflow="drop"` (default)**:
+   - **Rule**: The background queue holds up to 256 pending events. By default (`overflow="drop"`), a full queue drops the oldest events and increments `export_dropped`; generation blocks to wait for queue space only when `overflow="block"` is set explicitly.
+   - **Why**: **Observation must never stall inference.** If `on_export` performs slow disk I/O, network calls, or logging and falls behind generation, blocking by default would stall the entire serving engine. Throughput is protected by default; use `overflow="block"` only in offline evaluations where sample completeness matters more than throughput.
+3. **`on_export` execution context and no re-entrancy**:
+   - **Rule**: `on_export` runs asynchronously on a dedicated daemon thread inside the engine process. **Never call engine methods** (such as `llm.generate`) from inside `on_export`.
+   - **Why**: The engine core holds scheduling locks and pipeline state; calling back into the engine from the asynchronous export thread causes deadlocks or state corruption.
+4. **Automatic drain on context exit**:
+   - **Rule**: Exiting `with pllm.make_llm(...)` or calling `llm.close()` automatically calls `drain()`, waiting until every queued export event has been processed by `on_export`. Your collected data is complete as soon as the context exits, with no tail loss.
+
+### Runtime trace selector (`select_trace`) {#en-runtime-trace-selector-select_trace}
+
+To capture tensors, gradients, or kernel timings temporarily at runtime without editing the workload class, use the host-side trace selector:
+
+```python
+from pllm.io import TraceSelection
+
+# 1. Enable selector: temporarily capture the tensor named "loss"
+llm.select_trace(TraceSelection(names=("loss",), tensors=True, max_tensor_bytes=32768))
+
+# 2. Cursor recipe: record the absolute event index before generation
+before = llm.trace_snapshot()
+cursor = before.dropped + len(before.events)
+
+# 3. Run inference
+llm.generate(prompts, params)
+
+# 4. Extract fresh events belonging exclusively to this call
+after = llm.trace_snapshot()
+fresh = after.events[max(0, cursor - after.dropped) :]
+
+# 5. Disable observation with an empty selection
+llm.select_trace(TraceSelection())
+```
+
+- **How the cursor recipe works**: The trace ring persists across `generate` calls rather than clearing automatically. If the queue overflows, the oldest events are dropped and added to `dropped`. Computing `cursor = before.dropped + len(before.events)` yields a monotonic absolute index, and subtracting `after.dropped` isolates only the fresh events produced during that `generate` call.
+- **Calling discipline**: Call `llm.select_trace()` and `llm.trace_snapshot()` **serially between `generate` calls**, never concurrently from another thread while `generate` is running.
+
+---
+
+## 2. Adding Vocabulary Biases: `@pllm.add_logits` {#en-sec-2}
+
+### Concept and definition {#en-concept-and-definition-1}
+
+`@pllm.add_logits` adds a user-computed tensor element-wise to the model's unnormalized logits before the sampler applies temperature, top-k, and top-p filtering—ideal for training-free decoding interventions such as lexical suppression, DoLa contrastive decoding, or prompt-level biases.
+
+### Minimal runnable example {#en-minimal-runnable-example-1}
+
+This example injects an externally imported global bias vector scaled by `strength` across the vocabulary:
+
+```python
+@dataclass(frozen=True)
+class LogitBias(pllm.Workload):
+    strength: float = 1.0
+    bias = pllm.InstanceState({"b": lambda m: (m.vocab_size,)}, init=pllm.Imported())
+
+    def factor(self) -> float:
+        return self.strength
+
+    @pllm.add_logits()
+    def add(
+        self,
+        sample: torch.Tensor = pllm.sample_index(),
+        b: torch.Tensor = pllm.parameter("bias", "b"),
+    ) -> torch.Tensor:
+        # [rows, vocab]: broadcast bias across rows, returning exact zeros when neutral=0
+        return self.factor() * b.float().expand(sample.shape[0], -1)
+
+
+print(testing.check(LogitBias(), CONFIG, neutral=LogitBias(strength=0.0)).passed)
+```
+
+In DoLa contrastive decoding, the algorithm compares predictions from a mature (final) layer against a candidate premature layer to suppress surface-level premature patterns and amplify deeper factual predictions:
+
+```python
+@dataclass(frozen=True)
+class DoLaContrast(pllm.Workload):
+    candidate: int = 12
+
+    def lens(self) -> tuple[int, ...]:
+        return (self.candidate, -1)
+
+    @pllm.add_logits()
+    def contrast(
+        self,
+        logits: torch.Tensor = pllm.layer_logits(lens),
+    ) -> torch.Tensor:
+        mature = logits[:, -1].log_softmax(-1)
+        premature = logits[:, 0].log_softmax(-1)
+        # Add the difference onto the final-layer logits (native sampler logits equal logits[:, -1])
+        return (mature - premature) - logits[:, -1]
+
+
+print(testing.check(DoLaContrast(), CONFIG).passed)
+```
+
+For multi-concurrency benchmarks of DoLa, see [Example 06: Logit Lens and DoLa Contrastive Decoding](/pllm/docs/examples/06_reading_inside/).
+
+### Shape contract {#en-shape-contract}
+
+- **Return shape**: Must return a floating-point tensor of shape `[rows, vocab]` (`float32`, `float16`, or `bfloat16`).
+- **Row alignment**: Dimension 0 (`rows`) must equal the number of tokens drawn by the sampler in the current step (one per sampled token).
+- **Column alignment**: Dimension 1 must equal the model's full `vocab_size` (e.g., 151,936 for Qwen2.5-0.5B).
+
+### Cost and overhead {#en-cost-and-overhead-1}
+
+- `@pllm.add_logits` additions are fused into the sampler's existing pass over the vocabulary prior to sampling.
+- Compute is purely element-wise memory traffic and addition—typically microseconds of latency with negligible impact on forward time.
+
+### Constraints and rationale {#en-constraints-and-rationale-1}
+
+1. **Multiple `@pllm.add_logits` methods are allowed**:
+   - **Rule**: A workload (including subcomponents) may declare multiple `@pllm.add_logits` methods.
+   - **Why**: Tensor addition is associative and commutative. The framework adds all `@pllm.add_logits` biases onto the model logits in declaration order before sampling, with no conflict between biases.
+2. **Read logits with `pllm.layer_logits((-1,))`, not `pllm.base_logits()`**:
+   - **Rule**: If an `@pllm.add_logits` method needs the model's unscaled logits, it must read `pllm.layer_logits((-1,))`; reading `pllm.base_logits()` is rejected at graph build time.
+   - **Why**: On the engine's step timeline, `pllm.base_logits()` is defined as the unmodified base logits consumed by the sampler and is only materialized after sampling (`AFTER_SAMPLE` or inside `@pllm.train`). `@pllm.add_logits` runs before sampling (`BEFORE_SAMPLE`) to shape the sampler's input, before `base_logits()` exists. Use `pllm.layer_logits((-1,))` to read final-layer logits prior to sampling.
+3. **Neutral baseline must return exact zeros**:
+   - **Rule**: When verifying neutrality with `testing.check(..., neutral=...)`, passing the neutral instance (e.g., `strength=0.0`) must cause the method to return exact zeros everywhere.
+   - **Why**: The neutral contract verifies that disabling the algorithm yields the exact unmodified base-model distribution; even tiny non-zero residuals or NaNs shift probabilities.
+4. **Return width is checked at build time**:
+   - **Rule**: Returning hidden width (e.g., `[rows, 896]`) instead of vocabulary width (`[rows, 151936]`) is caught during shape tracing in `pllm.explain` and `make_llm`, with an error naming the expected shape and fix.
+
+---
+
+## 3. Sampling Guidance: `@pllm.guide_sampling` {#en-sec-3}
+
+### Concept and definition {#en-concept-and-definition-2}
+
+`@pllm.guide_sampling` takes a hidden-width state prediction from your method, projects it to vocabulary space through the model's native LM head, and contrastively reweights the base logits over the surviving candidate tokens after top-k / top-p truncation—steering generation away from token patterns already predicted by that vector.
+
+### Minimal runnable example and the ESamp pattern {#en-minimal-runnable-example-and-the-esamp-pattern}
+
+The canonical online sampling-guidance algorithm is ESamp ([Tutorial 03: Decode-Time Training](/pllm/docs/tutorials/03_decode_training/)): each request owns a private `distiller` network trained during decode to predict deep hidden states from shallow hidden states, and guidance activates once the network has completed at least one training step:
+
+```python
+@dataclass(frozen=True)
+class ShallowPredictor(pllm.Workload):
+    beta: float = 0.5
+
+    # What to store: each request owns a private distiller and an independent AdamW optimizer
+    distiller = pllm.RequestState(
+        init=pllm.FromModule(lambda m: nn.Sequential(nn.Linear(m.hidden_size, 4), nn.Linear(4, m.hidden_size))),
+        optimizer=pllm.AdamW(1e-3),
+    )
+
+    # Selector: activate guidance only after at least 1 weight update
+    def trained(self, versions: torch.Tensor = pllm.version("distiller")) -> torch.Tensor:
+        return versions > 0
+
+    # Config passing: return the instance field via a method
+    def strength(self) -> float:
+        return self.beta
+
+    # Where results go: sampling guidance (with strength and row selector)
+    @pllm.guide_sampling(beta=strength, rows="trained")
+    def predict(
+        self,
+        shallow: torch.Tensor = pllm.hidden(0),
+        distiller: nn.Module = pllm.module("distiller"),
+    ) -> torch.Tensor:
+        return distiller(shallow)  # Returns hidden-width prediction vector [rows, hidden]
+
+    # Online training: predict deep from shallow with MSE loss
+    @pllm.train(state="distiller")
+    def loss(
+        self,
+        shallow: torch.Tensor = pllm.hidden(0),
+        deep: torch.Tensor = pllm.hidden(-1),
+        distiller: nn.Module = pllm.module("distiller"),
+    ) -> torch.Tensor:
+        return (distiller(shallow) - deep.float()).square().mean(dim=-1)
+
+
+print(testing.check(ShallowPredictor(), CONFIG, neutral=ShallowPredictor(beta=0.0)).passed)
+```
+
+### Shape contract and guidance formula {#en-shape-contract-and-guidance-formula}
+
+- **Return shape**: Must return `[rows, hidden]`, where column count matches the model's `hidden_size` (e.g., 896 on Qwen2.5-0.5B).
+- **Reweighting formula**: Given method output $$\hat{h}$$, the framework projects through the LM head to obtain $$\text{pred\_logits} = \hat{h} \cdot W_{\text{lm\_head}}^T$$. Over the surviving candidate set after top-k and top-p truncation, guided logits are computed as:
+  $$\text{logits}_{\text{guided}} = (1 + \beta) \cdot \text{logits} - \beta \cdot \text{pred\_logits}$$
+  For $$\beta > 0$$, tokens easily predicted from shallow features are downweighted, encouraging tokens that carry genuinely deeper information.
+- **Semantics of $$\beta = 0$$**: Declares no sampling guidance on this call, falling back to standard sampling.
+- **Row selector `rows=`**: Bind a method returning a `[rows]` boolean mask via `rows="method_name"`. Unselected (`False`) rows keep unmodified sampling. See [Workload Anatomy: Selectors](/pllm/docs/guides/workload-anatomy/#en-selectors-acting-on-a-subset-of-rows).
+
+### Cost and overhead {#en-cost-and-overhead-2}
+
+- **One extra LM-head projection**: Performs one $$\hat{h} \cdot W_{\text{lm\_head}}^T$$ GEMM per decode step.
+- `pllm.explain` reports this projection's FLOPs and memory budget explicitly under the sampler task.
+
+### Constraints and rationale {#en-constraints-and-rationale-2}
+
+1. **At most one `@pllm.guide_sampling` across the entire workload**:
+   - **Rule**: A workload (including all nested components) can declare at most one `@pllm.guide_sampling` method. Declaring two raises `ValueError` at compile time.
+   - **Why**: Guidance reweights the post–top-k/top-p distribution once per step using a single prediction. Whether two predictions should be summed, averaged, or applied sequentially is an algorithmic choice pLLM refuses to guess—combine them into one method, and use `@pllm.add_logits` for any additional vocabulary-space biases.
+2. **Return width must equal `hidden_size`**:
+   - **Rule**: Return `[rows, hidden]`. This width is not currently validated on CPU and will fail only on GPU, so verify the trailing dimension yourself.
+
+---
+
+## 4. Custom State Writes: `@pllm.write` {#en-sec-4}
+
+### Concept and definition {#en-concept-and-definition-3}
+
+`@pllm.write` computes new state field values using ordinary PyTorch tensor math and atomically publishes them as a tuple representing the next state version—without losses, autograd, or optimizers.
+
+### Minimal runnable example {#en-minimal-runnable-example-2}
+
+This example maintains a per-request running mean of the final hidden state at every decode step:
+
+```python
+class RunningMean(pllm.Workload):
+    # What to store: each request owns a hidden-width mean vector
+    stats = pllm.RequestState({"mean": pllm.Field(lambda width, _: (width,))})
+
+    # Where results go: custom state write updating the mean field of stats
+    @pllm.write(state="stats", fields=("mean",))
+    def update(
+        self,
+        h: torch.Tensor = pllm.final_hidden(),
+        mean: torch.Tensor = pllm.parameter("stats", "mean"),
+    ) -> tuple[torch.Tensor]:
+        # Return a tuple containing the new tensor version for each field
+        return (0.9 * mean + 0.1 * h.float(),)
+
+    # Export the L2 norm of the running mean
+    @pllm.export(name="mean_norm", max_rows=8, max_cols=1)
+    def report(
+        self,
+        mean: torch.Tensor = pllm.parameter("stats", "mean"),
+    ) -> torch.Tensor:
+        return mean.norm(dim=-1, keepdim=True)
+
+
+print(testing.check(RunningMean(), CONFIG).passed)
+```
+
+### Shape contract and return values {#en-shape-contract-and-return-values}
+
+- **Must return a tuple**: The return value must be a Python `tuple` whose length and order match `fields` strictly. **Even when updating a single field, return a 1-tuple `(new_tensor,)`**—returning a bare tensor raises an error.
+- **Leading row axis for `RequestState`**: Each returned tensor for a `RequestState` must carry the leading request row axis `[rows, *field_shape]`.
+- **Shape for `InstanceState`**: Each returned tensor for an `InstanceState` matches the field's declared shape (or carries `[rows, *field_shape]` if `per_row=True`).
+
+### Cost and overhead {#en-cost-and-overhead-3}
+
+- Forward-only tensor math: no autograd graph construction, no backward pass, and no optimizer momentum/variance memory.
+- Writes directly into private state slots inside the CUDA graph and atomically flips version pointers at step end with zero CPU involvement.
+
+### Constraints and rationale {#en-constraints-and-rationale-3}
+
+1. **No `rows=` parameter; whole-batch writes and conditional updates**:
+   - **Rule**: `@pllm.write` does not accept `rows=`. On every execution it writes for all active request rows in the batch.
+   - **Why**: Each write publishes a complete new version of the state. "Updating only some rows" is equivalent to copying old values back for the remaining rows, which is expressed directly with `torch.where` without needing a separate mechanism.
+   - **Conditional update pattern**: Read the old state into the method and select element-wise with `torch.where`:
+     ```python
+     class ConditionalUpdate(pllm.Workload):
+         stats = pllm.RequestState({"mean": pllm.Field(lambda width, _: (width,))})
+
+         @pllm.write(state="stats", fields=("mean",))
+         def update_selected(
+             self,
+             h: torch.Tensor = pllm.final_hidden(),
+             mean: torch.Tensor = pllm.parameter("stats", "mean"),
+         ) -> tuple[torch.Tensor]:
+             # Update only rows whose norm exceeds the threshold; keep others unchanged
+             mask = h.float().norm(dim=-1, keepdim=True) > 1.0
+             new_mean = 0.9 * mean + 0.1 * h.float()
+             return (torch.where(mask, new_mean, mean),)
+
+         @pllm.export(name="mean_norm", max_rows=8, max_cols=1)
+         def report(self, mean: torch.Tensor = pllm.parameter("stats", "mean")) -> torch.Tensor:
+             return mean.norm(dim=-1, keepdim=True)
+
+
+     print(testing.check(ConditionalUpdate(), CONFIG).passed)
+     ```
+2. **Accumulator fields automatically use `float32`**:
+   - **Rule**: When a write method reads a field that it also writes (a self-referential accumulator such as a running mean or step counter), `dtype="auto"` automatically promotes that field to `float32`.
+   - **Why**: Over dozens or hundreds of autoregressive steps, small incremental updates added to larger values in `bfloat16` (7 mantissa bits) suffer underflow and truncate to zero (swallowed updates), stalling accumulation. `float32` preserves accuracy over long horizons.
+3. **Reads see the version published before the current step began**:
+   - **Rule**: A method executing on step $$n$$ always reads the version published at the end of step $$n-1$$ (or the initial value on step 0).
+   - **Why**: pLLM's versioned publishing isolates reads from concurrent writes within a step, eliminating read-after-write hazards so the forward pass, custom writes, and exports can all be captured in CUDA graphs and run safely in parallel across CUDA streams.
+
+---
+
+## 5. Boundary Between Selectors (`rows=`) and Training (`@pllm.train`) {#en-sec-5}
+
+When designing dataflow in a workload, keep the responsibilities of **row selectors** and **training effects** clear:
+
+### Where row selectors (`rows=`) apply {#en-where-row-selectors-rows-apply}
+
+- On `@pllm.add_logits` and `@pllm.guide_sampling`, `rows="selector_name"` restricts the effect to matching rows in the batch; unselected rows retain unmodified logits or standard sampling.
+- In standalone per-request training without in-model intervention, training runs unconditionally overlapped with sampling and therefore rejects `rows=`. For complete selector rules and availability, see [Workload Anatomy: Selectors](/pllm/docs/guides/workload-anatomy/#en-selectors-acting-on-a-subset-of-rows).
+
+### Non-training effects vs. `@pllm.train` {#en-non-training-effects-vs-pllmtrain}
+
+| Mechanism | Driven By | Autograd? | Memory & Optimizer | Typical Uses |
+| :--- | :--- | :--- | :--- | :--- |
+| **`@pllm.export`** | Forward tensor copy | No | 32 KiB host ring buffer only | Probe analysis, SAE monitoring, activation capture |
+| **`@pllm.add_logits`** | Pre-sample logit addition | No | No persistent extra VRAM | Vocabulary biases, DoLa contrastive decoding, constrained decoding |
+| **`@pllm.guide_sampling`** | Post-filter LM-head reweighting | No | LM-head GEMM workspace | ESamp online distillation guidance |
+| **`@pllm.write`** | Custom tensor math | No | State pages only | Running means, state machines, cross-step counters |
+| **`@pllm.train`** | Optimizer gradient step | **Yes** | Depends on optimizer (e.g., AdamW moments) | Online fine-tuning, per-request LoRA, TTT adapters |
+
+When your algorithm needs loss backpropagation and parameter updates, see [Online Training](/pllm/docs/guides/training/).
+
+---
+
+## 6. Common Errors and Troubleshooting {#en-sec-6}
+
+When patterns on this page are rejected, exact error messages, causes, and fixes are listed in the [Effects and results](/pllm/docs/reference/errors/#en-effects-and-results) and [Phases: when a value exists](/pllm/docs/reference/errors/#en-phases-when-a-value-exists) sections of the error catalog.
+
+---
+
+## 7. Self-Check {#en-sec-7}
+
+<details>
+<summary>1. Why does <code>@pllm.export</code> default to <code>overflow="drop"</code> rather than <code>"block"</code>, and why cannot a single row exceed 32 KiB?</summary>
+
+Observation must never slow down generation: if `on_export` hits slow disk I/O, blocking would stall the entire inference engine, so the default drops excess events and increments a counter. Export events sit in fixed-size buffers of at most 32 KiB each, and a single row is never split across two events, so one row must fit (`max_cols * 8 <= 32768`).
+</details>
+
+<details>
+<summary>2. Why does reading <code>pllm.base_logits()</code> inside <code>@pllm.add_logits</code> fail, and how should you read the current step's model output instead?</summary>
+
+`pllm.base_logits()` represents the unmodified base logits consumed by the sampler and is materialized only after sampling (`Phase.AFTER_SAMPLE`) for downstream training or feedback. `@pllm.add_logits` must run before sampling (`BEFORE_SAMPLE`) to supply a logit bias, when `base_logits()` does not yet exist. Read `pllm.layer_logits((-1,))` instead to obtain the current unnormalized final-layer logits.
+</details>
+
+<details>
+<summary>3. Why does <code>@pllm.write</code> not support <code>rows=</code>, and how do you update state for only a subset of requests?</summary>
+
+Each write publishes one complete new version of the state. To update only selected requests, read the old state into the method and use `torch.where(mask, new_value, old_value)` to compute per-row conditional updates while writing unselected rows back unchanged.
+</details>
+
+<details>
+<summary>4. Why are multiple <code>@pllm.add_logits</code> methods allowed in one workload, whereas multiple <code>@pllm.guide_sampling</code> methods are disallowed?</summary>
+
+Bias addition is associative and commutative, so outputs from multiple `@pllm.add_logits` methods can be summed onto the model logits in declaration order before entering the sampler. By contrast, `@pllm.guide_sampling` reweights the post–top-k/top-p candidate set once per step using one prediction; how two predictions should be combined is an algorithmic decision that belongs inside a single method.
+</details>
+
+</div>
+
+<div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN" markdown="1">
+
+<div id="zh-sec-1"></div>
 
 在 pLLM 中，一个方法负责读取张量并完成数学运算。但大模型推理处于连续批处理（continuous batching）与 CUDA Graph 回放的高并发执行环境中：方法计算出的张量如果不做显式声明，框架无法获知应当将其发往何处、以何种生命周期保存、何时发布给后续步骤或外部进程。
 
@@ -45,13 +506,13 @@ CONFIG = pllm.ModelConfig("Qwen/Qwen2.5-0.5B-Instruct", max_num_seqs=8)
 
 ---
 
-## 1. 导出观测：`@pllm.export` 与 `on_export` {#sec-2}
+## 1. 导出观测：`@pllm.export` 与 `on_export` {#zh-sec-2}
 
-### 概念与定义 {#sec-3}
+### 概念与定义 {#zh-sec-3}
 
 `@pllm.export` 将模型前向或计算过程中产生的张量以有界、异步的方式拷贝并送到宿主机 CPU 的 `on_export` 回调中，供特征记录、探针分析或 SAE 激活监控，且绝不阻塞或拖慢 GPU 上的主干推理。
 
-### 最小可运行示例 {#sec-4}
+### 最小可运行示例 {#zh-sec-4}
 
 在下面的示例中，我们读取第 12 层之后的残差流，计算每个请求当前 token 的 L2 范数，并将其导出到宿主机：
 
@@ -87,7 +548,7 @@ with pllm.make_llm(GPU_CONFIG, workload=StreamNorm()) as llm:
     assert llm.diagnostics().eager_reason == ""  # 读取残差流保持 CUDA Graph 捕获
 ```
 
-### 形状契约与事件结构 {#sec-5}
+### 形状契约与事件结构 {#zh-sec-5}
 
 - **输入与输出形状**：方法返回形状为 `[rows, cols]` 的张量。第 0 维为请求行（连续批处理中的行）。
 - **截断与门控**：每一步前向至多导出 `max_rows` 行，列宽截取前 `max_cols` 列，每 `every` 步执行一次。
@@ -120,12 +581,12 @@ class PromptEnd(pllm.Workload):
 print(testing.check(PromptEnd(), CONFIG).passed)
 ```
 
-### 成本与开销 {#sec-6}
+### 成本与开销 {#zh-sec-6}
 
 - **设备到主机（D2H）传输**：每步产生非阻塞的 GPU 到 CPU 锁页内存异步拷贝，传输字节数为 $$\text{rows} \times \text{cols} \times \text{element\_size}$$（上界为 $$\text{max\_rows} \times \text{max\_cols} \times 8$$ 字节）。
 - **静态成本展示**：`pllm.explain` 在计划阶段会直接输出每个导出任务每步传输的行数、上限字节数和拆分的事件数。
 
-### 限制与设计原因 {#sec-7}
+### 限制与设计原因 {#zh-sec-7}
 
 1. **整行打包且单事件不超过 32 KiB**：
    - 规则：每个导出事件由若干完整行组成，单个事件的尺寸上限为 32 KiB（32768 字节），且单行数据必须能完整装进一个事件中，即强制校验 `max_cols * 8 <= 32768`（至多 4096 列）。
@@ -139,7 +600,7 @@ print(testing.check(PromptEnd(), CONFIG).passed)
 4. **退出上下文自动排空（drain）**：
    - 规则：当代码退出 `with pllm.make_llm(...)` 代码块或调用 `llm.close()` 时，系统会自动调用 `drain()`，挂起等待直到所有排队的导出事件完全被 `on_export` 处理完毕。这确保了离开上下文后采集的数据完全就绪，不会发生尾部丢失。
 
-### 运行时 Trace 选择器（`select_trace`） {#sec-8}
+### 运行时 Trace 选择器（`select_trace`） {#zh-sec-8}
 
 如果不想修改负载类代码，仅希望在运行时临时截取某次生成的张量、梯度或内核耗时，可以使用宿主端提供的运行时 Trace 选择器：
 
@@ -169,13 +630,13 @@ llm.select_trace(TraceSelection())
 
 ---
 
-## 2. 注入词表偏置：`@pllm.add_logits` {#sec-9}
+## 2. 注入词表偏置：`@pllm.add_logits` {#zh-sec-9}
 
-### 概念与定义 {#sec-10}
+### 概念与定义 {#zh-sec-10}
 
 `@pllm.add_logits` 在采样器执行 temperature、top-k 和 top-p 概率截断之前，将用户计算出的张量按元素直接累加到模型的未归一化 logits 上，用于实现无训练的解码干预（如抑制特定词、对比解码 DoLa、提示词偏置等）。
 
-### 最小可运行示例 {#sec-11}
+### 最小可运行示例 {#zh-sec-11}
 
 下面的示例演示如何根据每个 Prompt 的采样序号给词表注入一个外部导入的全局偏置向量：
 
@@ -227,18 +688,18 @@ print(testing.check(DoLaContrast(), CONFIG).passed)
 
 关于 DoLa 在多并发下的实测表现，详见示例教程 [06 logit lens 与 DoLa 对比解码](/pllm/docs/examples/06_reading_inside/)。
 
-### 形状契约 {#sec-12}
+### 形状契约 {#zh-sec-12}
 
 - **返回值形状**：必须返回形状为 `[rows, vocab]` 的浮点张量（float32 或 float16/bfloat16）。
 - **行对齐**：第 0 维的 `rows` 必须严格等于当前步采样器抽取的 token 行数（每行抽取一个 token）。
 - **列对齐**：第 1 维必须严格等于模型的完整词表大小（`vocab_size`，例如 Qwen2.5-0.5B 为 151936）。
 
-### 成本与开销 {#sec-13}
+### 成本与开销 {#zh-sec-13}
 
 - `@pllm.add_logits` 的累加由框架在采样前完成，和采样器已有的对词表的遍历合在一起。
 - 计算量为纯粹的逐元素内存搬运与加法，耗时通常在微秒级别，几乎不增加前向时延。
 
-### 限制与设计原因 {#sec-14}
+### 限制与设计原因 {#zh-sec-14}
 
 1. **允许多个 `@pllm.add_logits` 并存**：
    - 规则：同一个负载（包括子组件）中可以声明多个 `@pllm.add_logits` 方法。
@@ -254,13 +715,13 @@ print(testing.check(DoLaContrast(), CONFIG).passed)
 
 ---
 
-## 3. 采样引导：`@pllm.guide_sampling` {#sec-15}
+## 3. 采样引导：`@pllm.guide_sampling` {#zh-sec-15}
 
-### 概念与定义 {#sec-16}
+### 概念与定义 {#zh-sec-16}
 
 `@pllm.guide_sampling` 接收方法返回的一个隐藏层宽度的状态预测，由框架调用模型原生的 LM head 将其投影至词表空间，并在 top-k / top-p 概率截断后的幸存候选 token 集合上，对模型原始 logits 进行对比重加权采样，将生成推离预测向量所代表的语义模式。
 
-### 最小可运行示例与 ESamp 范式 {#sec-17}
+### 最小可运行示例与 ESamp 范式 {#zh-sec-17}
 
 在线采样引导最典型的算法是 ESamp（教程 [03 decode 时训练](/pllm/docs/tutorials/03_decode_training/)）：每个请求持有一个私有小网络 `distiller`，在 decode 阶段一边生成一边用浅层隐藏状态预测深层隐藏状态。只有当小网络学习至少一步后，才开启引导：
 
@@ -306,21 +767,21 @@ class ShallowPredictor(pllm.Workload):
 print(testing.check(ShallowPredictor(), CONFIG, neutral=ShallowPredictor(beta=0.0)).passed)
 ```
 
-### 形状契约与引导公式 {#sec-18}
+### 形状契约与引导公式 {#zh-sec-18}
 
 - **返回值形状**：必须返回形状为 `[rows, hidden]` 的张量，列数严格等于模型的隐藏层维度（`hidden_size`，如 Qwen2.5-0.5B 为 896）。
 - **重加权公式**：设方法输出为 $$\hat{h}$$，框架通过 LM head 得到预测 logits $$\text{pred\_logits} = \hat{h} \cdot W_{\text{lm\_head}}^T$$。在经过 top-k 与 top-p 截断保留的幸存 token 集合上，重加权后的采样 logits 为：
   $$\text{logits}_{\text{guided}} = (1 + \beta) \cdot \text{logits} - \beta \cdot \text{pred\_logits}$$
   当 $$\beta > 0$$ 时，模型会主动避开浅层已能轻易预测出的 token，鼓励生成包含深层全新信息的 token。
 - **$$\beta = 0$$ 的语义**：声明本次调用不产生采样引导，采样器直接回退为标准采样。
-- **行选择器 `rows=`**：通过 `rows="method_name"` 绑定一个返回 `[rows]` 布尔掩码的方法。未选中的行（False）保持原生采样，不受引导干扰。关于选择器的声明方式，参见 [负载的组成：选择器](/pllm/docs/guides/workload-anatomy/#sec-13)。
+- **行选择器 `rows=`**：通过 `rows="method_name"` 绑定一个返回 `[rows]` 布尔掩码的方法。未选中的行（False）保持原生采样，不受引导干扰。关于选择器的声明方式，参见 [负载的组成：选择器](/pllm/docs/guides/workload-anatomy/#zh-sec-13)。
 
-### 成本与开销 {#sec-19}
+### 成本与开销 {#zh-sec-19}
 
 - **额外的一次 LM-Head 投影**：在每个解码步中，框架需要执行一次 $$\hat{h} \cdot W_{\text{lm\_head}}^T$$ 的矩阵乘法投影。
 - 在 `pllm.explain` 报告中，该成本会显式计入采样器任务的投影 FLOP 与显存预算中。
 
-### 限制与设计原因 {#sec-20}
+### 限制与设计原因 {#zh-sec-20}
 
 1. **全负载至多只能有一个 `@pllm.guide_sampling`**：
    - 规则：一个工作负载（包括其嵌套的所有子组件）中至多声明一个 `@pllm.guide_sampling` 方法。若声明了两个，框架在编译时会直接抛出 `ValueError`。
@@ -330,13 +791,13 @@ print(testing.check(ShallowPredictor(), CONFIG, neutral=ShallowPredictor(beta=0.
 
 ---
 
-## 4. 自定义写状态：`@pllm.write` {#sec-21}
+## 4. 自定义写状态：`@pllm.write` {#zh-sec-21}
 
-### 概念与定义 {#sec-22}
+### 概念与定义 {#zh-sec-22}
 
 `@pllm.write` 允许你使用普通的 PyTorch 张量数学直接计算状态字段的新数值，并以元组形式原子发布为该状态的下一个版本，无需经过损失函数、自动求导或优化器。
 
-### 最小可运行示例 {#sec-23}
+### 最小可运行示例 {#zh-sec-23}
 
 下面的示例在每个 decode 步维护一个记录最终隐藏状态滑动均值的统计量：
 
@@ -367,18 +828,18 @@ class RunningMean(pllm.Workload):
 print(testing.check(RunningMean(), CONFIG).passed)
 ```
 
-### 形状契约与返回值 {#sec-24}
+### 形状契约与返回值 {#zh-sec-24}
 
 - **必须返回元组（tuple）**：方法的返回值必须是一个 Python 元组，元组内的张量数量与顺序必须与 `fields` 声明的字段严格匹配。**即使只更新一个字段，也必须返回单元素元组 `(new_tensor,)`**，直接返回裸张量会报错。
 - **请求状态的领先行轴**：对于 `RequestState`，返回的每个字段张量必须具有领先的请求行轴：`[rows, *field_shape]`。
 - **实例状态的形状**：对于 `InstanceState`，返回的张量形状与字段本身的声明形状一致（若配置了 `per_row=True` 则同样具有 `[rows]` 行轴）。
 
-### 成本与开销 {#sec-25}
+### 成本与开销 {#zh-sec-25}
 
 - 纯前向张量运算，无需构建计算图，无反向求导计算，无优化器动量与方差显存开销。
 - 状态写入由框架在 CUDA Graph 内直接向分配的私有显存槽位写入，步末自动原子切换版本指针，零 CPU 交互开销。
 
-### 限制与设计原因 {#sec-26}
+### 限制与设计原因 {#zh-sec-26}
 
 1. **没有 `rows=` 参数，全量写入与条件更新**：
    - 规则：`@pllm.write` 不接受 `rows=` 参数。每一轮执行时，它会对当前批次中的所有活跃请求行进行统一写入。
@@ -415,16 +876,16 @@ print(testing.check(RunningMean(), CONFIG).passed)
 
 ---
 
-## 5. 选择器（`rows=`）与训练（`@pllm.train`）的边界 {#sec-27}
+## 5. 选择器（`rows=`）与训练（`@pllm.train`）的边界 {#zh-sec-27}
 
 在设计算法的数据流向时，需要清晰区分**行选择器**与**训练效果**的职责边界：
 
-### 行选择器（`rows=`）的适用范围 {#sec-28}
+### 行选择器（`rows=`）的适用范围 {#zh-sec-28}
 
 - 在 `@pllm.add_logits` 和 `@pllm.guide_sampling` 上，可以通过 `rows="selector_name"` 绑定一个方法，只让当前批次中满足条件的请求行生效；未选中的行保持原生 logits 或原生采样。
-- 在无模型干预的独立请求训练中，训练是与采样重叠的无条件步进更新，因此会拒绝 `rows=`。选择器的完整声明语法与可用性规则详见 [负载的组成：选择器](/pllm/docs/guides/workload-anatomy/#sec-13)。
+- 在无模型干预的独立请求训练中，训练是与采样重叠的无条件步进更新，因此会拒绝 `rows=`。选择器的完整声明语法与可用性规则详见 [负载的组成：选择器](/pllm/docs/guides/workload-anatomy/#zh-sec-13)。
 
-### 非训练效果 vs `@pllm.train` {#sec-29}
+### 非训练效果 vs `@pllm.train` {#zh-sec-29}
 
 | 机制 | 驱动方式 | 是否反向求导 | 显存与优化器 | 典型场景 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -438,13 +899,13 @@ print(testing.check(RunningMean(), CONFIG).passed)
 
 ---
 
-## 6. 常见错误与排查 {#sec-30}
+## 6. 常见错误与排查 {#zh-sec-30}
 
-这一页的写法被拒绝时的报错原文、原因和改法，见报错目录的[效果与结果](/pllm/docs/reference/errors/#sec-5)、[阶段](/pllm/docs/reference/errors/#sec-3)几节。
+这一页的写法被拒绝时的报错原文、原因和改法，见报错目录的[效果与结果](/pllm/docs/reference/errors/#zh-sec-5)、[阶段](/pllm/docs/reference/errors/#zh-sec-3)几节。
 
 ---
 
-## 7. 自测小问题 {#sec-31}
+## 7. 自测小问题 {#zh-sec-31}
 
 <details>
 <summary>1. 为什么 <code>@pllm.export</code> 默认采用 <code>overflow="drop"</code> 而非 <code>"block"</code>？为什么单行张量不能超过 32 KiB？</summary>
@@ -472,7 +933,11 @@ print(testing.check(RunningMean(), CONFIG).passed)
 
 </div>
 
-<div class="zine-doc-footer">
-  <a class="zine-pill-link" href="/pllm/#docs">← Back to pLLM Documentation Hub</a>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/guides/results.md" target="_blank" rel="noopener">Edit / View on GitHub ↗</a>
 </div>
+
+<div class="zine-doc-footer">
+  <a class="zine-pill-link" data-i18n-zh="← 返回 pLLM 项目与文档中心" data-i18n-en="← Back to pLLM Project &amp; Docs" href="/pllm/#docs">← Back to pLLM Project &amp; Docs</a>
+  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/guides/results.md" target="_blank" rel="noopener">GitHub &middot; doc/guides/results.md ↗</a>
+</div>
+
+<script defer src="/assets/js/bilingual-post.js"></script>

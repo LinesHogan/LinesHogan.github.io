@@ -1,23 +1,354 @@
 ---
 layout: page
-title: "07 改写残差连接：value residual、超连接与记忆子层"
-description: "pLLM · Algorithm Family Examples (06–13) (算法族示例与实测 (06–13))"
+title: "07 Rewriting Residual Connections: Value Residual, Hyper-Connections, and Memory Sublayers"
+description: "pLLM Documentation · Algorithm Family Examples (06–13)"
 permalink: /pllm/docs/examples/07_custom_residual/
 nav: false
 ---
 
-<div class="zine-dispatch">
+<link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
+
+<div class="zine-dispatch" data-title-zh="07 改写残差连接：value residual、超连接与记忆子层" data-title-en="07 Rewriting Residual Connections: Value Residual, Hyper-Connections, and Memory Sublayers">
   <div class="zine-dispatch-links">
-    <a class="zine-pill-link primary" href="/pllm/#docs">← pLLM Project &amp; Docs</a>
-    <a class="zine-pill-link" href="/pllm/docs/">All Docs Index</a>
-    <span class="zine-lang-badge">Notebook (.ipynb)</span>
+    <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
+    <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>
+    <span class="zine-lang-badge" data-i18n-zh="可执行教程 (.ipynb)" data-i18n-en="Notebook (.ipynb)">Notebook (.ipynb)</span>
   </div>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/examples/07_custom_residual.ipynb" target="_blank" rel="noopener">Open .ipynb on GitHub ↗</a>
+  <a class="zine-pill-link" data-i18n-zh="在 GitHub 打开 .ipynb ↗" data-i18n-en="Open .ipynb on GitHub ↗" href="https://github.com/LinesHogan/pLLM/blob/main/doc/examples/07_custom_residual.ipynb" target="_blank" rel="noopener">Open .ipynb on GitHub ↗</a>
 </div>
 
-<div id="markdown-content" markdown="1">
+<div id="markdown-content">
 
-<div id="sec-1"></div>
+<div class="zine-lang-panel" data-lang-panel="en" lang="en" markdown="1">
+
+<div id="en-sec-1"></div>
+
+In Example 06, we read the model's residual stream. Many architectural proposals operate at this exact level: altering the values read by each attention layer (such as ResFormer's value residual), changing how sublayer outputs merge back into the residual stream (such as LAuReL or hyper-connections), or attaching a fast-weight memory beside a sublayer that reads and writes on the fly (such as TTT or Titans).
+
+If you want to experiment with these structures inside an inference engine—for example, to load a checkpoint trained with the new architecture or to verify that the wiring matches—the conventional approach is to fork vLLM's model code and edit every layer's `forward` method. Once fast-weight memory enters the picture, you also have to manage isolated per-request state yourself so concurrent requests never corrupt one another.
+
+In pLLM, `@pllm.custom_residual` lets a single method take over the residual update at chosen sites while native attention, MLP, and KV writes run as usual. When hyperparameters are set to an identity transform, the output matches the base model verbatim, making it easy to verify your wiring first. For stateful memory sublayers, each request owns an isolated copy of the memory updated at a fixed chunk length, so the mathematical result does not depend on how the scheduler splits a prompt across steps.
+
+Before we start, note two limitations and costs:
+First, `Qwen/Qwen2.5-7B-Instruct` used in this notebook was not trained with these structures (~15 GiB in bf16 weights, requiring a 24 GiB GPU). Setting non-identity parameters will change the model's outputs, not improve answer quality; our goal here is to demonstrate how to wire these structures into the inference engine and measure their runtime overhead.
+Second, `@pllm.custom_residual` requires prefix caching to be disabled and runs on a single GPU. It executes inside CUDA graphs alongside the model; in Step 3 we measure how much the extra per-layer computation reduces throughput.
+
+This notebook walks through four experiments:
+1. **Value residual**: mix layer 0's values into subsequent layers' values.
+2. **Hyper-connections**: expand one residual stream into multiple parallel streams, reading and mixing before and after each sublayer.
+3. **Throughput cost**: benchmark these architectures running inside CUDA graphs.
+4. **Stateful memory sublayer**: attach a per-request fast-weight matrix beside an MLP, reading and updating by fixed-size chunks.
+
+Let's start by running native vLLM in eager mode as a baseline on two test prompts.
+
+```python
+import os
+
+os.environ["VLLM_LOGGING_LEVEL"] = "ERROR"  # Show only vLLM errors and suppress startup logs
+
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
+
+import torch
+from transformers import AutoTokenizer
+from vllm import SamplingParams
+
+import pllm
+from pllm.benchmark import throughput
+
+MODEL = "Qwen/Qwen2.5-7B-Instruct"
+# Rewritten residuals run inside CUDA graphs. Capture pools auto-size by default; set ExecutionOptions if you need an explicit cap.
+CONFIG = pllm.ModelConfig(MODEL, max_model_len=512, max_num_seqs=32, max_num_batched_tokens=512,
+                          gpu_memory_utilization=0.7, seed=0)
+```
+
+```python
+tokenizer = AutoTokenizer.from_pretrained(MODEL)
+questions = ["Write one sentence about the ocean.", "Name three prime numbers."]
+prompts = [tokenizer.apply_chat_template([{"role": "user", "content": q}], tokenize=False,
+                                         add_generation_prompt=True) for q in questions]
+greedy = SamplingParams(max_tokens=40, temperature=0.0)
+
+
+def answers(llm) -> list[str]:
+    return [output.outputs[0].text for output in llm.generate(prompts, greedy, use_tqdm=False)]
+
+
+def run(workload: pllm.Workload, config: pllm.ModelConfig = CONFIG) -> list[str]:
+    with pllm.make_llm(config, workload=workload) as llm:
+        texts = answers(llm)
+        print("eager 原因:", repr(llm.diagnostics().eager_reason))
+    return texts
+
+
+# Control group: native vLLM without a workload, running in eager mode (see below for why).
+with pllm.make_llm(replace(CONFIG, cuda_graphs=False)) as plain:
+    baseline = answers(plain)
+for text in baseline:
+    print(repr(text))
+```
+
+```text
+"The ocean covers approximately 71% of the Earth's surface and is home to a vast array of life forms, from microscopic plankton to massive whales."
+'Sure, three prime numbers are 2, 3, and 5. Prime numbers are numbers greater than 1 that have no divisors other than 1 and themselves.'
+```
+
+## Step 1: Value Residual (Rewriting Each Layer's Value) {#en-step-1-value-residual-rewriting-each-layers-value}
+
+In this step, we answer: how can we modify the value tensor that each attention layer reads and writes into the KV cache—without modifying model source code—and verify that our wiring is correct?
+
+First, why did the baseline above explicitly disable CUDA graphs (`cuda_graphs=False`)? A model with `@pllm.custom_residual` still runs inside CUDA graphs, but vLLM disables inductor operator fusion so the graph captures the model's original operators, matching eager-mode arithmetic. By contrast, default native vLLM uses fused operators whose bf16 rounding differs slightly (Tutorial 00 encountered this same rounding difference at steering strength `0`). Therefore, to verify "verbatim equivalence to native" under an identity configuration, we compare against eager-mode native vLLM.
+
+Our first architecture is ResFormer's value residual. The rule is simple: starting from layer 1, each attention layer mixes in a fraction of layer 0's value via $$V_l + \lambda_l (V_0 - V_l)$$. When the mixing coefficient `lam = 0`, the formula reduces to $$V_l$$, i.e., the original model.
+
+In the code below, we intercept layers 1 through 27 (this model has 28 layers) using `@pllm.custom_residual(site="value", layers=tuple(range(1, 28)))`:
+- A `site="value"` method receives the current layer's value tensor `v` of shape `[rows, kv_heads, head_dim]` and returns the replacement value (attention reads this returned tensor, and it is also what gets written to the KV cache).
+- `pllm.value(0)` reads the same token's layer-0 value from the current forward pass.
+- `pllm.depth()` returns the current layer index.
+- Per-layer mixing coefficients `lam` live in an `InstanceState`, populated at initialization by `fill`.
+- Incoming tensors have the model's `bfloat16` dtype; we cast with `.float()` for float32 math and cast back via `.to(v.dtype)`.
+
+```python
+@dataclass(frozen=True)
+class ValueResidual(pllm.Workload):
+    mixing: float = 0.0
+
+    @property
+    def gates(self) -> pllm.InstanceState:
+        return pllm.InstanceState({"lam": lambda m: (m.layer_count,)}, init=pllm.Computed(self.fill))
+
+    def fill(self, fields: Mapping[str, torch.Tensor], generator: torch.Generator) -> None:
+        fields["lam"].fill_(self.mixing)
+
+    @pllm.custom_residual(site="value", layers=tuple(range(1, 28)))
+    def mix(self, v: torch.Tensor, first: torch.Tensor = pllm.value(0), layer: int = pllm.depth(),
+            lam: torch.Tensor = pllm.parameter("gates", "lam")) -> torch.Tensor:
+        return (v.float() + lam[layer] * (first.float() - v.float())).to(v.dtype)
+```
+
+Before generating, let's inspect the plan and check contracts on CPU: `explain` confirms the model remains in CUDA graphs, and `testing.check` uses `lam = 0` as the `neutral=` baseline. Because custom residuals operate inside the model and there is no model to edit on CPU, the check explicitly reports `SKIP` for model-site execution; bit-for-bit verification happens in GPU generation and `check_on_gpu`.
+
+```python
+from pllm import testing
+
+print("CUDA graph:", "保留" if pllm.explain(ValueResidual(0.3), CONFIG).eager_reason == "" else "退回 eager")
+print(testing.check(ValueResidual(0.3), CONFIG, neutral=ValueResidual(0.0)))
+```
+
+```text
+CUDA graph: 保留
+status  contract / reason
+PASS    tensor_parallel_size=1: admission
+PASS    compile
+PASS    neutral
+SKIP    model-site execution: CPU decoder does not execute residual hooks, overlays, spans or PositionState
+```
+
+```python
+print("lam = 0，与原生逐字相同:", run(ValueResidual(0.0)) == baseline)
+for text in run(ValueResidual(0.3)):
+    print("lam = 0.3:", repr(text))
+```
+
+```text
+eager 原因: ''
+lam = 0，与原生逐字相同: True
+eager 原因: ''
+lam = 0.3: "The vast ocean covers over 70% of the Earth's surface and is home to a breathtakingly diverse array of marine life."
+lam = 0.3: 'Certainly! Here are three prime numbers:\n\n1. 7\n2. 13\n3. 19\n\nPrime numbers are numbers that are greater than 1 and have no divisors'
+```
+
+From the output, `eager_reason` is an empty string on every run—the model executes inside CUDA graphs. When `lam = 0`, the outputs match eager-mode native vLLM verbatim (`True`), confirming the wiring is correct.
+When `lam` is set to `0.3`, both responses change: the first rephrases the opening (`"The vast ocean covers over 70% of the Earth's surface..."`), and the second turns into a numbered list producing 7, 13, and 19 instead of 2, 3, and 5. The text remains fluent, which only shows the intervention took effect—not that the model improved, since the base model was never trained with this structure.
+
+```python
+@dataclass(frozen=True)
+class HyperConnections(pllm.Workload):
+    n: int = 4
+    perturb: float = 0.0
+
+    @property
+    def routing(self) -> pllm.InstanceState:
+        n = self.n
+        return pllm.InstanceState(
+            {"read": lambda m: (2 * m.layer_count, n), "mix": lambda m: (2 * m.layer_count, n, n),
+             "write": lambda m: (2 * m.layer_count, n)},
+            init=pllm.Computed(self.fill),
+        )
+
+    def fill(self, fields: Mapping[str, torch.Tensor], generator: torch.Generator) -> None:
+        fields["read"].fill_(1 / self.n)
+        fields["write"].fill_(1)
+        eye = torch.eye(self.n, device=fields["mix"].device)
+        noise = torch.randn(fields["mix"].shape, generator=torch.Generator(device=eye.device).manual_seed(5),
+                            device=eye.device) * self.perturb
+        fields["mix"].copy_(eye + noise - noise.mean(-1, keepdim=True))
+
+    def choose(self, x: torch.Tensor, s: int = pllm.depth(),
+               read: torch.Tensor = pllm.parameter("routing", "read")) -> torch.Tensor:
+        return torch.einsum("n,rnd->rd", read[s].float(), x.float()).to(x.dtype)
+
+    def streams(self) -> int:
+        return self.n
+
+    @pllm.custom_residual(site="both", read="choose", streams=streams)
+    def update(self, x: torch.Tensor, y: torch.Tensor, s: int = pllm.depth(),
+               mix: torch.Tensor = pllm.parameter("routing", "mix"),
+               write: torch.Tensor = pllm.parameter("routing", "write")) -> torch.Tensor:
+        mixed = torch.einsum("mn,rnd->rmd", mix[s].float(), x.float())
+        return (mixed + write[s].float()[:, None] * y.float()[:, None]).to(x.dtype)
+
+    @pllm.custom_residual(site="final")
+    def collapse(self, x: torch.Tensor) -> torch.Tensor:
+        return x.float().mean(1).to(x.dtype)
+```
+
+```python
+print("恒等路由，与原生逐字相同:", run(HyperConnections()) == baseline)
+for text in run(HyperConnections(perturb=0.5)):
+    print("扰动 0.5:", repr(text))
+```
+
+```text
+eager 原因: ''
+恒等路由，与原生逐字相同: True
+eager 原因: ''
+扰动 0.5: "The ocean covers approximately ( ( 90 %) of the Earth's surface and is a source of wonder, biodiversity, and vital resources for our planet."
+扰动 0.5: 'Certainly! Three prime numbers are 2, 3, and 5. Prime numbers are numbers that have exactly two distinct positive divisors: 1 and the number itself.'
+```
+
+Looking at the results: under identity routing (`perturb=0.0`, i.e. `read = 1/n`, `mix = identity`, `write = 1`), the 4 parallel streams still produce outputs verbatim identical to the eager base model (`True`). After adding `0.5` random perturbation to the mixing matrix, the first answer introduces an incorrect number and stray parentheses (`"The ocean covers approximately ( ( 90 %) of the Earth's surface..."`), and the second gives a different phrasing for prime numbers.
+
+## Step 3: Measuring Throughput Overhead {#en-step-3-measuring-throughput-overhead}
+
+In this step, we answer: when these architectures run inside CUDA graphs, how much does the extra per-layer tensor math reduce inference throughput?
+
+To measure realistic throughput, we construct 32 concurrent requests (8 prompts × 4 samples each × 256 generated tokens) and benchmark with `pllm.benchmark.throughput`: 1 warmup round followed by 3 timed rounds taking the median, timing each full `generate` call (including prefill). We compare four configurations side by side: native vLLM with CUDA graphs, native vLLM in eager mode (as a reference for what losing CUDA graphs costs), `ValueResidual(0.3)` from Step 1, and 4-stream `HyperConnections(perturb=0.5)`.
+
+```python
+many = [f"Explain the mathematical idea numbered {i}:" for i in range(8)]
+sampling = SamplingParams(n=4, max_tokens=256, temperature=0.8, top_p=0.95, ignore_eos=True, seed=7)
+
+rates = {}
+for name, config in (("原生 vLLM，CUDA graph", CONFIG), ("原生 vLLM，eager", replace(CONFIG, cuda_graphs=False))):
+    with pllm.make_llm(config) as plain:
+        rates[name] = throughput(plain, many, sampling)
+for name, workload in (("value residual", ValueResidual(0.3)), ("超连接 n=4", HyperConnections(perturb=0.5))):
+    with pllm.make_llm(CONFIG, workload=workload) as llm:
+        rates[name] = throughput(llm, many, sampling)
+graph = rates["原生 vLLM，CUDA graph"]
+for name, rate in rates.items():
+    print(f"{name:22s}: {rate:6.0f} token/s，为 CUDA graph 原生的 {rate / graph:.0%}")
+```
+
+```text
+原生 vLLM，CUDA graph    :   1728 token/s，为 CUDA graph 原生的 100%
+原生 vLLM，eager         :   1703 token/s，为 CUDA graph 原生的 99%
+value residual        :   1703 token/s，为 CUDA graph 原生的 99%
+超连接 n=4               :   1610 token/s，为 CUDA graph 原生的 93%
+```
+
+Here are the numbers from this run (RTX 4090, `Qwen2.5-7B-Instruct` bf16, vLLM 0.32.0, 32 concurrent requests, 256 tokens each, median of 3 rounds after 1 warmup):
+- **Native vLLM, CUDA graph**: `1728 token/s` (`100%` baseline)
+- **Native vLLM, eager**: `1703 token/s`, `99%` of native CUDA graph
+- **value residual**: `1703 token/s`, `99%` of native CUDA graph
+- **hyper-connections n=4**: `1610 token/s`, `93%` of native CUDA graph
+
+On 7B, a single decode step takes roughly 19 ms and is largely memory-bandwidth bound on weight reads, so even eager native reaches `99%` of graph mode—this dataset does not highlight the benefit of staying in CUDA graphs (on smaller models with few-millisecond steps, eager often drops to roughly half of graph throughput). The gap comes from the added per-layer math: value residual modifies the value tensor across 27 layers (`99%`), while hyper-connections read and matrix-mix 4 residual streams at all 56 sublayers (28 layers × 2 sublayers each), reaching `93%`.
+
+## Step 4: Stateful Memory Sublayer (Chunk-Updated Fast Weights) {#en-step-4-stateful-memory-sublayer-chunk-updated-fast-weights}
+
+In this step, we answer: if a residual branch carries per-request "memory" that is read and updated as tokens arrive, how do we write it so concurrent requests stay isolated and the mathematical result is invariant to how the scheduler chunks execution into steps?
+
+In plain terms, here is what this memory sublayer computes: beside layer 12's MLP, we place a `[hidden, hidden]` fast-weight matrix $$M$$ (one independent copy per request, initialized to zero).
+- **Read**: each token passing through layer 12 normalizes its incoming residual stream $$x$$ to form key $$k$$, reads $$M k$$ from the matrix, scales it by a gating factor `gate` (`2` in this demo), and adds it into the residual stream after the MLP output.
+- **Write (update)**: after accumulating a fixed-length chunk (`chunk=16`, i.e., 16 tokens), $$M$$ takes one gradient-descent step (learning rate `1.0`) toward the objective $$\|M k - y\|^2$$, where $$y$$ is the MLP output at that layer.
+
+This is the core skeleton of "read-and-write fast-weight memory" architectures such as TTT (Test-Time Training) and Titans. When `gate = 0`, the read term is zeroed out and the model reduces to the base model.
+
+In code, two parameters hand this rule over to the framework:
+- `state="memory"` binds a single-field `RequestState` (`M`), which the framework allocates and isolates per request.
+- `chunk=chunk_length` sets the chunk length to 16 (`chunk_length` is a method called once when pLLM binds the workload to read the instance's `chunk` attribute). The decorated `remember` method returns `(new_stream, new_M)`.
+
+Chunk-update visibility follows a strict rule: every row within a chunk (16 rows) reads the **$$M$$ from the start of that chunk**; only when the last row of the chunk finishes does the returned **new $$M$$** take effect for the next chunk. If a request has fewer than 16 tokens remaining in a given engine forward step, the framework automatically buffers those partial rows until subsequent steps complete a full chunk. Mathematically, the final output therefore does not depend on how the vLLM scheduler slices a long prompt across steps.
+
+```python
+@dataclass(frozen=True)
+class FastWeightMemory(pllm.Workload):
+    layer: int = 12
+    chunk: int = 16
+    lr: float = 1.0
+    gate: float = 2.0
+
+    @property
+    def memory(self) -> pllm.RequestState:
+        return pllm.RequestState({"M": lambda m: (m.hidden_size, m.hidden_size)})
+
+    def where(self) -> tuple[int, ...]:
+        return (self.layer,)
+
+    def chunk_length(self) -> int:
+        return self.chunk
+
+    @pllm.custom_residual(site="mlp", layers=where, state="memory", chunk=chunk_length)
+    def remember(self, x: torch.Tensor, y: torch.Tensor,
+                 M: torch.Tensor = pllm.parameter("memory", "M")) -> tuple[torch.Tensor, torch.Tensor]:
+        k = torch.nn.functional.normalize(x.float(), dim=-1)  # Key for this row
+        read = k @ M.T                                         # Value read from memory
+        stream = (x.float() + y.float() + self.gate * read).to(x.dtype)
+        return stream, M - self.lr / len(x) * (read - y.float()).T @ k  # One gradient step on |M k - y|^2
+```
+
+```python
+# One FP32 M per request (3584 x 3584 x 4 bytes, ~49 MiB), multiplied by in-flight versions. 32 concurrent requests
+# do not fit on a 24 GiB GPU, so we use 8 concurrent requests here and compare against native vLLM at the same concurrency.
+# Stateful sublayers also need VRAM for the model graph and scratch workspace; lower vLLM's memory utilization. Capture pool auto-sizes.
+SMALL = replace(CONFIG, max_num_seqs=8, gpu_memory_utilization=0.65)
+for config in (CONFIG, SMALL):
+    state = pllm.explain(FastWeightMemory(), config).states[0]
+    print(f"{config.max_num_seqs:2d} 个并发请求：记忆状态 {state.bytes_per_root / 2**20:.1f} MiB × {state.roots} 份 = "
+          f"{state.reserved_bytes / 2**30:.2f} GiB")
+print("gate = 0，与原生逐字相同:", run(FastWeightMemory(gate=0.0), SMALL) == baseline)
+for text in run(FastWeightMemory(), SMALL):
+    print("gate = 2:", repr(text))
+single = SamplingParams(n=1, max_tokens=256, temperature=0.8, top_p=0.95, ignore_eos=True, seed=7)
+with pllm.make_llm(SMALL) as plain:
+    small_graph = throughput(plain, many, single)
+with pllm.make_llm(SMALL, workload=FastWeightMemory()) as llm:
+    rate = throughput(llm, many, single)
+print(f"8 个并发请求：原生 vLLM {small_graph:6.0f} token/s，记忆子层 {rate:6.0f} token/s，为原生的 {rate / small_graph:.0%}")
+```
+
+```text
+32 个并发请求：记忆状态 49.2 MiB × 130 份 = 6.25 GiB
+ 8 个并发请求：记忆状态 49.2 MiB × 34 份 = 1.63 GiB
+eager 原因: ''
+gate = 0，与原生逐字相同: True
+eager 原因: ''
+gate = 2: "The ocean covers approximately 71% of the Earth's surface and plays a crucial role in regulating the planet's climate."
+gate = 2: 'Sure, here are three prime numbers:\n\n1. 2\n2. 3\n3. 5\n\nPrime numbers are numbers greater than 1 that have no divisors other than 1'
+8 个并发请求：原生 vLLM    484 token/s，记忆子层    362 token/s，为原生的 75%
+```
+
+From the output, when `gate = 0`, the results remain verbatim identical to the eager base model (`True`). When `gate` is set to `2`, the second half of the first answer changes (`"...plays a crucial role in regulating the planet's climate."`), and the second answer becomes a numbered list. The stateful memory sublayer also runs inside CUDA graphs (`eager_reason` is empty).
+
+Each request's `M` is a `[hidden, hidden]` FP32 matrix, about 49 MiB on 7B; including in-flight versions, 32 concurrent requests would require 6.25 GiB, which does not fit alongside everything else on a 24 GiB GPU. Running at concurrency 8 instead still needs ~1.9 GiB for the capture pool. At 8 concurrent requests, the memory sublayer reaches `362 token/s`, or `75%` of native vLLM at concurrency 8 (`484 token/s`): every token reads the 49 MiB matrix once and updates it every 16 tokens, competing directly with model weight reads for memory bandwidth.
+
+## Summary {#en-summary}
+
+Looking back at the four experiments in this notebook, here are the key usages and boundaries of `@pllm.custom_residual`:
+1. **Five attachment sites (`site`)**: attach at `attention`, `mlp`, `both` (applied to both attention and MLP at each layer), `value` (replacing the value read by attention and written to KV cache), or `final` (after all layers and before the final norm, typically to collapse multiple streams back into one).
+2. **Verify with identity settings first**: whether mixing layer-0 values, splitting into parallel streams, or attaching fast-weight memory, configure parameters for an identity transform and verify verbatim equivalence against eager-mode native vLLM before testing non-trivial parameters.
+3. **Stateful memory sublayers**: binding `state` (a single-field `RequestState`) and `chunk` (chunk length) gives each request an isolated state that reads and updates at a fixed chunk cadence.
+4. **Current limitations and overhead**: `@pllm.custom_residual` runs inside CUDA graphs alongside the model, at the cost of the added per-layer compute (`99%`, `93%`, and `75%` measured on 7B here, with the memory sublayer measured at concurrency 8). It requires a single GPU and prefix caching disabled. In addition, a stateful (`state`) memory sublayer cannot be combined with `@pllm.custom_forward`, because custom forward passes do not guarantee a fixed visit count per layer per token.
+
+This notebook demonstrated the skeleton of fast-weight memory on a standard base model. In the next example, [08 In-Place TTT](/pllm/docs/examples/08_inplace_ttt/), we load a checkpoint actually trained with chunked fast-weight updates—In-Place TTT—and inspect its behavior with real trained weights.
+
+</div>
+
+<div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN" markdown="1">
+
+<div id="zh-sec-1"></div>
 
 在示例 06 中，我们读了模型的残差流。不少改模型结构的论文关注的也是这一层面的问题：比如改变每个 attention 层读到的 value（如 ResFormer 的 value residual），改变子层输出并入残差流的方式（如 LAuReL、超连接 hyper-connections），或者在子层旁边挂一个边读边写的快权重记忆（如 TTT、Titans）。
 
@@ -89,7 +420,7 @@ for text in baseline:
 'Sure, three prime numbers are 2, 3, and 5. Prime numbers are numbers greater than 1 that have no divisors other than 1 and themselves.'
 ```
 
-## 第一步：value residual（改写每层的 value） {#sec-2}
+## 第一步：value residual（改写每层的 value） {#zh-sec-2}
 
 这一步我们要回答的问题是：怎样在不改模型源码的情况下，修改每一层 attention 读到并写入 KV cache 的 value，并且确认代码接法是对的？
 
@@ -159,7 +490,7 @@ lam = 0.3: 'Certainly! Here are three prime numbers:\n\n1. 7\n2. 13\n3. 19\n\nPr
 从运行输出可以看到，每次运行的 `eager 原因` 都是空字符串：模型在 CUDA graph 里运行。当 `lam = 0` 时，输出与 eager 模式的原生 vLLM 逐字相同（`True`），这说明结构接对了。
 当把 `lam` 设为 `0.3` 时，两个回答都变了：第一个回答换了说法（`"The vast ocean covers over 70% of the Earth's surface..."`），第二个变成了带编号的列表，而且列出的 7、13、19 和原来的 2、3、5 不同。回答依然通顺，但这只说明修改已经生效，不说明模型变好，因为底座模型没有按这个结构训练过。
 
-## 第二步：超连接（把一条残差流扩成多条） {#sec-3}
+## 第二步：超连接（把一条残差流扩成多条） {#zh-sec-3}
 
 这一步我们要回答的问题是：如果一个结构不仅改子层的输出，还要把单条残差流扩展成多条并行流，并在子层前后分别做组合，该怎样用 `@pllm.custom_residual` 表达？
 
@@ -236,7 +567,7 @@ eager 原因: ''
 
 来看运行结果：在恒等路由（`perturb=0.0`，即 `read = 1/n`、`mix = 单位阵`、`write = 1`）下，4 条并行流算出的结果依然与 eager 原生模型逐字相同（`True`）。当给混合矩阵加上 `0.5` 的随机扰动后，第一个回答出现了错误的数字和多余的括号（`"The ocean covers approximately ( ( 90 %) of the Earth's surface..."`），第二个换了一种解释质数的说法。
 
-## 第三步：实测吞吐代价 {#sec-4}
+## 第三步：实测吞吐代价 {#zh-sec-4}
 
 这一步我们要回答的问题是：这些结构在 CUDA graph 里运行时，每层新加的张量计算会让推理吞吐降低多少？
 
@@ -273,7 +604,7 @@ value residual        :   1703 token/s，为 CUDA graph 原生的 99%
 
 在 7B 上，一步 decode 约 19 ms，大部分时间花在读权重上，所以连 eager 原生也有图模式的 `99%`：这一组数字看不出“留在 CUDA graph 里”的好处（在一步只有几毫秒的小模型上，eager 往往只有图模式的一半左右）。差距来自每层多出来的计算：value residual 修改 27 层的 value 张量，吞吐为 `99%`；超连接在 56 个子层（28 层 × 每层 2 个子层）上各自做 4 条残差流的读取与矩阵混合，吞吐为 `93%`。
 
-## 第四步：带状态的记忆子层（按块更新的快权重） {#sec-5}
+## 第四步：带状态的记忆子层（按块更新的快权重） {#zh-sec-5}
 
 这一步我们要回答的问题是：如果残差分支里带有需要随 token 边读边写的“记忆”（每个请求独立一份），怎样写才能既让并发请求互不干扰，又保证计算结果不随调度器的分步方式而改变？
 
@@ -351,7 +682,7 @@ gate = 2: 'Sure, here are three prime numbers:\n\n1. 2\n2. 3\n3. 5\n\nPrime numb
 
 这个子层每个请求的 `M` 是 `[hidden, hidden]` 的 FP32 矩阵，7B 上约 49 MiB；加上在途版本，32 个并发请求要 6.25 GiB，放不进 24 GiB 的卡，所以这一步只开 8 个并发请求，它的 graph 也要约 1.9 GiB 的捕获池。8 个并发请求下，记忆子层的吞吐是 `362 token/s`，为同样 8 个并发请求的原生 vLLM（`484 token/s`）的 `75%`：每个 token 都要读一次 49 MiB 的矩阵，每 16 个 token 还要更新一次，这些读写和读模型权重抢的是同一份显存带宽。
 
-## 小结 {#sec-6}
+## 小结 {#zh-sec-6}
 
 回顾本篇的四个实验，关于 `@pllm.custom_residual` 的用法与边界可以总结为以下几点：
 1. **五种挂载位置（`site`）**：可以挂载在 `attention`、`mlp`、`both`（同时作用于每层的 attention 和 MLP）、`value`（替换 attention 读取并写入 KV cache 的 value）以及 `final`（所有层之后、最终 norm 之前，常用于把多条流合并回一条）。
@@ -363,7 +694,11 @@ gate = 2: 'Sure, here are three prime numbers:\n\n1. 2\n2. 3\n3. 5\n\nPrime numb
 
 </div>
 
-<div class="zine-doc-footer">
-  <a class="zine-pill-link" href="/pllm/#docs">← Back to pLLM Documentation Hub</a>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/examples/07_custom_residual.ipynb" target="_blank" rel="noopener">Edit / View on GitHub ↗</a>
 </div>
+
+<div class="zine-doc-footer">
+  <a class="zine-pill-link" data-i18n-zh="← 返回 pLLM 项目与文档中心" data-i18n-en="← Back to pLLM Project &amp; Docs" href="/pllm/#docs">← Back to pLLM Project &amp; Docs</a>
+  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/examples/07_custom_residual.ipynb" target="_blank" rel="noopener">GitHub &middot; doc/examples/07_custom_residual.ipynb ↗</a>
+</div>
+
+<script defer src="/assets/js/bilingual-post.js"></script>

@@ -4,7 +4,7 @@ title: "为什么 32 个线程块跑赢 9,600 个，跳过 23% 的词却省不�
 title_en: "Why 32 Thread Blocks Beat 9,600—and Skipping 23% of Tokens Saves Zero Time: Bandwidth and SM Quotas in Continuous Batching"
 date: 2026-11-23 03:08:00 +0800
 description: "建立“外部慢速 PCIe vs 片内 466 MB/层权重流”的双瓶颈模型：推导非抢占式 SM 槽位为何会被 9,600 个查表块塞满饿死矩阵乘，以及部分动态跳层为何省不下时间且暗藏概率分布漂移（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
-description_en: 'Two habits learned from single-request scripts—"launch thousands of thread blocks to hide memory latency" and "let easy tokens exit early to save proportional runtime"—both backfire inside a... (pLLM Engineering Series · Bilingual EN / 中文)'
+description_en: 'Two habits learned from single-request scripts—"launch thousands of thread blocks to hide memory latency" and "let easy tokens exit early to save proportional runtime"—both backfire inside... (pLLM Engineering Series · Bilingual EN / 中文)'
 tags: pllm vllm inference-systems
 categories: systems
 pllm_synced: true
@@ -15,10 +15,7 @@ related_posts: true
 ---
 
 <div class="zine-dispatch" data-title-zh="为什么 32 个线程块跑赢 9,600 个，跳过 23% 的词却省不下 1 毫秒？连续批处理的带宽配额分析" data-title-en="Why 32 Thread Blocks Beat 9,600—and Skipping 23% of Tokens Saves Zero Time: Bandwidth and SM Quotas in Continuous Batching">
-  <div class="zine-dispatch-links">
-    <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档" data-i18n-en="pLLM Project &amp; Docs" href="/pllm/">pLLM 项目主页与文档</a>
-    <a class="zine-pill-link" data-i18n-zh="GitHub · pLLM ↗" data-i18n-en="GitHub &middot; pLLM ↗" href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">GitHub · pLLM ↗</a>
-  </div>
+  <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <div class="zine-lang-switch" role="group" aria-label="Language">
     <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
     <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
@@ -33,7 +30,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（3/10 · 极客拆解 · 带宽与配额）** · [pLLM 项目介绍与文档中心](/pllm/) · [专栏目录与系统解剖图](/pllm/#blog) · [仓库源码原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/03-bandwidth-and-sm-quotas.md)
+> **pLLM 技术随笔与机制拆解（3/10 · 极客拆解 · 带宽与配额）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/03-bandwidth-and-sm-quotas.md)
 
 在单请求研究脚本里调性能，有两条几乎不用过脑子的经验：遇到高延迟访存就把启动网格（grid）开大，靠成千上万个线程块切换来掩盖延迟；遇到像 `the`、句号这类简单词，在第 16 层判断收敛后直接跳过后面几层（Early Exit），跳过四分之一的词自然能省近四分之一的时间。
 
@@ -43,16 +40,7 @@ related_posts: true
 
 先把一步并发解码所处的硬件配额地图画出来：
 
-```text
-主机锁页内存 (594 MiB 静态大表)
-     │
-     │ 通道 A：PCIe 4.0 x16 慢速链路 (~24 GB/s)
-     ▼
-┌───────────────────────────────────────────────┐      通道 B：片上显存高速总线 (~1,000 GB/s)
-│         GPU 流多处理器阵列 (128 个 SM)        │ ◄─── 每层 Transformer 必须流式读入 ~466 MB 权重
-│  (硬件块调度器按驻留槽位派活，一旦入住不可抢占) │
-└───────────────────────────────────────────────┘
-```
+![单步并发解码的硬件配额地图：通道 A 为慢速 PCIe 4.0 x16 链路，通道 B 为片上显存高速权重总线](/assets/img/pllm/blog/assets/03-bandwidth-and-sm-quotas-fig1-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 顺着图上的通道 A 和通道 B 各算一笔账，两个反直觉现象就能用初等算术推出来。
 
@@ -88,19 +76,7 @@ def bounded_rows(src, rows, out, count: int, width: tl.constexpr, block: tl.cons
 
 为什么多派三百倍的块反而把并发搞砸了？这里要区分 GPU 的两层调度器：SM 内部的 Warp 调度器确实能单周期切换藏延迟，但前提是别的内核已经拿到了这个 SM 的房间；而芯片顶层的**硬件块调度器是非抢占式的（non-preemptive）**：
 
-```text
-发射 9,600 个查表块 (旁路流瞬间塞满全部 128 个 SM 的驻留槽位):
-  ┌──────────┬──────────┬─────┬──────────┐
-  │   SM 0   │   SM 1   │ ... │  SM 127  │ ◄── 全部干等 24 GB/s 的慢速 PCIe 返回字节，不退房!
-  └──────────┴──────────┴─────┴──────────┘
-       ▲ 主干流矩阵乘请求入住 ──► 硬件调度器：“房间已满，门外排队。”
-
-限制在 32 个持久化块 (最多只占 1/4 的 SM 槽位):
-  ┌──────────┬─────┬──────────╦──────────┬──────────┬─────┬──────────┐
-  │   SM 0   │ ... │  SM 31   ║  SM 32   │  SM 33   │ ... │  SM 127  │
-  │ (循环拉满 24 GB/s PCIe)   ║     (96 个 SM 全速跑主干 Tensor Core) │
-  └──────────┴─────┴──────────╩──────────┴──────────┴─────┴──────────┘
-```
+![非抢占式块调度器：9,600 个查表块占满 128 个 SM 槽位导致主干流排队，32 个持久化块可让 96 个 SM 全速并发](/assets/img/pllm/blog/assets/03-bandwidth-and-sm-quotas-fig2-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 看清这张驻留图，诊断准则就有了：**凡是在旁路流上跑受限于慢速外部 I/O 的后台内核，“拉满占用率”恰恰是毒药**。只派刚好能喂饱外部总线带宽的少量持久化块（约 `SMs // 4`），把主力算力单元留给前台任务，两条流索取的资源互补，并发才真正成立。
 
@@ -122,14 +98,7 @@ def bounded_rows(src, rows, out, count: int, width: tl.constexpr, block: tl.cons
 
 还是算一眼通道 B 的字节账。7B 模型的双字节权重约 15 GiB，除去首尾词表，**平均每一层 Transformer 的权重矩阵重达约 466 MB**。在每次只算几十行的瘦矩阵乘（Skinny GEMM）里，耗时大头根本不是浮点乘加，而是把这 466 MB 权重从显存流式读进寄存器：
 
-```text
-情形 A：32 行里有 8 行早退，剩 24 行继续算第 16 层
-  [ 24 行活跃 | 8 行跳过 ] ──► 只要还剩哪怕 1 行要算，SM 就得把 466 MB 层权重一字不落读一遍!
-                              反而倒贴 7% 键值补写费 + argsort 压紧与写回搬运费 ──► 吞吐微跌 (98%)
-
-情形 B：32 行全员早退 (活跃行数 = 0)
-  [     32 行全部跳过     ] ──► 条件节点直接短路整段层切片，省下 4 层共 ~1.86 GB 权重读取 ──► 吞吐 112%!
-```
+![通道 B 字节账：部分早退仍须读完 466 MB 整层权重导致吞吐微跌至 98%，全批跳过才能短路省下 1.86 GB 读取升至 112%](/assets/img/pllm/blog/assets/03-bandwidth-and-sm-quotas-fig3-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 独立工作台上干完活就能关灯下班；但在共享权重带宽的批处理传送带上，只要同批里还有一个慢工位没法跳过这一层，整层权重就得照读不误。
 
@@ -158,7 +127,7 @@ def bounded_rows(src, rows, out, count: int, width: tl.constexpr, block: tl.cons
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (3/10 · Deep Dive · Bandwidth & Quotas)** · [pLLM Project & Docs Hub](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [Markdown Source on GitHub ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/03-bandwidth-and-sm-quotas.md)
+> **pLLM Engineering Essays & Deep Dives (3/10 · Deep Dive · Bandwidth & Quotas)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/03-bandwidth-and-sm-quotas.md)
 
 Profiling single-request research scripts builds two reliable reflexes: when memory latency is high, launch a massive grid of thread blocks (CTAs) so warp switching hides the wait; when easy tokens like periods or `the` settle their representation by layer 16, branch around the next few layers (early exit) to pocket proportional speedups.
 
@@ -168,16 +137,7 @@ Although one surprise happens over PCIe and the other inside Transformer blocks,
 
 Sketching the hardware quotas of a single concurrent decode step puts both bottlenecks on one map:
 
-```text
-Pinned Host RAM (594 MiB static lookup table)
-     │
-     │ Channel A: PCIe 4.0 x16 slow straw (~24 GB/s)
-     ▼
-┌───────────────────────────────────────────────┐      Channel B: Local VRAM bus (~1,000 GB/s)
-│           GPU Array (128 SMs total)           │ ◄─── Every active layer streams ~466 MB of weights
-│ (Non-preemptive block scheduler assigns slots)│
-└───────────────────────────────────────────────┘
-```
+![Hardware quota map of one concurrent decode step showing Channel A slow PCIe link and Channel B local VRAM weight bus](/assets/img/pllm/blog/assets/03-bandwidth-and-sm-quotas-fig1-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Tracing Channel A and Channel B in turn derives both reversals from elementary arithmetic.
 
@@ -213,19 +173,7 @@ Timed alongside four `4096³` BF16 matmuls on the main stream (`3.88 ms` solo):
 
 Distinguishing the GPU's two schedulers explains why 300x more blocks ruined concurrency. Inside one SM, warp schedulers switch warps every cycle—provided another kernel already holds a residency slot on that SM. Above them, **CUDA's global block scheduler is non-preemptive**:
 
-```text
-Launching 9,600 gather blocks (side stream fills every residency slot across all 128 SMs):
-  ┌──────────┬──────────┬─────┬──────────┐
-  │   SM 0   │   SM 1   │ ... │  SM 127  │ ◄── Stalled waiting on 24 GB/s PCIe; Tensor Cores sit idle!
-  └──────────┴──────────┴─────┴──────────┘
-       ▲ Main-stream GEMMs request SMs ──► Block Scheduler: "All slots occupied; wait outside."
-
-Capping at 32 persistent blocks (touches at most 1/4 of SMs):
-  ┌──────────┬─────┬──────────╦──────────┬──────────┬─────┬──────────┐
-  │   SM 0   │ ... │  SM 31   ║  SM 32   │  SM 33   │ ... │  SM 127  │
-  │ (Saturates 24 GB/s PCIe)  ║  (96 SMs run main-stream GEMMs full speed) │
-  └──────────┴─────┴──────────╩──────────┴──────────┴─────┴──────────┘
-```
+![Non-preemptive block scheduler comparison: 9,600 CTAs fill all 128 SMs and block main-stream GEMMs, whereas 32 persistent CTAs leave 96 SMs free](/assets/img/pllm/blog/assets/03-bandwidth-and-sm-quotas-fig2-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 That gives a general rule for any multi-stream server: **when a background kernel is bottlenecked on slow external I/O, maximizing SM occupancy is self-sabotage.** Launching just enough persistent CTAs to saturate the external link leaves the remaining SMs free so complementary resources actually overlap. It also states the exact boundary where host placement stops hiding: once $$\text{bytes\_per\_step} / 24\text{ GB/s} > T_{\text{forward}}$$ (on tiny 3 ms models or massive batches, or if the lookup accidentally depends on `hidden` states and cannot launch at step start), PCIe latency surfaces directly on the critical path.
 
@@ -245,14 +193,7 @@ Why did compacting nearly a quarter of the rows away lose a percent, while skipp
 
 Count the bytes on Channel B. Across 28 layers, a BF16 7B model averages ~**466 MB of weights per layer**. In skinny decode GEMMs (dozens of rows), runtime is dominated by streaming those 466 MB from VRAM into registers rather than Tensor Core math:
 
-```text
-Case A: 8 of 32 rows skip; 24 active rows still enter Layer 16
-  [ 24 Active | 8 Skipped ] ──► Even 1 active row forces SMs to stream 100% of 466 MB layer weights!
-                                Plus ~7% KV propagation + argsort gather/scatter ──► 98% throughput
-
-Case B: All 32 rows skip (active count == 0)
-  [    All 32 Skipped     ] ──► Conditional IF node short-circuits all 4 layers, saving ~1.86 GB reads ──► 112%!
-```
+![Channel B byte accounting: partial early exit still streams 466 MB of weights per layer for 98% throughput, while full-batch skip saves 1.86 GB for 112% throughput](/assets/img/pllm/blog/assets/03-bandwidth-and-sm-quotas-fig3-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 On a shared weight-streaming conveyor belt, one active row keeps the entire station running. Partial per-token skipping only starts saving wall-clock time in two regimes: when **batch concurrency grows large enough to enter compute-bound GEMMs**, or when **context lengths reach tens of thousands of tokens** so per-row KV cache scans outweigh the 466 MB layer weights.
 

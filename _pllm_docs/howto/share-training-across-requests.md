@@ -1,23 +1,326 @@
 ---
 layout: page
-title: "让一组请求共享训练成果"
-description: "pLLM · How-To & Serving Guides (操作与上线指南)"
+title: "Sharing Training Across Requests"
+description: "pLLM Documentation · How-To & Serving Guides"
 permalink: /pllm/docs/howto/share-training-across-requests/
 nav: false
 ---
 
-<div class="zine-dispatch">
+<link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
+
+<div class="zine-dispatch" data-title-zh="让一组请求共享训练成果" data-title-en="Sharing Training Across Requests">
   <div class="zine-dispatch-links">
-    <a class="zine-pill-link primary" href="/pllm/#docs">← pLLM Project &amp; Docs</a>
-    <a class="zine-pill-link" href="/pllm/docs/">All Docs Index</a>
-    <span class="zine-lang-badge">Doc (中文)</span>
+    <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
+    <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>
+    <span class="zine-lang-badge" data-i18n-zh="操作与上线指南" data-i18n-en="How-To &amp; Serving Guides">How-To &amp; Serving Guides</span>
   </div>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/howto/share-training-across-requests.md" target="_blank" rel="noopener">View Source on GitHub ↗</a>
+  <a class="zine-pill-link" data-i18n-zh="GitHub 源码 ↗" data-i18n-en="View on GitHub ↗" href="https://github.com/LinesHogan/pLLM/blob/main/doc/howto/share-training-across-requests.md" target="_blank" rel="noopener">View on GitHub ↗</a>
 </div>
 
-<div id="markdown-content" markdown="1">
+<div id="markdown-content">
 
-<div id="sec-1"></div>
+<div class="zine-lang-panel" data-lang-panel="en" lang="en" markdown="1">
+
+<div id="en-sharing-training-across-requests"></div>
+
+By default, `pllm.RequestState` is strictly isolated per request: each request receives a private copy of the state at admission, updates it independently during decoding, and frees its VRAM when the request completes and retires.
+
+In many algorithms, however, state should be **owned and evolved jointly by a group of related requests**:
+- **Multiple samples for the same prompt (Best-of-N / Self-Consistency)**: One generation call draws $$N$$ candidate completions that jointly train the same online LoRA adapter or probe during decoding.
+- **Multi-turn sessions or multi-tenant serving across calls**: Requests belonging to the same session, tenant, or task domain (such as math or code) persist and reuse the same adapter across multiple `llm.generate` calls.
+- **Engine-wide global sharing**: Every request in the inference engine shares a single global state copy.
+
+pLLM expresses request grouping and state lifetimes through `key_fields` on a state declaration. This guide shows how to configure each sharing granularity, plan capacity, and avoid common pitfalls in group training.
+
+---
+
+## 1. Sharing Across Multiple Samples of the Same Prompt: `key_fields=("prompt_index",)` {#en-sec-1}
+
+### Motivation {#en-motivation}
+
+In parallel sampling (such as `SamplingParams(n=4)`), a single prompt forks into 4 sibling samples decoded concurrently. With the default `RequestState`, each sample allocates its own isolated adapter copy and learns in a silo, unable to pool insights explored by its siblings.
+
+To let all samples from the same prompt pool what they learn into a single shared adapter, configure them to share one state copy.
+
+### Declaration {#en-declaration}
+
+When declaring `RequestState`, set `key_fields` explicitly to `("prompt_index",)`:
+
+```python
+import torch
+
+import pllm
+
+adapter = pllm.RequestState(
+    {"weight": lambda m: (m.hidden_size, m.hidden_size)},
+    optimizer=pllm.AdamW(lr=1e-3),
+    key_fields=("prompt_index",),
+)
+```
+
+When executing `llm.generate(prompts, sampling_params)`, pLLM automatically tags every request with its source prompt's `prompt_index`. All sample rows sharing the same `prompt_index` align onto and update the same physical state copy during continuous batching.
+
+### Reduction for Shared-Group Training: Why `reduction="sum"` Is Required {#en-reduction-for-shared-group-training-why-reductionsum-is-required}
+
+In a `@pllm.train` method, per-request training returns one scalar loss per active row in the current batch, which the framework reduces inside the state:
+
+```python
+@pllm.train(state="adapter", reduction="sum")
+def learn(
+    self,
+    h: torch.Tensor = pllm.hidden(0),
+    w: torch.Tensor = pllm.parameter("adapter", "weight"),
+) -> torch.Tensor:
+    # Compute loss for each row in the current batch belonging to this state
+    return (torch.bmm(h.unsqueeze(1), w).squeeze(1) - h).square().mean(-1)
+```
+
+**Why is `reduction="sum"` strongly recommended over the default `reduction="mean"` for `key_fields` group training?**
+
+- **The pitfall of `reduction="mean"`**: `"mean"` averages the losses of the $$n_s$$ active rows selected for that state on the current step (dividing by $$n_s$$). Across a group of concurrent sibling samples, sequences vary in length and hit EOS at different decode steps. With `"mean"`, as early samples finish and exit, the denominator $$n_s$$ shrinks (for instance, from 4 down to 1). That **artificially amplifies the per-token gradient contribution of the remaining unfinished samples several-fold**, destabilizing the effective learning rate.
+- **The guarantee of `reduction="sum"`**: `"sum"` adds the losses of all selected rows on the current step directly. Each surviving token contributes a gradient proportional strictly to its own loss—whether 4 sibling samples are decoding together or only the last sample remains running, every token's gradient weight stays constant.
+
+For mathematical details on online loss reduction and optimizer interactions, see [Online Training](/pllm/docs/guides/training/).
+
+---
+
+## 2. Sharing Across Requests and Calls: Business Route Keys `key_fields=("route",)` {#en-sec-2}
+
+### Motivation {#en-motivation-1}
+
+Many online learning algorithms span beyond a single `generate` call: long-lived multi-turn conversations (where the same `session_id` continuously updates conversational memory), lightweight per-tenant experts (where the same `tenant_id` reuses a dedicated LoRA), or domain-routed specialists (where math tasks train a math adapter and code tasks train a code adapter).
+
+Here, grouping is determined by external host business logic, and the state must outlive any single `generate` call.
+
+### Declaration and Invocation {#en-declaration-and-invocation}
+
+#### 1. Declare the route key on the state {#en-sec-3}
+
+Set `key_fields` to `("route",)`:
+
+```python
+adapter = pllm.RequestState(
+    {"weight": lambda m: (m.hidden_size, m.hidden_size)},
+    optimizer=pllm.AdamW(lr=1e-3),
+    key_fields=("route",),
+)
+```
+
+#### 2. Pass route values from host code {#en-sec-4}
+
+When calling `llm.generate`, pass one route string per prompt via the `routes` argument:
+
+```python
+from vllm import SamplingParams
+
+prompts = [
+    "Derive the Fundamental Theorem of Calculus",
+    "Write a quicksort algorithm",
+    "Prove the Pythagorean theorem",
+]
+
+
+def route_of(prompt: str) -> str:
+    # Host business logic computes the route key via classifier, regex, or tenant ID; pLLM never interprets it
+    if "theorem" in prompt.lower():
+        return "math"
+    return "code"
+
+
+routes = tuple(route_of(p) for p in prompts)
+# routes is ("math", "code", "math")
+
+sampling_params = SamplingParams(temperature=0.7, max_tokens=128)
+
+with pllm.make_llm(CONFIG, workload=workload) as llm:
+    # First call: prompts 0 and 2 share the "math" copy; prompt 1 uses a separate "code" copy
+    outputs_1 = llm.generate(prompts, sampling_params, routes=routes)
+
+    # Second call: another request with route "math" reuses the already-trained copy in the VRAM pool
+    follow_up_prompts = ["Explain the geometric meaning of the Cauchy-Schwarz inequality"]
+    outputs_2 = llm.generate(follow_up_prompts, sampling_params, routes=("math",))
+```
+
+### Semantics of Route Values and Isolation {#en-semantics-of-route-values-and-isolation}
+
+- **Computed entirely by host code**: A route value is a plain Python string that can come from regex rules, an external router model, a tenant ID, or a session ID.
+- **pLLM never interprets route contents**: The framework treats the string purely as an opaque key for state addressing.
+- **Sharing and isolation**:
+  - **Requests with the same route share one state copy**: Whether those requests arrive together in the same batch or sequentially across multiple `generate` calls, they read and update the exact same physical state copy. Parameter updates produced by any request take effect for every request under that route.
+  - **Different routes are strictly isolated**: `"math"` and `"code"` maintain completely separate parameter tensors and optimizer slots with zero cross-talk.
+
+---
+
+## 3. Route State Lifecycle and Capacity Planning {#en-sec-5}
+
+### Why Route States Persist After Requests Finish {#en-why-route-states-persist-after-requests-finish}
+
+- **Standard request state** (`key_fields=("request_id",)`): Freed immediately when the request completes and retires, returning its VRAM to the pool.
+- **Route-keyed state** (`key_fields=("route",)`): When the last active request for a route retires, its state copy is **not freed**. Instead, it stays alive in the engine's VRAM pool in a **dormant** state, bound to that route key. When a later `generate` call arrives with the same route, the engine wakes that copy and continues training it until the engine shuts down (`llm.close()`).
+
+### Capacity Planning: Leave Headroom in `max_num_seqs` {#en-capacity-planning-leave-headroom-in-max_num_seqs}
+
+Even when dormant state copies have no active requests running forward passes, they **still count against the engine's admission capacity**.
+
+At engine build time, `pllm.ModelConfig`'s `max_num_seqs` sets the maximum number of state copies the engine can hold simultaneously. With route keys, steady-state memory usage is governed by:
+
+$$\text{Steady-State Capacity Usage} = (\text{Active + Dormant Route Cardinality}) \times \text{Bytes per State Copy}$$
+
+**You must leave sufficient headroom in `max_num_seqs`**: If you size `max_num_seqs` only for instantaneous peak concurrency, dormant route copies will gradually fill the admission budget as requests with distinct routes arrive and retire. When a new route arrives with no free slots left, the request is rejected at admission. Plan `max_num_seqs` to accommodate the expected total number of distinct routes plus a concurrency buffer.
+
+---
+
+## 4. Global Sharing: When to Use `InstanceState` {#en-sec-6}
+
+If your algorithm's semantics dictate that every request across the entire inference engine shares a single set of physical parameters (with no per-prompt or per-route grouping), do not use `RequestState`.
+
+Use `pllm.InstanceState` directly:
+
+```python
+global_table = pllm.InstanceState(
+    {"table": lambda m: (10000, m.hidden_size)},
+    init=pllm.Zeros(),
+)
+```
+
+### Comparison of the Four State Sharing Granularities {#en-comparison-of-the-four-state-sharing-granularities}
+
+| Declaration | Sharing Scope | Lifetime | Typical Use Cases |
+| :--- | :--- | :--- | :--- |
+| `RequestState(key_fields=("request_id",))` (default) | Strictly private to one request | Freed when request finishes and retires | Per-request independent LoRA, per-request online distillation |
+| `RequestState(key_fields=("prompt_index",))` | Shared across samples of the same prompt | Freed once all samples of that prompt finish | Best-of-N group exploration, cross-sample collaborative guidance |
+| `RequestState(key_fields=("route",))` | Shared across requests with the same route value | Persists dormant after completion until engine shutdown | Multi-turn sessions, per-tenant adapters, continual learning across calls |
+| `InstanceState(...)` | Shared across all requests in the engine instance | Initialized at engine creation until engine shutdown | Global frozen probes, large cross-request lookup tables, model-wide statistics |
+
+See [State](/pllm/docs/guides/state/) for full details on state scopes and field declarations.
+
+---
+
+## 5. Complete Runnable Example: Declaration and Cost Check {#en-sec-7}
+
+Below is a complete workload declaration and execution-plan check that runs directly on CPU. It declares an online adapter shared by route key and minimizes a reconstruction loss during decoding with `reduction="sum"`:
+
+```python
+from dataclasses import dataclass
+
+import torch
+from torch import nn
+
+import pllm
+from pllm import testing
+
+CONFIG = pllm.ModelConfig("Qwen/Qwen2.5-0.5B-Instruct", max_num_seqs=8)
+
+
+@dataclass(frozen=True)
+class SharedRouteLoRA(pllm.Workload):
+    # What it owns: adapter weights and AdamW optimizer shared by route key
+    adapter = pllm.RequestState(
+        {"weight": lambda m: (m.hidden_size, m.hidden_size)},
+        optimizer=pllm.AdamW(lr=1e-3),
+        key_fields=("route",),
+    )
+
+    # Where results go: online training during decode; sum reduction keeps per-token weight constant
+    @pllm.train(state="adapter", reduction="sum")
+    def learn(
+        self,
+        h: torch.Tensor = pllm.hidden(0),
+        w: torch.Tensor = pllm.parameter("adapter", "weight"),
+    ) -> torch.Tensor:
+        # [rows, 1, H] @ [rows, H, H] -> [rows, H]
+        reconstructed = torch.bmm(h.unsqueeze(1), w).squeeze(1)
+        return (reconstructed - h).square().mean(-1)
+
+
+# Plan on CPU without allocating GPU VRAM
+workload = SharedRouteLoRA()
+plan = pllm.explain(workload, CONFIG)
+
+print(f"CUDA Graph mode: {plan.eager_reason or 'CUDA graphs: no effect needs eager'}")
+print(f"State name: {plan.states[0].name}, scope: {plan.states[0].scope}")
+```
+
+Using [`pllm.explain`](/pllm/docs/guides/explain/), you can inspect physical state reservations and CUDA graph capture status before launching a live GPU engine.
+
+---
+
+## 6. Verifying That Sharing Works {#en-sec-8}
+
+Once your workload is written, use these two checks to verify that sharing and isolation behave as intended:
+
+### 1. Zero-State Determinism Check {#en-sec-9}
+
+The quickest way to confirm state channels are bound properly is zero-initialized determinism:
+1. Send two requests with **new and distinct** routes (e.g., `"route_a"` and `"route_b"`) to the engine simultaneously.
+2. Given identical input prompts, because both routes start from zero-initialized parameters, their **step-1 training losses must be identical**.
+3. After `"route_a"` trains for several steps, send another `"route_a"` request alongside a brand-new `"route_c"` request. Now `"route_a"`'s step-1 loss should diverge noticeably from its initial value, while `"route_c"` still exhibits the exact zero-state baseline loss. If `"route_a"` and `"route_c"` still match, updates were not published or route keys were not mapped properly.
+
+### 2. Monitor Runtime State via `llm.diagnostics()` {#en-sec-10}
+
+`llm.diagnostics()` reports live internal counters from the engine:
+- `trained_rows`: total number of rows that participated in optimizer updates.
+- `update_count`: total number of optimizer weight update steps executed.
+- `loss_count`: number of loss evaluations performed.
+- `active_states`: total number of state copies currently allocated and retained by the engine. Use this to confirm that requests sharing a route reuse a single state copy rather than allocating new ones.
+
+For descriptions of all diagnostic fields, see [explain and diagnostics Fields](/pllm/docs/reference/diagnostics/).
+
+---
+
+## 7. Common Errors and Troubleshooting {#en-sec-11}
+
+When using route keys, most errors stem from mismatches between the state declaration and the arguments passed at call time.
+
+### Why Are Requests Missing a Route Value Rejected Immediately? {#en-why-are-requests-missing-a-route-value-rejected-immediately}
+
+When a state declares `key_fields=("route",)`, any request arriving without a route value is **rejected immediately with an error at admission**.
+
+**Why**: The route key is part of the state declaration and solely determines which copy a request uses. Without a route value, the engine cannot tell which copy belongs to the request—silently assigning a default copy would mix unrelated requests into the same training state (for example, letting two tenants share one adapter), so admission rejects it up front.
+
+### Other Errors {#en-other-errors}
+
+For exact error messages, root causes, and fixes when patterns on this page are rejected, see [Requests and run time](/pllm/docs/reference/errors/#en-requests-and-run-time) and [Method inputs and declarations](/pllm/docs/reference/errors/#en-method-inputs-and-declarations) in the Error Catalog.
+
+---
+
+## Self-Check {#en-self-check}
+
+1. After declaring `key_fields=("route",)`, why can't `max_num_seqs` stay small even when instantaneous request concurrency is low?
+<details>
+<summary>Answer</summary>
+
+Because route-keyed state copies are not freed when their last request retires; they remain alive in a dormant state and continue occupying admission capacity (the <code>max_num_seqs</code> quota). As requests arrive for many distinct routes, dormant copies gradually exhaust the quota and cause requests with new routes to be rejected at admission.
+</details>
+
+2. When training online across multiple sibling samples of the same prompt, why is `reduction="sum"` recommended over the default `reduction="mean"`?
+<details>
+<summary>Answer</summary>
+
+Sibling samples typically finish at different decode steps due to differing output lengths. With <code>"mean"</code>, as some samples finish and exit, the active-row denominator $$n_s$$ shrinks, passively amplifying the per-token gradient contribution of remaining samples several-fold. With <code>"sum"</code>, each token's gradient weight stays constant regardless of how many sibling rows are currently active.
+</details>
+
+3. Can host code pass integers in `routes` (such as `routes=(1, 2, 1)`)?
+<details>
+<summary>Answer</summary>
+
+No. <code>routes</code> expects a tuple of strings (one non-empty string per prompt). If you are grouping by integer IDs, convert them to strings first, e.g. <code>routes=("tenant_1", "tenant_2", "tenant_1")</code>.
+</details>
+
+---
+
+## Next Steps {#en-next-steps}
+
+- Learn how to train state and configure gradient edges in the decode loop → [Online Training](/pllm/docs/guides/training/)
+- Dive deeper into state scopes, fields, and initializers → [State](/pllm/docs/guides/state/)
+- Inspect memory reservations and graph capture status on CPU before startup → [Inspecting Cost: pllm.explain](/pllm/docs/guides/explain/)
+- Troubleshoot additional runtime and admission errors → [Troubleshooting](/pllm/docs/howto/troubleshooting/)
+
+</div>
+
+<div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN" markdown="1">
+
+<div id="zh-sec-1"></div>
 
 默认情况下，`pllm.RequestState` 按请求严格隔离：每个请求在准入（admission）时获得一份独立私有的状态副本，随请求解码独立更新，并在请求完成退役后释放显存。
 
@@ -30,15 +333,15 @@ pLLM 通过在状态中声明路由键 `key_fields` 来表达请求之间的分�
 
 ---
 
-## 1. 同一 Prompt 的多个采样共享：`key_fields=("prompt_index",)` {#sec-2}
+## 1. 同一 Prompt 的多个采样共享：`key_fields=("prompt_index",)` {#zh-sec-2}
 
-### 问题与动机 {#sec-3}
+### 问题与动机 {#zh-sec-3}
 
 在并行采样（例如设置 `SamplingParams(n=4)`）时，同一个 Prompt 会分叉出 4 个并行解码的兄弟采样。如果使用默认的 `RequestState`，每个采样都会分配一份独立的适配器副本，各自闭门造车，无法汇聚群体探索的信息。
 
 如果希望同一次生成中所有采样探索到的知识共同更新同一个适配器，需要让它们共享同一份状态副本。
 
-### 声明方式 {#sec-4}
+### 声明方式 {#zh-sec-4}
 
 在声明 `RequestState` 时，将 `key_fields` 显式设为 `("prompt_index",)`：
 
@@ -56,7 +359,7 @@ adapter = pllm.RequestState(
 
 在执行 `llm.generate(prompts, sampling_params)` 时，pLLM 会自动为每个请求标记其所属 Prompt 的序号 `prompt_index`。所有具有相同 `prompt_index` 的采样行，在连续批处理中都对齐并操作同一份物理状态。
 
-### 共享组训练的归约建议：为什么必须选 `reduction="sum"` {#sec-5}
+### 共享组训练的归约建议：为什么必须选 `reduction="sum"` {#zh-sec-5}
 
 在编写 `@pllm.train` 方法时，逐请求训练的方法针对当前批次的每个请求行返回一个标量损失，由框架在状态内部进行归约：
 
@@ -80,17 +383,17 @@ def learn(
 
 ---
 
-## 2. 跨请求与跨调用共享：业务路由键 `key_fields=("route",)` {#sec-6}
+## 2. 跨请求与跨调用共享：业务路由键 `key_fields=("route",)` {#zh-sec-6}
 
-### 问题与动机 {#sec-7}
+### 问题与动机 {#zh-sec-7}
 
 许多在线学习算法需要超越单次 `generate` 的范围：例如长驻对话中的多轮会话（同一 session_id 持续更新对话记忆）、按用户租户划分的轻量级专家（同一 tenant_id 复用专属 LoRA），或是按领域自动路由的分类器（math 任务训练数学适配器，code 任务训练代码适配器）。
 
 此时，状态的分组逻辑由外部宿主业务决定，并且状态必须在单次 `generate` 结束后继续存活。
 
-### 声明与调用 {#sec-8}
+### 声明与调用 {#zh-sec-8}
 
-#### 1. 在状态中声明路由键 {#sec-9}
+#### 1. 在状态中声明路由键 {#zh-sec-9}
 
 将 `key_fields` 声明为 `("route",)`：
 
@@ -102,7 +405,7 @@ adapter = pllm.RequestState(
 )
 ```
 
-#### 2. 在宿主代码中传入路由值 {#sec-10}
+#### 2. 在宿主代码中传入路由值 {#zh-sec-10}
 
 在调用 `llm.generate` 时，通过 `routes` 参数为每个 prompt 传入一个路由字符串：
 
@@ -137,7 +440,7 @@ with pllm.make_llm(CONFIG, workload=workload) as llm:
     outputs_2 = llm.generate(follow_up_prompts, sampling_params, routes=("math",))
 ```
 
-### 路由值的本质与隔离语义 {#sec-11}
+### 路由值的本质与隔离语义 {#zh-sec-11}
 
 - **由宿主代码全权计算**：路由值是一个普通的 Python 字符串，可以由正则表达式、外部判别器模型打分、租户 ID 或会话 ID 产生。
 - **pLLM 从不解释路由内容**：框架不关心字符串的具体含义，仅将其作为底层状态寻址的不透明标识。
@@ -147,14 +450,14 @@ with pllm.make_llm(CONFIG, workload=workload) as llm:
 
 ---
 
-## 3. 路由状态的生命周期与容量规划 {#sec-12}
+## 3. 路由状态的生命周期与容量规划 {#zh-sec-12}
 
-### 为什么路由状态在请求结束后不会消失 {#sec-13}
+### 为什么路由状态在请求结束后不会消失 {#zh-sec-13}
 
 - **普通请求状态**（`key_fields=("request_id",)`）：随着请求生成完毕并退役，其状态副本被立即释放，显存归还给内存池。
 - **路由状态**（`key_fields=("route",)`）：当某一个 route 的最后一个活跃请求退役后，其状态副本**不会被释放**，而是以**休眠（dormant）**状态存活在引擎显存池中，依然与该路由键保持绑定。当后续的 `generate` 调用再次传入相同的 route 值时，引擎直接唤醒该副本并继续累积训练，直到整个引擎关闭（`llm.close()`）。
 
-### 容量规划：为 `max_num_seqs` 预留余量 {#sec-14}
+### 容量规划：为 `max_num_seqs` 预留余量 {#zh-sec-14}
 
 休眠的状态副本虽然没有活跃请求在执行前向，但**仍然占用引擎的准入容量额度**。
 
@@ -166,7 +469,7 @@ $$\text{稳态容量占用} = \text{活跃与休眠的 route 基数} \times \tex
 
 ---
 
-## 4. 全局完全共享：何时使用 `InstanceState` {#sec-15}
+## 4. 全局完全共享：何时使用 `InstanceState` {#zh-sec-15}
 
 如果你的算法语义是“整个推理引擎中的所有请求，彻底共享唯一一份物理参数”（即无需按 prompt 或业务 route 分组），不要使用 `RequestState`。
 
@@ -179,7 +482,7 @@ global_table = pllm.InstanceState(
 )
 ```
 
-### 四种状态共享粒度对比 {#sec-16}
+### 四种状态共享粒度对比 {#zh-sec-16}
 
 | 声明方式 | 共享范围 | 存活生命周期 | 适用场景 |
 | :--- | :--- | :--- | :--- |
@@ -192,7 +495,7 @@ global_table = pllm.InstanceState(
 
 ---
 
-## 5. 完整可运行示例：声明与成本检查 {#sec-17}
+## 5. 完整可运行示例：声明与成本检查 {#zh-sec-17}
 
 下面是一个完整的、可在 CPU 上直接运行的算法声明与执行计划检查代码。算法声明了一个按路由键共享的在线适配器，并在 decode 阶段采用 `reduction="sum"` 最小化重构损失：
 
@@ -241,18 +544,18 @@ print(f"状态名称: {plan.states[0].name}, 作用域: {plan.states[0].scope}")
 
 ---
 
-## 6. 检查共享是否生效 {#sec-18}
+## 6. 检查共享是否生效 {#zh-sec-18}
 
 当负载编写完毕后，如何验证共享与隔离机制是否如预期工作？推荐以下两种自检方法：
 
-### 1. 零状态确定性检查（Zero-state Determinism） {#sec-19}
+### 1. 零状态确定性检查（Zero-state Determinism） {#zh-sec-19}
 
 验证状态通道是否正确绑定的最简捷手段是利用初始零状态的确定性：
 1. 向引擎同时发送两个**全新且不同**的路由请求（例如 `"route_a"` 与 `"route_b"`）。
 2. 在输入 prompt 完全相同的情况下，由于两个路由的初始参数均为零，它们在**第 1 步计算出的训练损失（loss）应当完全相等**。
 3. 当 `"route_a"` 经过数步训练更新后，再次向引擎发送一个 `"route_a"` 请求和一个从未见过的全新 `"route_c"` 请求。此时 `"route_a"` 的首步损失应当明显偏离初始值，而 `"route_c"` 仍呈现出标准的零状态损失。若 `"route_a"` 与 `"route_c"` 仍然相同，说明更新未成功发布或路由值未正确映射。
 
-### 2. 利用 `llm.diagnostics()` 监控运行时状态 {#sec-20}
+### 2. 利用 `llm.diagnostics()` 监控运行时状态 {#zh-sec-20}
 
 通过 `llm.diagnostics()` 可以实时获取引擎内部的计数指标：
 - `trained_rows`：实际参与优化器更新的总行数。
@@ -264,23 +567,23 @@ print(f"状态名称: {plan.states[0].name}, 作用域: {plan.states[0].scope}")
 
 ---
 
-## 7. 常见报错与排查 {#sec-21}
+## 7. 常见报错与排查 {#zh-sec-21}
 
 当使用路由键时，最容易遇到的错误通常源自状态声明与调用传参不一致。
 
-### 为什么缺少路由值的请求会被直接拒绝？ {#sec-22}
+### 为什么缺少路由值的请求会被直接拒绝？ {#zh-sec-22}
 
 当状态声明了 `key_fields=("route",)` 时，如果一条请求没有提供路由值，pLLM **会在准入（admission）阶段直接报错拒绝该请求**。
 
 **原因**：路由键是状态声明的一部分，请求用哪份副本完全由它决定。没有路由值的请求不知道该用哪份；悄悄给它一份默认副本，会把不相干的请求混进同一份训练状态（例如两个租户共用了一个适配器），所以准入时直接拒绝。
 
-### 其他报错 {#sec-23}
+### 其他报错 {#zh-sec-23}
 
-这一页的写法被拒绝时的报错原文、原因和改法，见报错目录的[请求与运行时](/pllm/docs/reference/errors/#sec-12)、[声明与输入](/pllm/docs/reference/errors/#sec-2)几节。
+这一页的写法被拒绝时的报错原文、原因和改法，见报错目录的[请求与运行时](/pllm/docs/reference/errors/#zh-sec-12)、[声明与输入](/pllm/docs/reference/errors/#zh-sec-2)几节。
 
 ---
 
-## 自测 {#sec-24}
+## 自测 {#zh-sec-24}
 
 1. 为什么在声明了 `key_fields=("route",)` 后，即使并发请求数很小，`max_num_seqs` 依然不能设得太小？
 <details>
@@ -305,7 +608,7 @@ print(f"状态名称: {plan.states[0].name}, 作用域: {plan.states[0].scope}")
 
 ---
 
-## 下一步 {#sec-25}
+## 下一步 {#zh-sec-25}
 
 - 了解在解码循环中训练状态与设置梯度边 → [在线训练](/pllm/docs/guides/training/)
 - 深入掌握状态的作用域、字段与初值来源 → [状态](/pllm/docs/guides/state/)
@@ -314,7 +617,11 @@ print(f"状态名称: {plan.states[0].name}, 作用域: {plan.states[0].scope}")
 
 </div>
 
-<div class="zine-doc-footer">
-  <a class="zine-pill-link" href="/pllm/#docs">← Back to pLLM Documentation Hub</a>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/howto/share-training-across-requests.md" target="_blank" rel="noopener">Edit / View on GitHub ↗</a>
 </div>
+
+<div class="zine-doc-footer">
+  <a class="zine-pill-link" data-i18n-zh="← 返回 pLLM 项目与文档中心" data-i18n-en="← Back to pLLM Project &amp; Docs" href="/pllm/#docs">← Back to pLLM Project &amp; Docs</a>
+  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/howto/share-training-across-requests.md" target="_blank" rel="noopener">GitHub &middot; doc/howto/share-training-across-requests.md ↗</a>
+</div>
+
+<script defer src="/assets/js/bilingual-post.js"></script>

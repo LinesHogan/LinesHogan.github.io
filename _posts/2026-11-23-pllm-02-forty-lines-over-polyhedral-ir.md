@@ -4,7 +4,7 @@ title: "复盘一次过度设计：删掉 45 万行多面体编译器，换成 4
 title_en: "Deleting 450,000 Lines of Polyhedral C for 40 Lines of Longest-Path: An Over-Engineering Postmortem"
 date: 2026-11-23 03:09:00 +0800
 description: "复盘引进 45.7 万行 ISL 多面体库却只用来算 lag >= 1 的弯路；展示如何将跨步时间线折叠为 8 刻度一致依赖图，以及如何用剖析器定位双卡 All-Reduce 优先级抢占与可分页内存假异步（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
-description_en: "Systems programmers have an occupational habit of judging technical depth by the weight of their dependencies. (pLLM Engineering Series · Bilingual EN / 中文)"
+description_en: "Systems programmers have an occupational habit of judging technical depth by the weight of their dependencies (pLLM Engineering Series · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
 categories: systems
 pllm_synced: true
@@ -15,10 +15,7 @@ related_posts: true
 ---
 
 <div class="zine-dispatch" data-title-zh="复盘一次过度设计：删掉 45 万行多面体编译器，换成 40 行最长路" data-title-en="Deleting 450,000 Lines of Polyhedral C for 40 Lines of Longest-Path: An Over-Engineering Postmortem">
-  <div class="zine-dispatch-links">
-    <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档" data-i18n-en="pLLM Project &amp; Docs" href="/pllm/">pLLM 项目主页与文档</a>
-    <a class="zine-pill-link" data-i18n-zh="GitHub · pLLM ↗" data-i18n-en="GitHub &middot; pLLM ↗" href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">GitHub · pLLM ↗</a>
-  </div>
+  <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <div class="zine-lang-switch" role="group" aria-label="Language">
     <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
     <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
@@ -33,7 +30,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（2/10 · 工程复盘）** · [pLLM 项目介绍与文档中心](/pllm/) · [专栏目录与系统解剖图](/pllm/#blog) · [仓库源码原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/02-forty-lines-over-polyhedral-ir.md)
+> **pLLM 技术随笔与机制拆解（2/10 · 工程复盘）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/02-forty-lines-over-polyhedral-ir.md)
 
 写底层基础软件的人，心里多少都有点“编译器情结”。只要手头的活涉及循环迭代、跨步数据依赖外加两条 CUDA Stream 的并行编排，脑子里就容易浮现出多面体模型（Polyhedral Model）和整数线性规划——仿佛不先立一套工整的中间表示（IR），直接写几十行图算法就显得不够庄重。
 
@@ -61,21 +58,7 @@ related_posts: true
 
 多面体工具擅长对付的是图像卷积或分块矩阵乘那种三四层嵌套的高维整数格点；可在现代 PyTorch 推理栈里，单个任务内部的算子融合，自带的 `torch.compile`（Inductor）早就比手写中端做得周全了。留给外层运行时去编排的，根本不是高维网格，而是**一条一维时间轴上的 $$M = 8$$ 个有序阶段锚点**：
 
-```text
-单步一维时间轴 (M = 8 个固定锚点):
-  0:request.prepare ─► 1:model.execute ─► 2:state.publish ─► 3:sampler.pre_draw
-    ─► 4:sampler.complete ─► 5:token.commit ─► 6:request.finish ─► 7:next.prepare
-
-无限展开的跨步循环 (Step t-k -> Step t)          折叠后的有限一致依赖图 (边权 = d - 8k)
-  Step t-k:  [ 写任务 u @ a_u ]                        ┌──────────────────────┐
-                     │                                 │     边权: d - 0*8    ▼
-                     │ (跨 k 步发布, 最小间隔 d)     ┌──────┐              ┌──────┐
-                     ▼                              │ 任务u │              │ 任务v │
-  Step t:    [ 读任务 v @ a_v ] ──(本步 k=0, d)───► └──────┘              └──────┘
-                                                       ▲                      │
-                                                       └──────────────────────┘
-                                                            边权: d - 8k
-```
+![单步一维时间轴与一致依赖折叠示意图](/assets/img/pllm/blog/assets/02-forty-lines-over-polyhedral-ir-fig1-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 看上面的折叠过程：每个任务按它读取的输入出生时刻与效果截止时刻，自带初始合法区间 $$[a_u^{\min}, a_u^{\max})$$。而任意两个任务之间的依赖——不管是同一步内先后读写（$$k = 0$$），还是第 $$t$$ 步读取第 $$t - k$$ 步写出的状态版本（$$k \ge 1$$，最小间隔 $$d$$）——只要把第 $$t$$ 步锚点 $$a$$ 映射到全局刻度 $$T = 8t + a$$，不等式两边的步数变量 $$t$$ 就直接消掉了：
 
@@ -115,15 +98,7 @@ fn propagate(bounds: &[(u32, u32)], edges: &[(usize, usize, i64)]) -> Result<Vec
 
 下面这三起从剖析时间线上抓出来的减速事故，展示了一套通用的多流排障思路：每当双流重叠没跑出预期加速，先去查**显存总线、跨卡同步障、以及主机内存页属性**这三处争抢点。
 
-```text
-事故 A (单卡提早发旁路训练 —— 显存总线踩踏):
-  主流:   [ 模型前向 ] ──► [ 采样器全速扫描 80 MB 词表张量 ]
-  旁路流:              ──► [ 撤掉栅栏提前启动训练拷贝 + AdamW ]  ◄── 同抢 GDDR/HBM 带宽，总耗时反升!
-
-事故 B (多卡 TP > 1 默认同优先级 —— 跨卡同步障放大抖动):
-  主流 (高优 -1): [ 层计算 ] ──► [ Custom All-Reduce 跨卡通信 ] ──► [ 下一层 ]
-  旁路流 (普通 0):               [ 本卡等待跨卡链路时，插空跑本地副本训练 ] ◄── 互不抢带宽，冲突归零!
-```
+![Nsight Systems 多流并发物理争抢对比图](/assets/img/pllm/blog/assets/02-forty-lines-over-polyhedral-ir-fig2-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 1. **盯显存总线饱和度：提早启动旁路流反而更慢。**  
    在 0.5B 模型上跑在线训练时，剖析器显示步末有约 70 微秒的旁路训练露在主流外头。我们曾试着撤掉采样前的等待栅栏，让旁路训练提前跑起来——时间线上露在外面的尾巴确实缩到了 8 微秒，但端到端吞吐反而掉了近两个百分点！看上图事故 A 就清楚了：那个时刻主流采样器正在全力横扫近 80 MB 的词表大表，显存总线早已吃满；提前放出来的训练内核一头撞进采样器怀里抢带宽，两边一起变慢。
@@ -148,7 +123,7 @@ fn propagate(bounds: &[(u32, u32)], edges: &[(usize, usize, i64)]) -> Result<Vec
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (2/10 · Postmortem)** · [pLLM Project & Docs Hub](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [Markdown Source on GitHub ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/02-forty-lines-over-polyhedral-ir.md)
+> **pLLM Engineering Essays & Deep Dives (2/10 · Postmortem)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/02-forty-lines-over-polyhedral-ir.md)
 
 Systems engineers have a soft spot for compiler machinery. Hand us an iterative loop with cross-step state dependencies and two CUDA streams to coordinate, and our minds drift straight toward polyhedral models and integer linear programming—as if solving a scheduling problem without first designing an intermediate representation (IR) were cutting corners.
 
@@ -176,21 +151,7 @@ Why did a proven loop-compiler model misfire inside an LLM serving engine? Sketc
 
 Polyhedral tools shine on dense, multi-dimensional loop nests like image stencils or blocked GEMMs. In a modern PyTorch serving stack, intra-task operator fusion is already handled far better by `torch.compile` (Inductor) than by custom middle-ends. What remains for the outer step runtime is not a high-dimensional lattice, but **a one-dimensional timeline of $$M = 8$$ ordered step anchors**:
 
-```text
-One-dimensional step timeline (M = 8 fixed anchors):
-  0:request.prepare ─► 1:model.execute ─► 2:state.publish ─► 3:sampler.pre_draw
-    ─► 4:sampler.complete ─► 5:token.commit ─► 6:request.finish ─► 7:next.prepare
-
-Unrolled cross-step loop (Step t-k -> Step t)       Folded finite uniform graph (weight = d - 8k)
-  Step t-k:  [ Writer u @ a_u ]                          ┌──────────────────────┐
-                     │                                   │    weight: d - 0*8   ▼
-                     │ (lag k steps, min sep d)      ┌──────┐               ┌──────┐
-                     ▼                               │Task u│               │Task v│
-  Step t:    [ Reader v @ a_v ] ──(intra k=0, d)───► └──────┘               └──────┘
-                                                         ▲                      │
-                                                         └──────────────────────┘
-                                                             weight: d - 8k
-```
+![One-dimensional step timeline and uniform-dependence folding diagram](/assets/img/pllm/blog/assets/02-forty-lines-over-polyhedral-ir-fig1-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Each task's declared inputs and effects give it an initial valid window $$[a_u^{\min}, a_u^{\max})$$. Every dependency—whether intra-step ($$k = 0$$) or reading a state version written $$k \ge 1$$ steps ago with minimum separation $$d$$—maps step $$t$$, anchor $$a$$ onto global tick $$T = 8t + a$$, canceling $$t$$ from both sides:
 
@@ -230,15 +191,7 @@ Once the compiler monument was gone and we opened Nsight Systems instead, we lea
 
 Whenever overlapping a side stream fails to deliver expected speedups, checking three physical contention points—**VRAM bus saturation, multi-GPU collective barriers, and host memory pageability**—usually catches the culprit:
 
-```text
-Case A (Unfenced early side launch on 1 GPU —— VRAM bus collision):
-  Main stream: [ Model Forward ] ──► [ Sampler sweeping 80 MB vocabulary buffer ]
-  Side stream:                   ──► [ Early train copy + AdamW ]  ◄── Fights over GDDR/HBM bus; net slowdown!
-
-Case B (Multi-GPU TP > 1 with stream priority —— riding inter-GPU wait gaps):
-  Main stream (priority -1): [ Layer GEMM ] ──► [ Custom All-Reduce (NVLink/PCIe) ] ──► [ Next Layer ]
-  Side stream (priority  0):                    [ Local replicated state update    ] ◄── Zero bus collision!
-```
+![Nsight Systems multi-stream physical contention comparison](/assets/img/pllm/blog/assets/02-forty-lines-over-polyhedral-ir-fig2-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 1. **Check memory-bus saturation before launching early**: On a 0.5B run, ~70 µs of side-stream training poked past the forward pass. Removing the pre-sampler fence shrank the visible tail to 8 µs on the timeline—yet end-to-end throughput _dropped_ by nearly two points. At that exact instant, the main-stream sampler was sweeping an 80 MB logits table at peak memory bandwidth; unleashing side-stream kernels into a saturated memory bus simply slowed both streams down.
 2. **Check cross-GPU barriers under Tensor Parallelism**: Side-stream training that ran smoothly on one GPU sagged to **87%** of native throughput across multi-GPU TP (where small request states are replicated per rank to avoid extra collectives). Under TP, every layer ends with a tight Custom All-Reduce barrier; whenever a side-stream backward kernel delayed _one_ GPU's arrival at the collective by tens of microseconds, every other GPU stalled waiting for the straggler. Giving the main TP stream high priority (`torch.cuda.Stream(priority=-1)`), keeping the side stream at `0`, and staggering publication eliminated collective overlap stalls and lifted TP throughput to **97.6%**.

@@ -209,8 +209,33 @@ pagination:
 
   </ul>
 
-{% if page.pagination.enabled %}
-{% include pagination.liquid %}
+{% if page.pagination.enabled and paginator.total_pages > 1 %}
+
+<nav aria-label="Blog page navigation">
+  <ul class="af-pagination">
+    <li class="af-page-item {% unless paginator.previous_page %}disabled{% endunless %}">
+      {% if paginator.previous_page %}
+      <a class="af-page-link" href="{{ paginator.previous_page_path | relative_url | remove: 'index.html' }}" aria-label="Previous page">&lt;</a>
+      {% else %}
+      <span class="af-page-link" aria-disabled="true">&lt;</span>
+      {% endif %}
+    </li>
+    {% if paginator.page_trail %}
+      {% for trail in paginator.page_trail %}
+      <li class="af-page-item {% if page.url == trail.path %}active{% endif %}">
+        <a class="af-page-link" href="{{ trail.path | relative_url | remove: 'index.html' }}" title="{{ trail.title }}">{{ trail.num }}</a>
+      </li>
+      {% endfor %}
+    {% endif %}
+    <li class="af-page-item {% unless paginator.next_page %}disabled{% endunless %}">
+      {% if paginator.next_page %}
+      <a class="af-page-link" href="{{ paginator.next_page_path | relative_url | remove: 'index.html' }}" aria-label="Next page">&gt;</a>
+      {% else %}
+      <span class="af-page-link" aria-disabled="true">&gt;</span>
+      {% endif %}
+    </li>
+  </ul>
+</nav>
 {% endif %}
 
 </div>

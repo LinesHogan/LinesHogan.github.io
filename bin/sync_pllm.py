@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synchronize blog posts and documentation from the pLLM repository into LinesHogan.github.io.
+"""Synchronize bilingual blog posts, human-facing bilingual docs, and SVG illustrations from pLLM into LinesHogan.github.io.
 
 Usage:
   python3 bin/sync_pllm.py --pllm-dir /path/to/pLLM
@@ -21,15 +21,14 @@ REPO_URL_DEFAULT = "https://github.com/LinesHogan/pLLM.git"
 REPO_WEB_BASE = "https://github.com/LinesHogan/pLLM"
 CST = datetime.timezone(datetime.timedelta(hours=8))
 
-DOC_CATEGORY_LABELS = {
-    "root": ("文档总览", "Documentation Index"),
-    "agent": ("Agent Skill 与英文 API 规范", "Coding Agent Skill & English Reference"),
-    "tutorials": ("交互式入门教程 (00–05)", "Step-by-Step Tutorials (00–05)"),
-    "guides": ("用户指南", "User Guides"),
-    "howto": ("操作与上线指南", "How-To & Serving Guides"),
-    "explain": ("架构与机制解释", "Architecture & Design Explanations"),
-    "reference": ("API 与配置参考手册", "API, Config & Support Reference"),
-    "examples": ("算法族示例与实测 (06–13)", "Algorithm Family Examples (06–13)"),
+# Human-only doc categories (doc/agent/ is intentionally excluded)
+DOC_CATEGORIES = {
+    "tutorials": ("交互式入门教程 (00–05)", "Step-by-Step Tutorials (00–05)", "入门教程", "Tutorials"),
+    "guides": ("用户指南", "User Guides", "用户指南", "Guides"),
+    "howto": ("操作与上线指南", "How-To & Serving Guides", "操作指南", "How-To"),
+    "explain": ("架构与机制解析", "Architecture & Design Explanations", "架构解析", "Architecture"),
+    "reference": ("API 与配置参考手册", "API, Config & Support Reference", "参考手册", "Reference"),
+    "examples": ("算法族示例与实测 (06–13)", "Algorithm Family Examples (06–13)", "算法示例", "Examples"),
 }
 
 
@@ -44,7 +43,6 @@ def run_git(cwd: pathlib.Path, args: List[str]) -> str:
 
 
 def strip_frontmatter(text: str) -> Tuple[Dict[str, str], str]:
-    """Strip optional leading YAML frontmatter (`--- ... ---`) and return simple key/values + body."""
     meta: Dict[str, str] = {}
     if not text.startswith("---\n"):
         return meta, text
@@ -60,19 +58,15 @@ def strip_frontmatter(text: str) -> Tuple[Dict[str, str], str]:
 
 
 def github_slug(heading_text: str) -> str:
-    """Compute a GitHub-compatible heading anchor slug (matching github-slugger)."""
-    # Strip markdown links `[label](url)` -> `label`, inline code backticks, bold/italic markers
     clean = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", heading_text)
     clean = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", clean)
     clean = clean.replace("`", "").replace("**", "").replace("*", "")
     clean = clean.strip().lower()
-    # Remove punctuation characters that GitHub strips (keep word chars incl. Unicode letters/digits, spaces, hyphens)
     out_chars: List[str] = []
     for ch in clean:
         if ch == " " or ch == "-":
             out_chars.append("-")
         elif ch == "_" or ch.isalnum() or ord(ch) > 127:
-            # Filter CJK/general punctuation
             if ch in "，。！？：；、“”‘’（）《》【】·—…—–/\\()[]{}:;,.!?\"'+~=<>&|$%@^#*":
                 continue
             out_chars.append(ch)
@@ -80,7 +74,8 @@ def github_slug(heading_text: str) -> str:
 
 
 class SlugTracker:
-    def __init__(self) -> None:
+    def __init__(self, prefix: str = "") -> None:
+        self.prefix = prefix
         self.counts: Dict[str, int] = {}
         self.sec_counter = 0
 
@@ -90,10 +85,10 @@ class SlugTracker:
         self.counts[base] = idx + 1
         gh = base if idx == 0 else "{}-{}".format(base, idx)
         if re.match(r"^[a-z][a-z0-9_-]*$", gh):
-            ascii_id = gh
+            ascii_id = "{}{}".format(self.prefix, gh)
         else:
             self.sec_counter += 1
-            ascii_id = "sec-{}".format(self.sec_counter)
+            ascii_id = "{}sec-{}".format(self.prefix, self.sec_counter)
         return gh, ascii_id
 
 
@@ -111,42 +106,45 @@ def html_attr_escape(val: str) -> str:
     )
 
 
-def doc_url_for_rel(rel_posix: str) -> Optional[str]:
-    """Return site URL `/pllm/docs/.../` if `rel_posix` (relative to pLLM root) is a synced doc/notebook."""
-    if not rel_posix.startswith("doc/"):
+def normalize_doc_subpath(rel_posix: str) -> Optional[str]:
+    """If `rel_posix` is inside `doc/` or `doc_en/` and is human-facing (not `agent/` or `dev/`), return subpath."""
+    if rel_posix.startswith("doc/"):
+        sub = rel_posix[len("doc/") :]
+    elif rel_posix.startswith("doc_en/"):
+        sub = rel_posix[len("doc_en/") :]
+    else:
         return None
-    sub = rel_posix[len("doc/") :]
-    if sub.startswith("dev/"):
+    if sub.startswith(("dev/", "agent/", "assets/")):
+        return None
+    p = pathlib.PurePosixPath(sub)
+    if p.suffix not in (".md", ".ipynb"):
+        return None
+    return sub
+
+
+def doc_url_for_rel(rel_posix: str) -> Optional[str]:
+    sub = normalize_doc_subpath(rel_posix)
+    if sub is None:
         return None
     if sub == "README.md":
         return "/pllm/docs/"
     p = pathlib.PurePosixPath(sub)
-    if p.suffix in (".md", ".ipynb"):
-        stem = p.stem.lower()
-        parent = str(p.parent)
-        if parent == ".":
-            return "/pllm/docs/{}/".format(stem)
-        return "/pllm/docs/{}/{}/".format(parent.lower(), stem)
-    return None
+    stem = p.stem.lower()
+    parent = str(p.parent)
+    if parent == ".":
+        return "/pllm/docs/{}/".format(stem)
+    return "/pllm/docs/{}/{}/".format(parent.lower(), stem)
 
 
-def doc_output_rel(rel_posix: str) -> Optional[str]:
-    """Return output path inside `_pllm_docs/` for a synced doc/notebook."""
-    if not rel_posix.startswith("doc/"):
-        return None
-    sub = rel_posix[len("doc/") :]
-    if sub.startswith("dev/"):
-        return None
+def doc_output_rel(sub: str) -> str:
     if sub == "README.md":
         return "index.md"
     p = pathlib.PurePosixPath(sub)
-    if p.suffix in (".md", ".ipynb"):
-        stem = p.stem.lower()
-        parent = str(p.parent)
-        if parent == ".":
-            return "{}.md".format(stem)
-        return "{}/{}.md".format(parent.lower(), stem)
-    return None
+    stem = p.stem.lower()
+    parent = str(p.parent)
+    if parent == ".":
+        return "{}.md".format(stem)
+    return "{}/{}.md".format(parent.lower(), stem)
 
 
 def notebook_to_raw_markdown(nb_path: pathlib.Path) -> str:
@@ -179,46 +177,60 @@ def notebook_to_raw_markdown(nb_path: pathlib.Path) -> str:
     return "\n\n".join(parts) + "\n"
 
 
+def copy_static_assets(pllm_dir: pathlib.Path, site_dir: pathlib.Path) -> None:
+    """Mirror pLLM/blog/assets and pLLM/doc/assets into assets/img/pllm/."""
+    dest_root = site_dir / "assets" / "img" / "pllm"
+    if dest_root.exists():
+        shutil.rmtree(dest_root)
+    for rel_sub in ("blog/assets", "doc/assets"):
+        src_dir = pllm_dir / rel_sub
+        if src_dir.exists():
+            target_dir = dest_root / rel_sub
+            target_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(src_dir, target_dir)
+
+
 def scan_doc_anchors(pllm_dir: pathlib.Path) -> Tuple[Dict[str, Dict[str, str]], Dict[str, str]]:
-    """Pre-scan all synced docs/notebooks to map `(rel_posix, github_slug) -> ascii_id` and extract H1 titles."""
+    """Pre-scan all human docs in both `doc/` (zh-) and `doc_en/` (en-) for heading anchors and H1 titles."""
     anchor_map: Dict[str, Dict[str, str]] = {}
     titles: Dict[str, str] = {}
-    doc_root = pllm_dir / "doc"
-    if not doc_root.exists():
-        return anchor_map, titles
 
-    for path in sorted(doc_root.rglob("*")):
-        if not path.is_file() or ".ipynb_checkpoints" in path.parts:
+    for root_name, id_prefix in (("doc", "zh-"), ("doc_en", "en-")):
+        droot = pllm_dir / root_name
+        if not droot.exists():
             continue
-        rel_posix = path.relative_to(pllm_dir).as_posix()
-        if doc_url_for_rel(rel_posix) is None:
-            continue
-        raw = (
-            notebook_to_raw_markdown(path)
-            if path.suffix == ".ipynb"
-            else strip_frontmatter(path.read_text(encoding="utf-8"))[1]
-        )
-        tracker = SlugTracker()
-        file_map: Dict[str, str] = {}
-        fenced = False
-        first_h1: Optional[str] = None
-        for line in raw.splitlines():
-            stripped = line.lstrip()
-            if stripped.startswith("```") or stripped.startswith("~~~"):
-                fenced = not fenced
+        for path in sorted(droot.rglob("*")):
+            if not path.is_file() or ".ipynb_checkpoints" in path.parts:
                 continue
-            if fenced:
+            rel_posix = path.relative_to(pllm_dir).as_posix()
+            if normalize_doc_subpath(rel_posix) is None:
                 continue
-            m = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
-            if m:
-                level = len(m.group(1))
-                htitle = m.group(2).strip()
-                if level == 1 and first_h1 is None:
-                    first_h1 = re.sub(r"`([^`]+)`", r"\1", htitle)
-                gh, ascii_id = tracker.register(htitle)
-                file_map[gh] = ascii_id
-        anchor_map[rel_posix] = file_map
-        titles[rel_posix] = first_h1 or path.stem
+            raw = (
+                notebook_to_raw_markdown(path)
+                if path.suffix == ".ipynb"
+                else strip_frontmatter(path.read_text(encoding="utf-8"))[1]
+            )
+            tracker = SlugTracker(prefix=id_prefix)
+            file_map: Dict[str, str] = {}
+            fenced = False
+            first_h1: Optional[str] = None
+            for line in raw.splitlines():
+                stripped = line.lstrip()
+                if stripped.startswith("```") or stripped.startswith("~~~"):
+                    fenced = not fenced
+                    continue
+                if fenced:
+                    continue
+                m = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
+                if m:
+                    level = len(m.group(1))
+                    htitle = m.group(2).strip()
+                    if level == 1 and first_h1 is None:
+                        first_h1 = re.sub(r"`([^`]+)`", r"\1", htitle)
+                    gh, ascii_id = tracker.register(htitle)
+                    file_map[gh] = ascii_id
+            anchor_map[rel_posix] = file_map
+            titles[rel_posix] = first_h1 or path.stem
     return anchor_map, titles
 
 
@@ -251,6 +263,14 @@ def resolve_relative_url(
     except ValueError:
         return target
 
+    # If a `doc_en/` file used a relative path that resolved into `doc_en/assets/...`, fall back to `doc/assets/...`
+    if is_image and not resolved.exists() and rel_target.startswith("doc_en/"):
+        alt_rel = "doc/" + rel_target[len("doc_en/") :]
+        alt_resolved = (pllm_dir / alt_rel).resolve()
+        if alt_resolved.exists():
+            resolved = alt_resolved
+            rel_target = alt_rel
+
     if is_image and resolved.exists() and resolved.is_file():
         dest = site_dir / "assets" / "img" / "pllm" / rel_target
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -270,10 +290,25 @@ def resolve_relative_url(
     if doc_url is not None:
         if frag_part:
             tmap = anchor_map.get(rel_target, {})
-            mapped_frag = tmap.get(frag_part.lower(), tmap.get(frag_part, frag_part))
-            return "{}#{}".format(doc_url, mapped_frag)
+            mapped_frag = tmap.get(frag_part.lower(), tmap.get(frag_part))
+            if not mapped_frag:
+                # Try sibling tree (`doc/` <-> `doc_en/`) if anchor came from translated link
+                sibling = (
+                    "doc/" + rel_target[len("doc_en/") :]
+                    if rel_target.startswith("doc_en/")
+                    else "doc_en/" + rel_target[len("doc/") :]
+                )
+                smap = anchor_map.get(sibling, {})
+                mapped_frag = smap.get(frag_part.lower(), smap.get(frag_part))
+            if mapped_frag:
+                return "{}#{}".format(doc_url, mapped_frag)
         return doc_url
 
+    # Non-human / repo files (e.g. `doc/agent/*`, `examples/*.py`, `measurements.toml`) point cleanly to GitHub
+    if rel_target.startswith("doc_en/"):
+        gh_check = pllm_dir / rel_target
+        if not gh_check.exists():
+            rel_target = "doc/" + rel_target[len("doc_en/") :]
     gh_url = "{}/blob/main/{}".format(REPO_WEB_BASE, rel_target)
     if frag_part:
         gh_url = "{}#{}".format(gh_url, frag_part)
@@ -287,13 +322,10 @@ def convert_prose_chunk(
     site_dir: pathlib.Path,
     anchor_map: Dict[str, Dict[str, str]],
     blog_url_by_stem: Dict[str, str],
-    strip_first_h1: bool = False,
-) -> Tuple[str, bool]:
-    """Transform non-fenced markdown prose for Kramdown + MathJax + site links."""
+) -> str:
     chunk = chunk.replace("&nearr;", "↗")
     chunk = re.sub(r"\s*<!--\s*check-docs:[^>]*-->", "", chunk)
 
-    # Protect inline code spans (`...`, ``...``)
     code_tokens: List[str] = []
 
     def save_code(m: re.Match) -> str:
@@ -306,13 +338,14 @@ def convert_prose_chunk(
 
     chunk = re.sub(r"(`+)([^`\n]+?)\1", save_code, chunk)
 
-    # Rewrite images `![alt](target)` and links `[text](target)`
     def replace_img(m: re.Match) -> str:
         alt, url = m.group(1), m.group(2).strip()
         new_url = resolve_relative_url(
             url, source_rel_posix, pllm_dir, site_dir, anchor_map, blog_url_by_stem, is_image=True
         )
-        return "![{}]({})".format(alt, new_url)
+        return '![{}]({}){{: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }}'.format(
+            alt, new_url
+        )
 
     def replace_link(m: re.Match) -> str:
         label, url = m.group(1), m.group(2).strip()
@@ -324,41 +357,35 @@ def convert_prose_chunk(
     chunk = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", replace_img, chunk)
     chunk = re.sub(r"(?<!!)\[([^\]]+)\]\(([^)\s]+)\)", replace_link, chunk)
 
-    # Protect existing display/inline `$$...$$` math
     math_tokens: List[str] = []
 
     def save_double_math(m: re.Match) -> str:
         expr = m.group(1)
         idx = len(math_tokens)
-        math_tokens.append((expr, True))
+        math_tokens.append(expr)
         return "\x00MATH{}\x00".format(idx)
 
     chunk = re.sub(r"\$\$(.+?)\$\$", save_double_math, chunk, flags=re.S)
 
-    # Convert single-dollar inline math `$...$` -> `$$...$$`
     def save_single_math(m: re.Match) -> str:
         expr = m.group(1)
         idx = len(math_tokens)
-        math_tokens.append((expr, False))
+        math_tokens.append(expr)
         return "\x00MATH{}\x00".format(idx)
 
     chunk = re.sub(r"(?<!\$)\$(?!\$)([^\$\n]+?)(?<!\$)\$(?!\$)", save_single_math, chunk)
 
-    # Escape any stray Liquid tags outside code/math
     if "{{" in chunk or "{%" in chunk:
         chunk = chunk.replace("{{", "{% raw %}{{{% endraw %}").replace("{%", "{% raw %}{%{% endraw %}")
 
-    # Restore math tokens (escaping bare `|` inside table rows so Kramdown tables never split cells)
     out_lines: List[str] = []
-    h1_removed = strip_first_h1
     for line in chunk.splitlines():
         is_table_row = line.lstrip().startswith("|")
 
         def restore_line_math(m: re.Match) -> str:
             idx = int(m.group(1))
-            expr, _ = math_tokens[idx]
+            expr = math_tokens[idx]
             if is_table_row:
-                # Replace single unescaped `|` (not `\|`) with `\vert ` inside GFM table cells
                 expr = re.sub(r"(?<!\\)\|(?![|])", r"\\vert ", expr)
             if "{{" in expr or "{%" in expr:
                 return "{% raw %}$$" + expr + "$${% endraw %}"
@@ -368,7 +395,7 @@ def convert_prose_chunk(
         line = re.sub(r"\x00CODE(\d+)\x00", lambda m: code_tokens[int(m.group(1))], line)
         out_lines.append(line)
 
-    return "\n".join(out_lines), h1_removed
+    return "\n".join(out_lines)
 
 
 def transform_markdown_document(
@@ -379,11 +406,11 @@ def transform_markdown_document(
     anchor_map: Dict[str, Dict[str, str]],
     blog_url_by_stem: Dict[str, str],
     attach_kramdown_ids: bool = False,
+    id_prefix: str = "",
     strip_leading_h1: bool = False,
 ) -> str:
-    """Transform a complete markdown document while preserving fenced code blocks."""
     lines = raw_text.splitlines()
-    tracker = SlugTracker()
+    tracker = SlugTracker(prefix=id_prefix)
     result_chunks: List[str] = []
     prose_buf: List[str] = []
     in_fence = False
@@ -402,7 +429,7 @@ def transform_markdown_document(
         if not text_block:
             result_chunks.append("")
             return
-        converted, _ = convert_prose_chunk(
+        converted = convert_prose_chunk(
             text_block,
             source_rel_posix,
             pllm_dir,
@@ -449,7 +476,6 @@ def transform_markdown_document(
             if close_m and close_m.group(2)[0] == fence_marker[0] and len(close_m.group(2)) >= len(fence_marker):
                 fence_buf.append(line)
                 code_block = "\n".join(fence_buf)
-                # Remove internal check-docs skip directives from reader-facing code
                 code_block = re.sub(r"^\s*#\s*check-docs:\s*skip:[^\n]*\n", "", code_block, flags=re.M)
                 if "{{" in code_block or "{%" in code_block:
                     code_block = "{% raw %}\n" + code_block + "\n{% endraw %}"
@@ -469,21 +495,12 @@ def transform_markdown_document(
     return "\n".join(result_chunks).strip() + "\n"
 
 
-def parse_blog_readme_metadata(
-    blog_readme_path: pathlib.Path,
-) -> Tuple[str, Dict[str, Dict[str, str]]]:
-    """Extract System Anatomy ASCII diagram, per-post badges, and per-post summaries from pLLM/blog/README.md."""
+def parse_blog_readme_metadata(blog_readme_path: pathlib.Path) -> Dict[str, Dict[str, str]]:
     meta_by_stem: Dict[str, Dict[str, str]] = {}
-    anatomy_diagram = ""
     if not blog_readme_path.exists():
-        return anatomy_diagram, meta_by_stem
-
+        return meta_by_stem
     text = blog_readme_path.read_text(encoding="utf-8")
-    diag_m = re.search(r"```text\n(.*?)```", text, flags=re.S)
-    if diag_m:
-        anatomy_diagram = diag_m.group(1).rstrip()
 
-    # Parse ZH entries:
     zh_badge_pat = re.compile(r"\*\*\[`\[([^\]]+)\]`[^\n]*?\]\(zh/([a-zA-Z0-9_-]+)\.md\)\*\*")
     for m in zh_badge_pat.finditer(text):
         badge_zh, stem = m.group(1).strip(), m.group(2).strip()
@@ -494,7 +511,6 @@ def parse_blog_readme_metadata(
             if next_line.startswith("*") and next_line.endswith("*") and len(next_line) > 2:
                 meta_by_stem[stem]["summary_zh"] = next_line.strip("*").strip()
 
-    # Parse EN entries:
     en_badge_pat = re.compile(r"\*\*\[`\[([^\]]+)\]`[^\n]*?\]\(en/([a-zA-Z0-9_-]+)\.md\)\*\*")
     for m in en_badge_pat.finditer(text):
         badge_en, stem = m.group(1).strip(), m.group(2).strip()
@@ -505,18 +521,16 @@ def parse_blog_readme_metadata(
             if next_line.startswith("*") and next_line.endswith("*") and len(next_line) > 2:
                 meta_by_stem[stem]["summary_en"] = next_line.strip("*").strip()
 
-    return anatomy_diagram, meta_by_stem
+    return meta_by_stem
 
 
 def split_blog_header_and_tldr(raw_md: str) -> Tuple[str, str, str]:
-    """Extract (title, single_paragraph_tldr_body, remaining_markdown) from a pLLM blog markdown file."""
     _, body = strip_frontmatter(raw_md)
     lines = body.lstrip().splitlines()
     title = ""
     idx = 0
     if idx < len(lines) and lines[idx].startswith("# "):
         title = lines[idx][2:].strip()
-        # Strip surrounding Chinese book-title marks 《...》 only if wrapping the entire title? Keep original author title!
         idx += 1
     while idx < len(lines) and not lines[idx].strip():
         idx += 1
@@ -536,45 +550,74 @@ def split_blog_header_and_tldr(raw_md: str) -> Tuple[str, str, str]:
     return title, tldr_body, rest
 
 
-def summarize_first_sentence(tldr_text: str, max_chars: int = 180) -> str:
-    clean = re.sub(r"\*\*([^*]+)\*\*", r"\1", tldr_text)
+def summarize_first_sentence(tldr_text: str, max_chars: int = 160) -> str:
+    clean = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", tldr_text)
+    clean = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", clean)
+    clean = re.sub(r"\*\*([^*]+)\*\*", r"\1", clean)
     clean = re.sub(r"\*([^*]+)\*", r"\1", clean)
-    clean = re.sub(r"`([^`]+)`", r"\1", clean)
-    clean = re.sub(r"\$+([^$]+)\$+", r"\1", clean)
+    clean = clean.replace("`", "")
+    clean = re.sub(r"\$+([^$]+)\$+", r"\1", clean).strip()
     if len(clean) <= max_chars:
         return clean
-    # Cut cleanly at sentence boundary or word boundary
     for sep in (". ", "。", "；", "; "):
-        pos = clean.find(sep, 60)
+        pos = clean.find(sep, 45)
         if 0 < pos <= max_chars:
-            return clean[: pos + (1 if sep in ("。", "；") else 1)].strip()
-    cut = clean[:max_chars].rsplit(" ", 1)[0]
-    return cut.rstrip(",;:") + "..."
+            return clean[: pos + (1 if sep == "。" else 0)].rstrip("；;,，")
+    cut = clean[:max_chars]
+    if " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(",;；、:") + "..."
+
+
+def extract_doc_summary(raw_md: str, is_english: bool) -> str:
+    para_lines: List[str] = []
+    in_code = False
+    for line in raw_md.splitlines():
+        s = line.strip()
+        if s.startswith("```") or s.startswith("~~~"):
+            in_code = not in_code
+            if para_lines:
+                break
+            continue
+        if in_code:
+            continue
+        if not s:
+            if para_lines:
+                break
+            continue
+        if s.startswith(("#", "|", "<!--", "- ", "* ", ">", "![")):
+            if para_lines:
+                break
+            continue
+        para_lines.append(s)
+    if not para_lines:
+        return ""
+    merged = (" " if is_english else "").join(para_lines)
+    return summarize_first_sentence(merged, 145 if is_english else 95)
 
 
 def sync_blogs(
     pllm_dir: pathlib.Path,
     site_dir: pathlib.Path,
     anchor_map: Dict[str, Dict[str, str]],
-) -> Tuple[str, Dict[str, str], List[Dict[str, object]]]:
-    """Sync paired ZH/EN pLLM blog posts into `_posts/*-pllm-*.md`."""
+) -> Tuple[Dict[str, str], List[Dict[str, object]]]:
     blog_dir = pllm_dir / "blog"
     zh_dir = blog_dir / "zh"
     en_dir = blog_dir / "en"
-    anatomy_diagram, readme_meta = parse_blog_readme_metadata(blog_dir / "README.md")
+    readme_meta = parse_blog_readme_metadata(blog_dir / "README.md")
 
     zh_files = {p.stem: p for p in sorted(zh_dir.glob("*.md"))} if zh_dir.exists() else {}
     en_files = {p.stem: p for p in sorted(en_dir.glob("*.md"))} if en_dir.exists() else {}
     stems = sorted(set(zh_files.keys()) | set(en_files.keys()))
 
-    # Determine first-commit dates per stem for stable URLs and ordering
     raw_ts_by_stem: Dict[str, int] = {}
     for stem in stems:
         rel_check = "blog/zh/{}.md".format(stem) if stem in zh_files else "blog/en/{}.md".format(stem)
         ts_str = run_git(pllm_dir, ["log", "--diff-filter=A", "--follow", "--format=%at", "-1", "--", rel_check])
-        raw_ts_by_stem[stem] = int(ts_str) if ts_str.isdigit() else int(datetime.datetime(2026, 11, 23, 3, 0, tzinfo=CST).timestamp())
+        raw_ts_by_stem[stem] = (
+            int(ts_str) if ts_str.isdigit() else int(datetime.datetime(2026, 11, 23, 3, 0, tzinfo=CST).timestamp())
+        )
 
-    # Precompute URLs `/blog/<year>/pllm-<stem>/`
     blog_url_by_stem: Dict[str, str] = {}
     dt_by_stem: Dict[str, datetime.datetime] = {}
     total_count = len(stems)
@@ -582,14 +625,8 @@ def sync_blogs(
         base_dt = datetime.datetime.fromtimestamp(raw_ts_by_stem[stem], tz=CST)
         m_num = re.match(r"^(\d+)-", stem)
         order_num = int(m_num.group(1)) if m_num else idx
-        # Keep deterministic staggered timestamps on the commit date so #01 sits at top of the series on /blog/
         minute_offset = max(1, total_count + 1 - order_num)
-        post_dt = base_dt.replace(
-            hour=base_dt.hour,
-            minute=min(59, minute_offset),
-            second=0,
-            microsecond=0,
-        )
+        post_dt = base_dt.replace(hour=base_dt.hour, minute=min(59, minute_offset), second=0, microsecond=0)
         dt_by_stem[stem] = post_dt
         blog_url_by_stem[stem] = "/blog/{}/pllm-{}/".format(post_dt.strftime("%Y"), stem)
 
@@ -623,8 +660,8 @@ def sync_blogs(
         rmeta = readme_meta.get(stem, {})
         badge_zh = rmeta.get("badge_zh", "技术拆解")
         badge_en = rmeta.get("badge_en", "Deep Dive")
-        summary_zh_base = (rmeta.get("summary_zh") or summarize_first_sentence(tldr_zh_raw, 140)).replace("`", "")
-        summary_en_base = (rmeta.get("summary_en") or summarize_first_sentence(tldr_en_raw, 200)).replace("`", "")
+        summary_zh_base = (rmeta.get("summary_zh") or summarize_first_sentence(tldr_zh_raw, 130)).replace("`", "")
+        summary_en_base = (rmeta.get("summary_en") or summarize_first_sentence(tldr_en_raw, 190)).replace("`", "")
         desc_zh = "{}（pLLM 技术专栏 · 支持 EN / 中文 一键切换）".format(summary_zh_base.rstrip("。"))
         desc_en = "{} (pLLM Engineering Series · Bilingual EN / 中文)".format(summary_en_base)
 
@@ -657,12 +694,7 @@ def sync_blogs(
             '<div class="zine-dispatch" data-title-zh="{}" data-title-en="{}">'.format(
                 html_attr_escape(title_zh), html_attr_escape(title_en)
             ),
-            '  <div class="zine-dispatch-links">',
-            '    <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档" data-i18n-en="pLLM Project &amp; Docs" href="/pllm/">pLLM 项目主页与文档</a>',
-            '    <a class="zine-pill-link" data-i18n-zh="GitHub · pLLM ↗" data-i18n-en="GitHub &middot; pLLM ↗" href="{}" target="_blank" rel="noopener">GitHub · pLLM ↗</a>'.format(
-                REPO_WEB_BASE
-            ),
-            "  </div>",
+            '  <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>',
             '  <div class="zine-lang-switch" role="group" aria-label="Language">',
             '    <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>',
             '    <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>',
@@ -677,7 +709,7 @@ def sync_blogs(
             "",
             "</div>",
             "",
-            "> **pLLM 技术随笔与机制拆解（{}/{} · {}）** · [pLLM 项目介绍与文档中心](/pllm/) · [专栏目录与系统解剖图](/pllm/#blog) · [仓库源码原文 ↗]({})".format(
+            "> **pLLM 技术随笔与机制拆解（{}/{} · {}）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗]({})".format(
                 order_num, total_count, badge_zh, gh_zh_url
             ),
             "",
@@ -693,7 +725,7 @@ def sync_blogs(
             "",
             "</div>",
             "",
-            "> **pLLM Engineering Essays & Deep Dives ({}/{} · {})** · [pLLM Project & Docs Hub](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [Markdown Source on GitHub ↗]({})".format(
+            "> **pLLM Engineering Essays & Deep Dives ({}/{} · {})** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗]({})".format(
                 order_num, total_count, badge_en, gh_en_url
             ),
             "",
@@ -704,8 +736,7 @@ def sync_blogs(
             '<script defer src="/assets/js/bilingual-post.js"></script>',
             "",
         ]
-        out_path = posts_dir / filename
-        out_path.write_text("\n".join(content_lines), encoding="utf-8")
+        (posts_dir / filename).write_text("\n".join(content_lines), encoding="utf-8")
 
         blog_records.append(
             {
@@ -721,7 +752,6 @@ def sync_blogs(
             }
         )
 
-    # Prune deleted synced pLLM posts without touching non-pLLM posts
     for existing in posts_dir.glob("*-pllm-*.md"):
         if existing.name not in expected_filenames:
             head = existing.read_text(encoding="utf-8")[:600]
@@ -729,7 +759,7 @@ def sync_blogs(
                 existing.unlink()
 
     blog_records.sort(key=lambda item: int(item["order"]))  # type: ignore[arg-type]
-    return anatomy_diagram, blog_url_by_stem, blog_records
+    return blog_url_by_stem, blog_records
 
 
 def sync_docs(
@@ -739,114 +769,147 @@ def sync_docs(
     titles: Dict[str, str],
     blog_url_by_stem: Dict[str, str],
 ) -> Dict[str, List[Dict[str, str]]]:
-    """Sync all pLLM docs (`doc/**/*.md` and `doc/{tutorials,examples}/*.ipynb`) into `_pllm_docs/`."""
+    """Sync paired human-facing bilingual docs (`doc/` + `doc_en/`, excluding `doc/agent/`) into `_pllm_docs/`."""
     out_root = site_dir / "_pllm_docs"
     if out_root.exists():
         shutil.rmtree(out_root)
     out_root.mkdir(parents=True, exist_ok=True)
 
-    sections: Dict[str, List[Dict[str, str]]] = {k: [] for k in DOC_CATEGORY_LABELS}
-    doc_root = pllm_dir / "doc"
-    if not doc_root.exists():
-        return sections
+    sections: Dict[str, List[Dict[str, str]]] = {k: [] for k in DOC_CATEGORIES}
+    doc_zh_root = pllm_dir / "doc"
+    doc_en_root = pllm_dir / "doc_en"
 
-    for path in sorted(doc_root.rglob("*")):
-        if not path.is_file() or ".ipynb_checkpoints" in path.parts:
+    subpaths = set()
+    for root_dir in (doc_zh_root, doc_en_root):
+        if not root_dir.exists():
             continue
-        rel_posix = path.relative_to(pllm_dir).as_posix()
-        out_rel = doc_output_rel(rel_posix)
-        page_url = doc_url_for_rel(rel_posix)
-        if out_rel is None or page_url is None:
+        for p in sorted(root_dir.rglob("*")):
+            if not p.is_file() or ".ipynb_checkpoints" in p.parts:
+                continue
+            rel = p.relative_to(pllm_dir).as_posix()
+            sub = normalize_doc_subpath(rel)
+            if sub is not None:
+                subpaths.add(sub)
+
+    for sub in sorted(subpaths):
+        zh_path = doc_zh_root / sub
+        en_path = doc_en_root / sub
+        has_zh = zh_path.exists()
+        has_en = en_path.exists()
+        if not has_zh and not has_en:
             continue
 
-        sub_parts = pathlib.PurePosixPath(rel_posix[len("doc/") :]).parts
-        category = "root" if len(sub_parts) == 1 else sub_parts[0].lower()
-        cat_zh, cat_en = DOC_CATEGORY_LABELS.get(category, (category, category))
-        is_notebook = path.suffix == ".ipynb"
+        zh_file = zh_path if has_zh else en_path
+        en_file = en_path if has_en else zh_path
+        zh_rel = zh_file.relative_to(pllm_dir).as_posix()
+        en_rel = en_file.relative_to(pllm_dir).as_posix()
 
-        if is_notebook:
-            raw_md = notebook_to_raw_markdown(path)
-            fm_meta: Dict[str, str] = {}
-        else:
-            fm_meta, raw_md = strip_frontmatter(path.read_text(encoding="utf-8"))
+        is_notebook = pathlib.PurePosixPath(sub).suffix == ".ipynb"
+        raw_zh = (
+            notebook_to_raw_markdown(zh_file)
+            if is_notebook
+            else strip_frontmatter(zh_file.read_text(encoding="utf-8"))[1]
+        )
+        raw_en = (
+            notebook_to_raw_markdown(en_file)
+            if is_notebook
+            else strip_frontmatter(en_file.read_text(encoding="utf-8"))[1]
+        )
 
-        page_title = titles.get(rel_posix) or path.stem
-        body_md = transform_markdown_document(
-            raw_md,
-            rel_posix,
+        title_zh = titles.get(zh_rel) or pathlib.PurePosixPath(sub).stem
+        title_en = titles.get(en_rel) or title_zh
+
+        body_zh = transform_markdown_document(
+            raw_zh,
+            zh_rel,
             pllm_dir,
             site_dir,
             anchor_map,
             blog_url_by_stem,
             attach_kramdown_ids=True,
+            id_prefix="zh-",
+            strip_leading_h1=True,
+        ).strip()
+        body_en = transform_markdown_document(
+            raw_en,
+            en_rel,
+            pllm_dir,
+            site_dir,
+            anchor_map,
+            blog_url_by_stem,
+            attach_kramdown_ids=True,
+            id_prefix="en-",
             strip_leading_h1=True,
         ).strip()
 
-        # Extract short description from frontmatter or first non-heading paragraph
-        short_desc = fm_meta.get("description", "")
-        if not short_desc:
-            para_lines: List[str] = []
-            in_code = False
-            for line in raw_md.splitlines():
-                s = line.strip()
-                if s.startswith("```") or s.startswith("~~~"):
-                    in_code = not in_code
-                    if para_lines:
-                        break
-                    continue
-                if in_code:
-                    continue
-                if not s:
-                    if para_lines:
-                        break
-                    continue
-                if s.startswith(("#", "|", "<!--", "- ", "* ", ">")):
-                    if para_lines:
-                        break
-                    continue
-                para_lines.append(s)
-            if para_lines:
-                joiner = "" if category != "agent" else " "
-                merged_para = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", joiner.join(para_lines))
-                short_desc = summarize_first_sentence(merged_para, 150)
+        summary_zh = extract_doc_summary(raw_zh, is_english=False)
+        summary_en = extract_doc_summary(raw_en, is_english=True) or summary_zh
 
-        gh_source_url = "{}/blob/main/{}".format(REPO_WEB_BASE, rel_posix)
-        lang_tag = "EN" if category == "agent" else "中文"
-        kind_badge = "Notebook (.ipynb)" if is_notebook else "Doc ({})".format(lang_tag)
+        parts = pathlib.PurePosixPath(sub).parts
+        category = "root" if len(parts) == 1 else parts[0].lower()
+        cat_zh, cat_en = DOC_CATEGORIES.get(category, ("文档总览", "Documentation Overview"))[:2]
+
+        out_rel = doc_output_rel(sub)
+        page_url = doc_url_for_rel("doc/" + sub) or "/pllm/docs/"
+        gh_source_url = "{}/blob/main/doc/{}".format(REPO_WEB_BASE, sub)
+        kind_badge_zh = "可执行教程 (.ipynb)" if is_notebook else cat_zh
+        kind_badge_en = "Notebook (.ipynb)" if is_notebook else cat_en
 
         doc_lines = [
             "---",
             "layout: page",
-            "title: {}".format(yaml_quote(page_title)),
-            "description: {}".format(yaml_quote("pLLM · {} ({})".format(cat_en, cat_zh))),
+            "title: {}".format(yaml_quote(title_en)),
+            "description: {}".format(yaml_quote("pLLM Documentation · {}".format(cat_en))),
             "permalink: {}".format(page_url),
             "nav: false",
             "---",
             "",
-            '<div class="zine-dispatch">',
+            '<link rel="stylesheet" href="{{ \'/assets/css/pllm-hub.css\' | relative_url | bust_file_cache }}">',
+            "",
+            '<div class="zine-dispatch" data-title-zh="{}" data-title-en="{}">'.format(
+                html_attr_escape(title_zh), html_attr_escape(title_en)
+            ),
             '  <div class="zine-dispatch-links">',
-            '    <a class="zine-pill-link primary" href="/pllm/#docs">← pLLM Project &amp; Docs</a>',
-            '    <a class="zine-pill-link" href="/pllm/docs/">All Docs Index</a>',
-            '    <span class="zine-lang-badge">{}</span>'.format(html_attr_escape(kind_badge)),
+            '    <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>',
+            '    <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>',
+            '    <span class="zine-lang-badge" data-i18n-zh="{}" data-i18n-en="{}">{}</span>'.format(
+                html_attr_escape(kind_badge_zh),
+                html_attr_escape(kind_badge_en),
+                html_attr_escape(kind_badge_en),
+            ),
             "  </div>",
-            '  <a class="zine-pill-link" href="{}" target="_blank" rel="noopener">{} ↗</a>'.format(
+            '  <a class="zine-pill-link" data-i18n-zh="{}" data-i18n-en="{}" href="{}" target="_blank" rel="noopener">{}</a>'.format(
+                "在 GitHub 打开 .ipynb ↗" if is_notebook else "GitHub 源码 ↗",
+                "Open .ipynb on GitHub ↗" if is_notebook else "View on GitHub ↗",
                 gh_source_url,
-                "Open .ipynb on GitHub" if is_notebook else "View Source on GitHub",
+                "Open .ipynb on GitHub ↗" if is_notebook else "View on GitHub ↗",
             ),
             "</div>",
             "",
-            '<div id="markdown-content" markdown="1">',
+            '<div id="markdown-content">',
             "",
-            body_md,
+            '<div class="zine-lang-panel" data-lang-panel="en" lang="en" markdown="1">',
+            "",
+            body_en,
+            "",
+            "</div>",
+            "",
+            '<div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN" markdown="1">',
+            "",
+            body_zh,
+            "",
+            "</div>",
             "",
             "</div>",
             "",
             '<div class="zine-doc-footer">',
-            '  <a class="zine-pill-link" href="/pllm/#docs">← Back to pLLM Documentation Hub</a>',
-            '  <a class="zine-pill-link" href="{}" target="_blank" rel="noopener">Edit / View on GitHub ↗</a>'.format(
-                gh_source_url
+            '  <a class="zine-pill-link" data-i18n-zh="← 返回 pLLM 项目与文档中心" data-i18n-en="← Back to pLLM Project &amp; Docs" href="/pllm/#docs">← Back to pLLM Project &amp; Docs</a>',
+            '  <a class="zine-pill-link" href="{}" target="_blank" rel="noopener">GitHub &middot; doc/{} ↗</a>'.format(
+                gh_source_url, sub
             ),
             "</div>",
+            "",
+            '<script defer src="/assets/js/bilingual-post.js"></script>',
             "",
         ]
 
@@ -854,17 +917,19 @@ def sync_docs(
         dest_file.parent.mkdir(parents=True, exist_ok=True)
         dest_file.write_text("\n".join(doc_lines), encoding="utf-8")
 
-        sections.setdefault(category, []).append(
-            {
-                "title": page_title,
-                "url": page_url,
-                "github_url": gh_source_url,
-                "rel_path": rel_posix,
-                "lang": lang_tag,
-                "kind": "notebook" if is_notebook else "markdown",
-                "summary": short_desc,
-            }
-        )
+        if category in DOC_CATEGORIES:
+            sections[category].append(
+                {
+                    "title_zh": title_zh,
+                    "title_en": title_en,
+                    "url": page_url,
+                    "github_url": gh_source_url,
+                    "rel_path": "doc/" + sub,
+                    "kind": "notebook" if is_notebook else "markdown",
+                    "summary_zh": summary_zh,
+                    "summary_en": summary_en,
+                }
+            )
 
     return sections
 
@@ -874,11 +939,9 @@ def write_sync_data_yaml(
     commit_sha: str,
     full_sha: str,
     commit_date: str,
-    anatomy_diagram: str,
     doc_sections: Dict[str, List[Dict[str, str]]],
     blog_records: List[Dict[str, object]],
 ) -> None:
-    """Emit `_data/pllm_sync.yml` for Liquid templates on `/pllm/`."""
     lines: List[str] = [
         "# Auto-generated by bin/sync_pllm.py from LinesHogan/pLLM — do not edit manually.",
         "repo_url: {}".format(yaml_quote(REPO_WEB_BASE)),
@@ -887,34 +950,30 @@ def write_sync_data_yaml(
             yaml_quote("{}/commit/{}".format(REPO_WEB_BASE, full_sha) if full_sha else REPO_WEB_BASE)
         ),
         "commit_date: {}".format(yaml_quote(commit_date)),
+        "doc_categories:",
     ]
 
-    if anatomy_diagram:
-        lines.append("anatomy_diagram: |2-")
-        for dline in anatomy_diagram.splitlines():
-            lines.append(("  " + dline) if dline else "")
-    else:
-        lines.append('anatomy_diagram: ""')
-
-    lines.append("doc_categories:")
-    ordered_cats = ["agent", "tutorials", "examples", "guides", "howto", "explain", "reference"]
+    ordered_cats = ["tutorials", "guides", "howto", "explain", "reference", "examples"]
     for cat in ordered_cats:
         items = doc_sections.get(cat, [])
         if not items:
             continue
-        label_zh, label_en = DOC_CATEGORY_LABELS[cat]
+        label_zh, label_en, short_zh, short_en = DOC_CATEGORIES[cat]
         lines.append("  - id: {}".format(yaml_quote(cat)))
         lines.append("    title_zh: {}".format(yaml_quote(label_zh)))
         lines.append("    title_en: {}".format(yaml_quote(label_en)))
+        lines.append("    short_zh: {}".format(yaml_quote(short_zh)))
+        lines.append("    short_en: {}".format(yaml_quote(short_en)))
         lines.append("    items:")
         for item in items:
-            lines.append("      - title: {}".format(yaml_quote(item["title"])))
+            lines.append("      - title_zh: {}".format(yaml_quote(item["title_zh"])))
+            lines.append("        title_en: {}".format(yaml_quote(item["title_en"])))
             lines.append("        url: {}".format(yaml_quote(item["url"])))
             lines.append("        github_url: {}".format(yaml_quote(item["github_url"])))
             lines.append("        rel_path: {}".format(yaml_quote(item["rel_path"])))
-            lines.append("        lang: {}".format(yaml_quote(item["lang"])))
             lines.append("        kind: {}".format(yaml_quote(item["kind"])))
-            lines.append("        summary: {}".format(yaml_quote(item["summary"])))
+            lines.append("        summary_zh: {}".format(yaml_quote(item["summary_zh"])))
+            lines.append("        summary_en: {}".format(yaml_quote(item["summary_en"])))
 
     lines.append("blogs:")
     for b in blog_records:
@@ -966,14 +1025,15 @@ def main() -> int:
         full_sha = run_git(pllm_dir, ["rev-parse", "HEAD"])
         commit_date = run_git(pllm_dir, ["log", "-1", "--format=%cs"])
 
+        copy_static_assets(pllm_dir, site_dir)
         anchor_map, titles = scan_doc_anchors(pllm_dir)
-        anatomy_diagram, blog_url_by_stem, blog_records = sync_blogs(pllm_dir, site_dir, anchor_map)
+        blog_url_by_stem, blog_records = sync_blogs(pllm_dir, site_dir, anchor_map)
         doc_sections = sync_docs(pllm_dir, site_dir, anchor_map, titles, blog_url_by_stem)
-        write_sync_data_yaml(site_dir, short_sha, full_sha, commit_date, anatomy_diagram, doc_sections, blog_records)
+        write_sync_data_yaml(site_dir, short_sha, full_sha, commit_date, doc_sections, blog_records)
 
-        total_docs = sum(len(v) for v in doc_sections.values())
+        total_docs = sum(len(v) for v in doc_sections.values()) + 1  # +1 for index.md
         print(
-            "Synced pLLM ({}) -> {} bilingual blog posts, {} doc/notebook pages.".format(
+            "Synced pLLM ({}) -> {} bilingual blog posts, {} human-only bilingual doc pages.".format(
                 short_sha or "local", len(blog_records), total_docs
             )
         )

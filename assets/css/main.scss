@@ -132,8 +132,8 @@ h4 {
   letter-spacing: -0.025em;
 }
 
-.post article a:not(.btn):not(.post-title):not(.zine-pill-link):not(.zine-doc-card):not(.post-tags a):not(.abbr a):not(.social a),
-#markdown-content a:not(.btn):not(.zine-pill-link):not(.zine-doc-card):not(.post-title) {
+.post article a:not(.btn):not(.post-title):not(.zine-pill-link):not(.zine-doc-card):not(.pllm-blog-card):not(.post-tags a):not(.abbr a):not(.social a),
+#markdown-content a:not(.btn):not(.zine-pill-link):not(.zine-doc-card):not(.pllm-blog-card):not(.post-title) {
   color: var(--zine-ink);
   text-decoration: underline;
   text-decoration-color: var(--zine-red);
@@ -142,8 +142,8 @@ h4 {
   transition: background-color 0.12s ease, color 0.12s ease;
 }
 
-.post article a:not(.btn):not(.post-title):not(.zine-pill-link):not(.zine-doc-card):not(.post-tags a):not(.abbr a):not(.social a):hover,
-#markdown-content a:not(.btn):not(.zine-pill-link):not(.zine-doc-card):not(.post-title):hover {
+.post article a:not(.btn):not(.post-title):not(.zine-pill-link):not(.zine-doc-card):not(.pllm-blog-card):not(.post-tags a):not(.abbr a):not(.social a):hover,
+#markdown-content a:not(.btn):not(.zine-pill-link):not(.zine-doc-card):not(.pllm-blog-card):not(.post-title):hover {
   background-color: var(--zine-hi);
   color: var(--zine-ink);
   text-decoration-color: var(--zine-red);

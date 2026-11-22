@@ -15,10 +15,7 @@ related_posts: true
 ---
 
 <div class="zine-dispatch" data-title-zh="少读 98% 的历史反而慢 5 倍，换上 DeepSeek 又罢工：从显存布局重看自定义注意力" data-title-en="Why Reading 98% Less History Ran 5x Slower—and Broke on DeepSeek: Rethinking Custom Attention from Memory Layouts">
-  <div class="zine-dispatch-links">
-    <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档" data-i18n-en="pLLM Project &amp; Docs" href="/pllm/">pLLM 项目主页与文档</a>
-    <a class="zine-pill-link" data-i18n-zh="GitHub · pLLM ↗" data-i18n-en="GitHub &middot; pLLM ↗" href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">GitHub · pLLM ↗</a>
-  </div>
+  <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <div class="zine-lang-switch" role="group" aria-label="Language">
     <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
     <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
@@ -33,7 +30,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（8/10 · 极客拆解 · 跨代际注意力）** · [pLLM 项目介绍与文档中心](/pllm/) · [专栏目录与系统解剖图](/pllm/#blog) · [仓库源码原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/08-attention-from-gqa-to-mla.md)
+> **pLLM 技术随笔与机制拆解（8/10 · 极客拆解 · 跨代际注意力）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/08-attention-from-gqa-to-mla.md)
 
 做长上下文探测、局部/全局交替注意力或者块级稀疏筛选时，研究员在单机脚本里习惯直接伸手去拿 `Key` 和 `Value` 张量，或者给注意力函数传一个 `window_size` 参数。
 
@@ -64,17 +61,7 @@ $$\text{有效搬运量} = 128\text{ 行} \times 256\text{ 词} \times 2\text{ �
 
 带着这个猜想打开剖析器看一眼两个内核的启动网格（Grid）参数，病因一抓一个准：
 
-```text
-1. 全量解码 (按 2 个 KV 头组织网格 —— GQA 打包生效，耗时 16.6 µs):
-   ┌──────────────────────┐
-   │ 显存中的 KV Head 0 页 │ ──(读取 1 次)──► [ 单个 CTA 内共享: Q0, Q1, Q2, Q3, Q4, Q5, Q6 ]
-   └──────────────────────┘
-
-2. 裸调 FA2 窗口解码 (退化为按 14 个 Query 头组织网格 —— 打包失效，耗时 91.5 µs):
-   ┌──────────────────────┐   ┌────────────► [ CTA 0: Q0 ]
-   │ 显存中的 KV Head 0 页 │───┼────────────► [ CTA 1: Q1 ]  ... (7 个独立块重复拉取同一页缓存)
-   └──────────────────────┘   └────────────► [ CTA 6: Q6 ]
-```
+![GQA 网格派发对比：头部打包生效与滑窗退化](/assets/img/pllm/blog/assets/08-attention-from-gqa-to-mla-fig1-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 在这个解码形状下，一旦开启滑动窗口，FA2 的解码路径丢掉了 GQA 头部打包，网格从按 **2 个 KV 头**派发退化成了按 **14 个 Query 头**各自派发，省下的序列长度全赔进了重复访存和窗口边界判定里。
 
@@ -86,12 +73,7 @@ $$\text{有效搬运量} = 128\text{ 行} \times 256\text{ 词} \times 2\text{ �
 
 碰到“局部配置被静默忽略”，直接去查宿主合并配置组的入口函数，十行代码就暴露了一个面向对象继承陷阱：
 
-```text
-类继承关系：   AttentionSpec ──► FullAttentionSpec ──► RSWASpec (子类!)
-
-vLLM 分组逻辑： 取字典第 0 项 (FullAttentionSpec) 询问：“后面所有层都是 isinstance(..., FullAttentionSpec) 吗？”
-               ──► 返回 True！挑剔的窗口子类被宽容的全量父类直接吞并进了全量保留组。
-```
+![vLLM 缓存分组继承陷阱与 sink_first 修复](/assets/img/pllm/blog/assets/08-attention-from-gqa-to-mla-fig2-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 看清继承树之后，不用改上游一行源码：派生一个收紧相等条件的子类，再在把配置字典交给引擎前排个序（`sink_first`），把挑剔的 `RSWASpec` 子类挪到字典最前头让它先发言，原生的物理块回收器就正常接管了。
 
@@ -101,14 +83,7 @@ vLLM 分组逻辑： 取字典第 0 项 (FullAttentionSpec) 询问：“后面�
 
 先把两种架构的物理分页缓存并排画出来对比：
 
-```text
-标准 GQA 缓存页 (如 Qwen / Llama):
-  每个位置按头分开存： [ KV Head 0: K, V ] [ KV Head 1: K, V ] ...  (存在明确的 K、V 张量)
-
-DeepSeek MLA 压缩潜空间缓存页 (V2 / V3):
-  所有注意力头只共享一条低秩向量： [ 共享压缩潜变量 c_KV (如 512 维) | 共享旋转编码 k_rope (64 维) ]
-  逻辑还原公式 (共 H 个头)：       K_h^nope = c_KV @ W_UK[h],    V_h = c_KV @ W_UV[h]
-```
+![物理分页缓存布局对比：标准 GQA 与 DeepSeek MLA](/assets/img/pllm/blog/assets/08-attention-from-gqa-to-mla-fig3-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 MLA 之所以能把长上下文显存占用砍掉一大截，正是因为它只存那一条所有头共享的 $$c_{KV}$$。这时候如果上层自定义注意力接口非要向底层索取展开后的 `[位置数, 头数 H, 头维]` 键值张量，底层就只能在每次读取时把历史 $$L$$ 个位置的 $$c_{KV}$$ 全部乘上 $$W_{UK}, W_{UV}$$ 物化出来——历史长度 $$L$$ 动辄几千上万，头数 $$H$$ 在大模型上有上百个，这一乘就把 MLA 省下来的显存带宽全数倒贴了回去。
 
@@ -118,17 +93,7 @@ MLA 之所以能把长上下文显存占用砍掉一大截，正是因为它只�
 
 对照下面的维度流向图看两次括号移动：
 
-```text
-解码单步：当前查询长度 = 1，历史缓存长度 = L (L >> 1)，注意力头数 = H
-
-【打分阶段】
-  朴素顺序： q_nope [1, H, 128]  ·  (c_KV [L, 512] @ W_UK [H, 512, 128])^T   ──► 展开 O(L · H) 显存读写!
-  结合律后： (q_nope [1, H, 128] @ W_UK^T [H, 128, 512])  ·  c_KV^T [512, L] ──► 仅入口做 O(1 · H) 投影!
-
-【加权求和阶段】
-  朴素顺序： sum_t  weights [1, H, L]  ·  (c_KV [L, 512] @ W_UV [H, 512, 128]) ──► 展开 O(L · H) 显存读写!
-  结合律后： (weights [1, H, L] @ c_KV [L, 512])  @  W_UV [H, 512, 128]        ──► 仅出口做 O(1 · H) 投影!
-```
+![MLA 潜空间矩阵吸收：利用乘法结合律把投影从 L 移到 1](/assets/img/pllm/blog/assets/08-attention-from-gqa-to-mla-fig4-zh.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 看清维度之后，代码几乎是照着图抄出来的。配合分块在线 `logaddexp` 归并（每扫过一个 128 词的压缩缓存块就动态更新局部最大值与配分函数，保证任意长序列数值稳定），完整的流式潜空间注意力用普通 PyTorch 写出来只有十来行：
 
@@ -186,7 +151,7 @@ class WindowProbe(pllm.Workload):
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (8/10 · Deep Dive · Attention Layouts)** · [pLLM Project & Docs Hub](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [Markdown Source on GitHub ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/08-attention-from-gqa-to-mla.md)
+> **pLLM Engineering Essays & Deep Dives (8/10 · Deep Dive · Attention Layouts)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/08-attention-from-gqa-to-mla.md)
 
 Researchers prototyping long-context probes, alternating local/global windows, or sparse top-$$k$$ attention in standalone scripts are used to reaching directly for `Key` and `Value` tensors—or passing a `window_size` argument to an attention kernel.
 
@@ -217,17 +182,7 @@ That one division solves half the mystery before opening a single source file: h
 
 Checking the launched grid dimensions in the profiler confirmed the diagnosis on the spot:
 
-```text
-1. Full decode (grid organized by 2 KV heads — 7:1 GQA packing active, 16.6 µs):
-   ┌───────────────────┐
-   │ KV Head 0 in HBM  │ ──(loaded once)──► [ Shared inside 1 CTA: Q0, Q1, Q2, Q3, Q4, Q5, Q6 ]
-   └───────────────────┘
-
-2. Raw FA2 window decode (grid falls back to 14 Query heads — packing lost, 91.5 µs):
-   ┌───────────────────┐   ┌──────────────► [ CTA 0: Q0 ]
-   │ KV Head 0 in HBM  │───┼──────────────► [ CTA 1: Q1 ]  ... (7 separate CTAs reload the same KV!)
-   └───────────────────┘   └──────────────► [ CTA 6: Q6 ]
-```
+![GQA Grid Dispatch Comparison: 7:1 Head Packing vs. Window Regression](/assets/img/pllm/blog/assets/08-attention-from-gqa-to-mla-fig1-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Enabling `window_size` on this decode shape dropped FA2 out of its KV-head-packed path into a 14-query-head grid, trading away sequence-length savings for redundant page fetches and window-bound overhead.
 
@@ -235,12 +190,7 @@ Switching windowed GQA reads to FlashInfer—whose decode kernel keeps packing Q
 
 Reclaiming physical HBM blocks on sliding-window layers (`RSWASpec`: retain prompt prefix + recent window, recycling evicted middle blocks to `null_block`) surfaced a reusable lesson for debugging silently ignored config overrides in large frameworks. Setting only a subset of layers to `RSWASpec` while leaving Layer 0 on `FullAttentionSpec` reclaimed zero blocks at runtime. Inspecting vLLM's ten-line KV-cache group merger exposed classic OOP inheritance swallowing:
 
-```text
-Class hierarchy:   AttentionSpec ──► FullAttentionSpec ──► RSWASpec (subclass!)
-
-vLLM group check:  Pick entry #0 (FullAttentionSpec) and ask: "Are all remaining layers isinstance(..., FullAttentionSpec)?"
-                   ──► Returns True! The permissive parent swallowed its stricter sliding-window subclass.
-```
+![vLLM KV-Group Trap: Parent isinstance Swallows Window Subclass](/assets/img/pllm/blog/assets/08-attention-from-gqa-to-mla-fig2-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Tightening equality on a thin subclass and sorting `RSWASpec` entries ahead of `FullAttentionSpec` (`sink_first`) before handing the dict to vLLM let the stricter subclass speak first—activating native physical block eviction without touching upstream code.
 
@@ -250,14 +200,7 @@ Now look at the second wall on DeepSeek V2 and V3: **how do you formulate custom
 
 Compare the two physical paged-cache layouts side by side:
 
-```text
-Standard GQA paged cache (Qwen / Llama):
-  Stored per KV head at each token: [ KV Head 0: K, V ] [ KV Head 1: K, V ] ...
-
-DeepSeek MLA compressed latent cache (V2 / V3):
-  All heads share ONE low-rank vector: [ Shared latent c_KV (e.g. 512d) | Shared k_rope (64d) ]
-  Logical reconstruction (H heads):    K_h^nope = c_KV @ W_UK[h],    V_h = c_KV @ W_UV[h]
-```
+![Physical Paged-Cache Layout: Standard GQA vs. DeepSeek MLA](/assets/img/pllm/blog/assets/08-attention-from-gqa-to-mla-fig3-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 MLA slashes KV-cache memory precisely because all $$H$$ heads share that single 512-dim $$c_{KV}$$ vector. If a custom attention API demands unfolded `[seq_len L, heads H, head_dim]` `K` and `V` tensors, the backend has to multiply all $$L$$ historical $$c_{KV}$$ vectors by $$W_{UK}$$ and $$W_{UV}$$ on every step—exploding $$O(L)$$ compressed reads into $$O(L \cdot H)$$ HBM traffic and wiping out MLA's entire advantage.
 
@@ -267,17 +210,7 @@ Let **tensor dimension complexity** guide the algebra—the exact same associati
 
 Follow the parentheses across both stages:
 
-```text
-Decode step: query length = 1, history length = L (L >> 1), attention heads = H
-
-[Scoring stage]
-  Naive order:      q_nope [1, H, 128]  ·  (c_KV [L, 512] @ W_UK [H, 512, 128])^T   ──► O(L · H) HBM expansion!
-  Reassociated:    (q_nope [1, H, 128] @ W_UK^T [H, 128, 512])  ·  c_KV^T [512, L] ──► O(1 · H) entry projection!
-
-[Aggregation stage]
-  Naive order:      sum_t  weights [1, H, L]  ·  (c_KV [L, 512] @ W_UV [H, 512, 128]) ──► O(L · H) HBM expansion!
-  Reassociated:    (weights [1, H, L] @ c_KV [L, 512])  @  W_UV [H, 512, 128]        ──► O(1 · H) exit projection!
-```
+![MLA Latent Matrix Absorption: Moving Projections from L to 1](/assets/img/pllm/blog/assets/08-attention-from-gqa-to-mla-fig4-en.svg){: style="display: block; max-width: 100%; height: auto; margin: 1.5rem auto;" }
 
 Once the dimensions line up, the implementation writes itself. Paired with tiled online `logaddexp` rescaling over 128-token compressed page tiles for numerical stability at any context length, streaming latent attention fits in fifteen lines of plain PyTorch:
 

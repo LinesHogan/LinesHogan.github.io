@@ -1,23 +1,322 @@
 ---
 layout: page
-title: "13 让 agent 搜索算法：一个可复现的打分循环"
-description: "pLLM · Algorithm Family Examples (06–13) (算法族示例与实测 (06–13))"
+title: "13 Agent-Driven Algorithm Search: A Reproducible Scoring Loop"
+description: "pLLM Documentation · Algorithm Family Examples (06–13)"
 permalink: /pllm/docs/examples/13_algorithm_search/
 nav: false
 ---
 
-<div class="zine-dispatch">
+<link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
+
+<div class="zine-dispatch" data-title-zh="13 让 agent 搜索算法：一个可复现的打分循环" data-title-en="13 Agent-Driven Algorithm Search: A Reproducible Scoring Loop">
   <div class="zine-dispatch-links">
-    <a class="zine-pill-link primary" href="/pllm/#docs">← pLLM Project &amp; Docs</a>
-    <a class="zine-pill-link" href="/pllm/docs/">All Docs Index</a>
-    <span class="zine-lang-badge">Notebook (.ipynb)</span>
+    <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
+    <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>
+    <span class="zine-lang-badge" data-i18n-zh="可执行教程 (.ipynb)" data-i18n-en="Notebook (.ipynb)">Notebook (.ipynb)</span>
   </div>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/examples/13_algorithm_search.ipynb" target="_blank" rel="noopener">Open .ipynb on GitHub ↗</a>
+  <a class="zine-pill-link" data-i18n-zh="在 GitHub 打开 .ipynb ↗" data-i18n-en="Open .ipynb on GitHub ↗" href="https://github.com/LinesHogan/pLLM/blob/main/doc/examples/13_algorithm_search.ipynb" target="_blank" rel="noopener">Open .ipynb on GitHub ↗</a>
 </div>
 
-<div id="markdown-content" markdown="1">
+<div id="markdown-content">
 
-<div id="sec-1"></div>
+<div class="zine-lang-panel" data-lang-panel="en" lang="en" markdown="1">
+
+<div id="en-sec-1"></div>
+
+Previous tutorials showed how to author, verify, and benchmark inference algorithms by hand in pLLM. If you want a coding agent to modify and explore inference algorithms for you, this section answers a practical question: how do you build a safe, reproducible scoring loop around the agent?
+
+Letting an agent edit inference algorithms requires cheap, reliable, reproducible feedback for every candidate: a cost report, correctness checks, and a quality score. pLLM provides the first two (`pllm.explain`, `pllm.testing.check`, and `check_on_gpu`), and `examples/algorithm_search` in the repository wires them together with an evaluation benchmark into a loop. This example adds no search API to pLLM itself.
+
+Upfront disclaimer: the score difference observed in this run is within statistical noise, and we explain why below. This demonstration shows that **the loop runs end-to-end, gates enforce constraints, and scores replay reproducibly**—not that the agent found a better algorithm.
+
+In this example, the loop operates under these rules:
+- **Task**: improve `Qwen/Qwen2.5-0.5B-Instruct` accuracy on the first 200 GSM8K test problems while maintaining at least 90% of vanilla vLLM throughput.
+- **Three seeds**: the vanilla model (a plain residual add, equivalent to no change), built-in DoLa, and an `active=` early exit.
+- **Each round**: the agent (defaulting to the `codex` CLI) runs inside a GPU-less sandbox without repository access, reading only doc snapshots, the task prompt, seeds, the current best candidate, and the full leaderboard (each candidate's scores plus `explain` and `check` output), editing only `candidate.py`; after the agent exits, scoring runs in a fresh process.
+- **Scoring (`score.py`)**: runs `explain` then `pllm.testing.check` on CPU (failures are eliminated immediately); then on GPU runs `check_on_gpu`, greedy generation (up to 512 tokens) for accuracy (extracting the last number and matching against the ground truth), and `pllm.benchmark.compare` with fixed settings (batch 8, 256 tokens, 16 samples/prompt, 1 warmup, 3 timed rounds) against vanilla vLLM CUDA graph throughput.
+- **Selection rule**: highest accuracy among candidates passing all contracts and `>= 90%` throughput; ties break by `explain` FLOP estimate. Duplicate source fingerprints (computed by pLLM from workload source) are scored only once.
+- **Ledger and replay**: each candidate appends a line to `ledger.jsonl` containing source code, fingerprint, git revision, pinned model and dataset revisions, problem indices, random seed, `explain` and `check` text, GPU model, per-problem answers, and 3 throughput rounds. `--replay` bypasses the agent and re-scores every ledger entry in fresh processes: per-problem answers must match identically, and throughput is compared against the recorded reference. Agent proposals are non-deterministic; scores are reproducible.
+
+This run completed on RTX 4090, vLLM 0.27.1 over 3 rounds, taking 2671 seconds (~45 minutes) total for the notebook including replay.
+
+First, inspect the task specification (`task.md`) seen by the agent inside its sandbox.
+
+```python
+import json
+import math
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path.cwd().resolve().parents[1]          # Repository root (this notebook lives in doc_en/examples/)
+EXAMPLE = ROOT / "examples" / "algorithm_search"
+print((EXAMPLE / "task.md").read_text())
+```
+
+```text
+Submit one small, concrete candidate.py edit for this round, then finish. The
+external scorer evaluates it after you exit and returns feedback to the next round.
+This sandbox contains only docs and seed files: torch/pllm packages, repository
+source and GPUs are unavailable. Use the supplied API docs; do not search for
+packages, install dependencies or run inference here.
+
+Improve Qwen/Qwen2.5-0.5B-Instruct accuracy on the pinned first 200 GSM8K test
+questions while retaining at least 90% of vanilla throughput. Edit candidate.py
+and define WORKLOAD and NEUTRAL as pllm.Workload instances. NEUTRAL must disable
+every effect. Use only the documented pLLM API and torch math; do not read files,
+fetch data, alter scoring, or depend on other workspace files from candidate.py.
+
+Seeds: candidate.py is the current best; dola.py uses the DoLa built-in;
+early_exit.py uses an active= loop over the last two layers. You may replace the
+algorithm or tune it. The leaderboard contains previous accuracy, throughput,
+explain and check feedback. A failed contract or throughput below 90% disqualifies
+a candidate. Highest accuracy wins; ties go to lower explain FLOPs. Vanilla is a
+valid candidate. Each proposal is scored once per source.
+
+Quality uses greedy generation, up to 512 tokens, a fixed zero-shot chat prompt,
+and exact numeric match of the last number in the response. Throughput uses the
+aligned batch=8, tokens=256, sampling_n=16, warmup=1, rounds=3 settings. Model
+graphs are enabled when supported; early exits require eager model execution.
+The throughput floor always uses the vanilla graph reference. Submit only
+candidate.py; execution and scoring happen outside this sandbox.
+```
+
+Here we review the key boundaries in `task.md` and inspect the code of the third seed, `early_exit.py`.
+
+`task.md` sets three clear rules for the agent:
+- Evaluate on the fixed first 200 GSM8K test problems while keeping throughput at least 90% of vanilla vLLM.
+- Edit only `candidate.py`, defining both `WORKLOAD` and `NEUTRAL` `pllm.Workload` instances, where `NEUTRAL` disables all effects for the `neutral` check.
+- Use only documented pLLM APIs and `torch` math—no reading files, fetching external data, modifying scoring logic, or depending on other workspace files.
+
+Among the three seeds, the first is the vanilla model, the second is built-in DoLa, and the third is `early_exit.py` printed below: before entering each of the last two layers (layers 22 and 23), compute the mean squared hidden activation and skip that layer for rows at or below the threshold (using the `active=` pattern from Example 12).
+
+```python
+print((EXAMPLE / "early_exit.py").read_text())
+```
+
+```text
+"""Bounded early-exit loop seed for algorithm search on Qwen2.5-0.5B."""
+
+from dataclasses import dataclass
+
+import torch
+
+import pllm
+
+
+@dataclass(frozen=True)
+class EarlyExit(pllm.Workload):
+    """Skip the last two layers for rows below the hidden-energy threshold."""
+
+    threshold: float = 0.0
+
+    @pllm.custom_forward(tokens="decode")
+    def forward(self, layers: pllm.model.Layers) -> torch.Tensor:
+        """Visit two tail layers while the row's active mask remains true."""
+        h = layers(stop=22)[21]
+        active = torch.ones_like(h[:, :1], dtype=torch.bool)
+        for layer in range(22, 24):
+            active = active & (h.float().square().mean(-1, keepdim=True) > self.threshold)
+            h = layers(layer, layer + 1, hidden=h, active=active)[layer]
+        return h
+
+
+WORKLOAD = EarlyExit()
+NEUTRAL = EarlyExit(threshold=-1.0)
+```
+
+Let's check the default parameters in `early_exit.py` before launching the 3-round search.
+
+Notice `EarlyExit` defaults to `threshold: float = 0.0`. Because the mean of squared hidden elements is always strictly positive, `threshold = 0.0` actually never skips any layer (this matters when analyzing the results later). Meanwhile, `NEUTRAL = EarlyExit(threshold=-1.0)` sets `-1.0` so all rows remain active to satisfy the `neutral` check.
+
+Next we run `search.py --rounds 3`. The script requires a fresh output directory; it first scores the three seeds in separate processes, then runs 3 agent rounds, printing one JSON summary line after each round finishes scoring. On GPU this cell runs for tens of minutes.
+
+```python
+OUTPUT = ROOT / "outputs" / "tutorial13-search"
+shutil.rmtree(OUTPUT, ignore_errors=True)  # search.py requires a fresh output directory
+run = subprocess.run([sys.executable, str(EXAMPLE / "search.py"), "--rounds", "3", "--output", str(OUTPUT)],
+                     cwd=ROOT, capture_output=True, text=True)
+print("退出码:", run.returncode)
+print(run.stdout)
+```
+
+```text
+退出码: 0
+{"fingerprint": "54bb2b3ece37d060e870f3aa15e8acadfc3659b991fbc08a4247044661018797", "category": null, "eligible": false, "accuracy": 0.465, "throughput_ratio": 0.895217258023644, "duplicate_of": null}
+{"fingerprint": "db6a716ff4c77012a285c16e8ec9dcdfec093c6b2b7ad1ef610ae05301ca1c5c", "category": null, "eligible": true, "accuracy": 0.465, "throughput_ratio": 0.9033448027755293, "duplicate_of": null}
+{"fingerprint": "18648cbd26a770accd7cceb5364b9805e1013245d7b47298d80a57a0729191cc", "category": null, "eligible": true, "accuracy": 0.465, "throughput_ratio": 0.9008080168905768, "duplicate_of": null}
+```
+
+Let's inspect the outputs from the 3 agent search rounds and format all entries in `ledger.jsonl` into a leaderboard.
+
+From the stdout above, the exit code is 0, and all three rounds produced scorable candidates with unique fingerprints (`duplicate_of` is `null`):
+- Round 1 reached `0.465` accuracy, but its throughput ratio was `0.895217258023644` (~0.895), failing the 90% gate (`eligible: false`).
+- Rounds 2 and 3 cleared all gates (`eligible: true`) with throughput ratios `0.9033448027755293` (~0.903) and `0.9008080168905768` (~0.901), both scoring `0.465` accuracy.
+
+The next cell reads `ledger.jsonl` to display the three `seed` entries and three `codex` candidates in one table.
+
+```python
+ledger = [json.loads(line) for line in (OUTPUT / "ledger.jsonl").read_text().splitlines()]
+
+
+def title(record: dict) -> str:
+    source = record.get("source", "")
+    return source.split('"""')[1].strip().splitlines()[0] if '"""' in source else "(没有提交代码)"
+
+
+print(f"{'来源':8s} {'通过全部门槛':8s} {'准确率':>8s} {'吞吐/原生':>9s}  说明")
+for record in ledger:
+    accuracy = record.get("accuracy")
+    ratio = record.get("throughput_ratio")
+    print(f"{record['agent']:8s} {str(record['eligible']):8s} "
+          f"{'-' if accuracy is None else f'{accuracy:.3f}':>8s} {'-' if ratio is None else f'{ratio:.3f}':>9s}  "
+          f"{title(record)}")
+```
+
+```text
+来源       通过全部门槛        准确率     吞吐/原生  说明
+seed     True        0.445     0.977  Vanilla seed edited by the algorithm-search author; scored in a separate process.
+seed     False       0.300     0.152  DoLa seed for algorithm search, using the built-in layer contrast.
+seed     False       0.465     0.894  Bounded early-exit loop seed for algorithm search on Qwen2.5-0.5B.
+codex    False       0.465     0.895  Fused early-exit tail for Qwen2.5-0.5B, replacing per-layer loops with a single slice.
+codex    True        0.465     0.903  Fused early-exit tail for Qwen2.5-0.5B with tuned energy threshold.
+codex    True        0.465     0.901  Fused early-exit tail for Qwen2.5-0.5B with tuned energy threshold.
+```
+
+Let's read the leaderboard above and examine the text feedback passed to the next agent round.
+
+Looking at the six ledger entries:
+- **Vanilla seed**: passed all gates, accuracy `0.445`, throughput `0.977` of vanilla vLLM.
+- **DoLa seed**: accuracy `0.300`, throughput only `0.152` of vanilla, eliminated by the 90% gate (Example 06 explains DoLa's throughput cost).
+- **Early-exit seed (`Bounded early-exit loop seed`)**: accuracy `0.465`, throughput `0.894`, missing the 90% gate by a hair and eliminated.
+- **Three `codex` candidates**: as their docstrings show, the agent's edit fused the two single-layer calls at the tail into a single slice call (`Fused early-exit tail`); Round 1 reached `0.895` (still slightly short), and Rounds 2 and 3 also tuned the energy threshold (to `1.0` and `1.4`), lifting throughput to `0.903` and `0.901` to cross the 90% gate.
+
+Alongside accuracy and throughput numbers, the leaderboard passes each candidate's `explain` and `check` output to the next round's agent. The next cell prints the beginning of both sections from the first record.
+
+```python
+first = ledger[0]
+print("explain（节选）:")
+print("\n".join(first["explain"].splitlines()[:6]))
+print()
+print("check（节选）:")
+print("\n".join(str(first["check"]).splitlines()[:8]))
+```
+
+```text
+explain（节选）:
+model    Qwen2ForCausalLM, hidden 896, 24 layers, vocab 151936, bfloat16 [exact, config.json]
+parallel tensor_parallel_size=1; reservations are per rank
+forward  CUDA graphs: no effect needs eager
+base     987922432 FLOP/token [estimate: dense projections and LM head; excludes attention over KV history]
+member  effect  anchor / lane / graph  state reads (origin, distance)
+residual  custom_residual  model site or inactive method
+
+check（节选）:
+status  contract / reason
+PASS    tensor_parallel_size=1: admission
+PASS    compile
+PASS    neutral
+SKIP    model-site execution: CPU decoder does not execute residual hooks, overlays, spans or PositionState
+```
+
+Let's inspect what `explain` and `check` communicate to the agent, then test whether `0.465` vs. `0.445` accuracy is a real gain.
+
+From the excerpt above, `explain` tells the agent: the model is a 24-layer `Qwen2ForCausalLM`, forward still executes inside CUDA graphs (`no effect needs eager`), base cost is ~`987922432 FLOP/token`, and the workload has a `custom_residual`; `check` reports pass/fail status across `admission`, `compile`, `neutral`, and other contracts. For an agent operating inside a GPU-less sandbox, this text exposes costs and bugs without touching a GPU.
+
+Now for the core question: is the best candidate's `0.465` accuracy over the vanilla seed's `0.445` a genuine improvement? The next cell downloads the ground-truth answers, compares the best candidate and vanilla seed problem-by-problem, and runs a statistical test.
+
+```python
+import re
+import urllib.request
+from decimal import Decimal
+
+
+def number(text: str) -> str:
+    """Same rule as score.py: extract and normalize the final number."""
+    numbers = re.findall(r"[-+]?\d[\d,]*(?:\.\d+)?", text)
+    return str(Decimal(numbers[-1].replace(",", "")).normalize()) if numbers else ""
+
+
+url = ("https://raw.githubusercontent.com/openai/grade-school-math/" + ledger[0]["dataset_revision"]
+       + "/grade_school_math/data/test.jsonl")
+gold = [number(json.loads(line)["answer"]) for line in urllib.request.urlopen(url, timeout=60).read().splitlines()[:200]]
+
+vanilla = ledger[0]
+best = max((r for r in ledger if r["eligible"]), key=lambda r: (r["accuracy"], -r["flops"]))
+right_v = [a == g for a, g in zip(vanilla["answers"], gold)]
+right_b = [a == g for a, g in zip(best["answers"], gold)]
+gained = sum(b and not v for v, b in zip(right_v, right_b))
+lost = sum(v and not b for v, b in zip(right_v, right_b))
+n, p = len(gold), vanilla["accuracy"]
+print(f"最佳候选: {title(best)}")
+print(f"准确率 {best['accuracy']:.3f}，原生 {p:.3f}：新答对 {gained} 题，新答错 {lost} 题，净 {gained - lost:+d} 题（共 {n} 题）")
+print(f"{n} 道题上，准确率 {p:.3f} 的标准误约为 {math.sqrt(p * (1 - p) / n):.3f}")
+k, m = min(gained, lost), gained + lost
+p_value = min(1.0, 2 * sum(math.comb(m, i) for i in range(k + 1)) / 2**m) if m else 1.0
+print(f"配对符号检验（只看结果不同的 {m} 题）的双侧 p 值: {p_value:.2f}")
+```
+
+```text
+最佳候选: Fused early-exit tail for Qwen2.5-0.5B with tuned energy threshold.
+准确率 0.465，原生 0.445：新答对 12 题，新答错 8 题，净 +4 题（共 200 题）
+200 道题上，准确率 0.445 的标准误约为 0.035
+配对符号检验（只看结果不同的 20 题）的双侧 p 值: 0.50
+```
+
+Let's examine the statistical test and ledger evidence candidly, then verify score reproducibility in fresh processes with `--replay`.
+
+Why is this "improvement" within noise?
+1. **Statistical test**: the best candidate's `0.465` vs. vanilla's `0.445` gains 12 problems and loses 8 out of 200, for a net `+4`. Accuracy `0.445` over 200 problems has a standard error of ~`0.035`; a two-sided paired sign test over just the 20 discordant problems yields `p = 0.50`.
+2. **More direct ledger evidence**: recall that the `early_exit.py` seed defaults to `threshold=0.0`, and because mean squared hidden activation is always positive, it never skips a layer—yet it already scores `0.465` on the leaderboard, eliminated only because its `0.894` throughput missed the 90% gate. Comparing the `answers` field across all three agent candidates in `ledger.jsonl` shows that they (including Rounds 2 and 3 with thresholds `1.0` and `1.4`) produce identical answers on all 200 problems, while the early-exit seed differs slightly at the same `0.465` accuracy. What the agent actually achieved was fusing the last two single-layer calls into one slice (`Fused early-exit tail`), raising throughput ratio from `0.894` to `0.903` and `0.901` to clear the 90% gate. The `0.465` vs. `0.445` difference comes from numerical differences between two execution paths of the same model (`custom_forward` sliced execution vs. vLLM's whole-model CUDA graph), not from layer skipping.
+
+Thus, this demo proves that the loop runs end-to-end, gates enforce thresholds, and scores replay—not that the agent discovered a better algorithm.
+
+Finally, we verify score reproducibility. Running `search.py --replay` reads the source strings recorded in `ledger.jsonl` and re-scores every entry in fresh processes without invoking an agent; any mismatch in answers, eligibility, or fingerprint causes a non-zero exit code.
+
+```python
+REPLAY = ROOT / "outputs" / "tutorial13-replay"
+shutil.rmtree(REPLAY, ignore_errors=True)
+run = subprocess.run([sys.executable, str(EXAMPLE / "search.py"), "--replay", str(OUTPUT / "ledger.jsonl"),
+                      "--output", str(REPLAY)], cwd=ROOT, capture_output=True, text=True)
+print("退出码:", run.returncode)  # Non-zero indicates a mismatch in answers, eligibility, or fingerprint
+for line in run.stdout.splitlines():
+    if line.startswith("{"):
+        row = json.loads(line)
+        print(f"准确率 {row['accuracy']:.3f}（与原记录相同）；吞吐 {row['throughput']:.0f} token/s，"
+              f"原记录 {row['reference_throughput']:.0f}（{row['throughput_change']:+.1%}）")
+```
+
+```text
+退出码: 0
+准确率 0.445（与原记录相同）；吞吐 38162 token/s，原记录 38243（-0.2%）
+准确率 0.300（与原记录相同）；吞吐 6072 token/s，原记录 6032（+0.7%）
+准确率 0.465（与原记录相同）；吞吐 34767 token/s，原记录 34992（-0.6%）
+准确率 0.465（与原记录相同）；吞吐 35369 token/s，原记录 35545（-0.5%）
+准确率 0.465（与原记录相同）；吞吐 35618 token/s，原记录 35448（+0.5%）
+准确率 0.465（与原记录相同）；吞吐 35666 token/s，原记录 35409（+0.7%）
+```
+
+Finally, let's review the replay results and wrap up the experiment.
+
+Replay exited with code 0: all six records reproduced identical per-problem answers across all 200 problems (accuracies `0.445`, `0.300`, `0.465`, `0.465`, `0.465`, `0.465`, matching the originals); re-measured throughputs were `38162`, `6072`, `34767`, `35369`, `35618`, and `35666 token/s`, within `-0.6%` to `+0.7%` of the original records (`38243`, `6032`, `34992`, `35545`, `35448`, `35409 token/s`).
+
+Summary:
+- **End-to-end loop**: the agent proposes edits in a GPU-less sandbox, pLLM runs `explain` and `check`, a GPU process measures accuracy and throughput, results are logged to `ledger.jsonl`, and `--replay` verifies them.
+- **Gates work**: DoLa (`0.152` throughput ratio) and the unfused early-exit seed (`0.894` throughput ratio) were both automatically eliminated for missing the 90% throughput gate.
+- **Scores are reproducible, agent proposals are not**: each search run can generate different code; once recorded in `ledger.jsonl`, `--replay` reproduces exact per-problem answers and consistent gate outcomes in fresh processes (assuming matching hardware and the versions pinned in the ledger).
+- **This accuracy difference is noise**: `0.465` vs. `0.445` (net `+4` problems, two-sided paired sign test `p = 0.50`) stems from numerical differences between execution paths—the never-skipping early-exit seed already scored `0.465`.
+Making a search genuinely meaningful requires larger benchmarks or repeated runs and candidates whose training or tuning actually alters model behavior, which are outside this demo.
+
+If you want your own coding agent to author pLLM workloads, you can provide it with the `pllm` agent skill (`pllm skill --print`) and the [API Reference](/pllm/docs/reference/api/); `tools/ai_eval` in the repository also uses the same sandbox to evaluate whether an agent reading only the documentation can author valid workloads.
+
+Back to [Documentation Home](/pllm/docs/).
+
+</div>
+
+<div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN" markdown="1">
+
+<div id="zh-sec-1"></div>
 
 前面几篇教程展示了怎样在 pLLM 里手工编写、检查和评测推理算法。如果你希望让编码 agent 帮自己改写和尝试推理算法，这一节回答一个实际问题：怎样给 agent 搭一个安全、可复现的打分循环？
 
@@ -304,13 +603,17 @@ for line in run.stdout.splitlines():
 - **这次的准确率差别是噪声**：0.465 对 0.445（净 +4 题，配对符号检验双侧 p 值 0.50）来自切换执行路径的数值差异：从不跳层的 early exit 起点也是 0.465。
 要让搜索真正有意义，需要更大的题集或多次重复、能被训练或调参真正改变行为的候选，这些不在这个演示里。
 
-如果你想让自己的编码 agent 编写 pLLM 负载，可以把 [agent skill](/pllm/docs/agent/skill/) 和 [agent 参考](/pllm/docs/agent/reference/) 交给它；仓库里的 `tools/ai_eval` 也用同样的沙箱评测“只看文档的 agent 能不能写对负载”。
+如果你想让自己的编码 agent 编写 pLLM 负载，可以把 [agent skill](https://github.com/LinesHogan/pLLM/blob/main/doc/agent/SKILL.md) 和 [agent 参考](https://github.com/LinesHogan/pLLM/blob/main/doc/agent/reference.md) 交给它；仓库里的 `tools/ai_eval` 也用同样的沙箱评测“只看文档的 agent 能不能写对负载”。
 
 回到 [文档首页](/pllm/docs/)。
 
 </div>
 
-<div class="zine-doc-footer">
-  <a class="zine-pill-link" href="/pllm/#docs">← Back to pLLM Documentation Hub</a>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/examples/13_algorithm_search.ipynb" target="_blank" rel="noopener">Edit / View on GitHub ↗</a>
 </div>
+
+<div class="zine-doc-footer">
+  <a class="zine-pill-link" data-i18n-zh="← 返回 pLLM 项目与文档中心" data-i18n-en="← Back to pLLM Project &amp; Docs" href="/pllm/#docs">← Back to pLLM Project &amp; Docs</a>
+  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/examples/13_algorithm_search.ipynb" target="_blank" rel="noopener">GitHub &middot; doc/examples/13_algorithm_search.ipynb ↗</a>
+</div>
+
+<script defer src="/assets/js/bilingual-post.js"></script>

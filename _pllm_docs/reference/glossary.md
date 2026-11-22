@@ -1,27 +1,97 @@
 ---
 layout: page
-title: "术语表"
-description: "pLLM · API, Config & Support Reference (API 与配置参考手册)"
+title: "Glossary"
+description: "pLLM Documentation · API, Config & Support Reference"
 permalink: /pllm/docs/reference/glossary/
 nav: false
 ---
 
-<div class="zine-dispatch">
+<link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
+
+<div class="zine-dispatch" data-title-zh="术语表" data-title-en="Glossary">
   <div class="zine-dispatch-links">
-    <a class="zine-pill-link primary" href="/pllm/#docs">← pLLM Project &amp; Docs</a>
-    <a class="zine-pill-link" href="/pllm/docs/">All Docs Index</a>
-    <span class="zine-lang-badge">Doc (中文)</span>
+    <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
+    <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>
+    <span class="zine-lang-badge" data-i18n-zh="API 与配置参考手册" data-i18n-en="API, Config &amp; Support Reference">API, Config &amp; Support Reference</span>
   </div>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/reference/glossary.md" target="_blank" rel="noopener">View Source on GitHub ↗</a>
+  <a class="zine-pill-link" data-i18n-zh="GitHub 源码 ↗" data-i18n-en="View on GitHub ↗" href="https://github.com/LinesHogan/pLLM/blob/main/doc/reference/glossary.md" target="_blank" rel="noopener">View on GitHub ↗</a>
 </div>
 
-<div id="markdown-content" markdown="1">
+<div id="markdown-content">
 
-<div id="sec-1"></div>
+<div class="zine-lang-panel" data-lang-panel="en" lang="en" markdown="1">
+
+<div id="en-glossary"></div>
+
+Terms that appear throughout the documentation and `pllm.explain` output, one meaning per term. Each entry links to the page where it is explained in detail.
+
+## Authoring Workloads {#en-authoring-workloads}
+
+- **workload**: A subclass of `pllm.Workload` containing only declarations and tensor math. Read once when building the engine and scheduled by pLLM thereafter; its methods are not runtime callbacks. See [Workload Anatomy](/pllm/docs/guides/workload-anatomy/).
+- **declaration**: The three constructs in a workload that answer "what to read, what to store, and where results go": parameter defaults, state attributes, and effect decorators or model-edit attributes.
+- **input marker**: A value placed in a parameter's default specifying where the input comes from, such as `pllm.hidden(0)` or `pllm.parameter("s", "w")`. Type annotations only document what the method body receives. See [Reading Inside the Model](/pllm/docs/guides/reading/).
+- **effect**: A decorator specifying where a method's output goes: `@pllm.export`, `@pllm.add_logits`, `@pllm.guide_sampling`, `@pllm.write`, `@pllm.train`, and so on. See [Where Results Go](/pllm/docs/guides/results/).
+- **model site**: A declaration acting directly inside the model forward pass: `pllm.model.ActivationPatch`, `pllm.model.Adapter`, `@pllm.train_in_forward`, `@pllm.custom_residual`, and `@pllm.custom_attention`. CPU checks do not execute model sites.
+- **setting method**: A method passed to a decorator or input marker instead of a fixed literal, such as `beta=strength` with `def strength(self) -> float`. pLLM calls it once per workload instance.
+- **row**: A single entry along dimension 0 of a tensor received by a method: one active request (or one token to be sampled, or one token computed in the step). Row order is determined by the scheduler. See [Core Concepts](/pllm/docs/explain/core-concepts/).
+- **selector (`rows=`)**: A method returning a `bool [rows]` mask, passed to an effect's `rows=` argument so the effect applies only to selected rows.
+- **component**: A workload held as a dataclass field inside another workload; its names carry the field name prefix, and its states are independent. See [Composing Workloads](/pllm/docs/guides/composition/).
+- **custom op**: A kernel wrapped with `torch.library.custom_op` and called inside a workload method. See [Custom Ops](/pllm/docs/guides/custom-ops/).
+
+## State {#en-state}
+
+- **state**: The only mutable construct in a workload: a collection of named tensor fields whose VRAM is allocated and version-updated by pLLM. See [State](/pllm/docs/guides/state/).
+- **RequestState / InstanceState**: `pllm.RequestState` maintains one copy per request (or group of requests); `pllm.InstanceState` maintains one copy for the entire engine.
+- **`key_fields`**: Determines which requests share a `RequestState` copy: per request, samples of the same prompt, or requests sharing a route (`routes=`). See [Sharing Training Across Requests](/pllm/docs/howto/share-training-across-requests/).
+- **field**: A single tensor inside a state. `shape=` declares a single field named `"value"`; `pllm.Field` specifies a projection-scaled shape or an explicit dtype.
+- **initializer (`init=`)**: Where a state's initial values come from: `pllm.Zeros`, `pllm.Computed`, `pllm.Pretrained`, `pllm.ModelCheckpoint`, `pllm.FromModule`, `pllm.Fed`, or `pllm.Imported`. See [Loading Trained Weights](/pllm/docs/howto/load-trained-weights/).
+- **frozen state**: A state without an optimizer: readable anywhere, and mutable only through import or `@pllm.write`.
+- **version**: Each state update publishes a new version; readers observe published versions, while in-flight requests retain their starting version. `pllm.version(state)` gives the number of times each row's state has been updated.
+- **`publish_lag`**: An update computed on a step becomes visible to readers starting at the `(1 + publish_lag)`-th step on which the workload actually executes afterward; steps where the workload reads zero rows (such as mid-prompt chunks or recomputed history) are skipped by the engine and do not count. Defaults to 1 to overlap training with the next forward pass.
+- **carry field**: A field declared with `carry=` that is published alongside training updates without being updated by the optimizer; written via `pllm.carry`.
+- **PositionState (`pllm.PositionState`)**: One hidden-width vector per KV block, read and written via `layers.load` / `layers.save` exclusively inside `@pllm.custom_forward`.
+- **placement (`placement=`)**: Whether a read-only large table resides in GPU VRAM (`"device"`) or pinned host memory (`"host"`).
+
+## Training {#en-training}
+
+- **request-row training**: A `@pllm.train` method reads rows of active requests and returns a per-row loss; pLLM reduces per state, runs backward, and updates. See [Online Training](/pllm/docs/guides/training/).
+- **reduction (`reduction=`)**: When multiple rows share one state in a step, whether losses are averaged (`"mean"`) or summed (`"sum"`).
+- **host batch**: A training batch assembled by host code and passed in via `generate(batch=...)`: `WeightedRowBatch`, `CausalTrainBatch`, or `WeightedCEBatch`. See [Host Loops and Batch Training](/pllm/docs/guides/host-loops/).
+- **causal model (`pllm.causal_model`)**: The full model callable inside a training method with specified `Adapter` overlays attached, allowing gradients to flow into adapter state.
+- **`HostTrainer`**: The object returned by `pllm.host.make_host`, which trains a workload's state on host batches without loading a model.
+- **in-forward training (`@pllm.train_in_forward`)**: Trains a `RequestState` inside the forward pass using a projection's inputs and outputs and adds its delta to that projection (as in TTT / In-Place TTT). See [Model Edits](/pllm/docs/guides/model-edits/).
+
+## Model Edits & Forward Structure {#en-model-edits--forward-structure}
+
+- **ActivationPatch**: Reads values from state and modifies the outputs of selected layers (steering vectors, ReFT).
+- **Adapter**: Applies a state as a weight delta onto designated projections (e.g., LoRA), regardless of how the state is written.
+- **custom residual (`@pllm.custom_residual`)**: Takes over the residual update at a specific site in selected layers, value rows, or the final stream. See [Customizing Forward Structure](/pllm/docs/guides/forward-structure/).
+- **stateful sublayer**: A custom residual with `state=` and `chunk=`, maintaining a per-request carry updated in chunks (fast-weight memory).
+- **custom attention (`@pllm.custom_attention`)**: Replaces how selected layers read KV; can also declare a static **KV layout** (sliding window, prompt + window, cross-layer sharing).
+- **custom forward (`@pllm.custom_forward`)**: Uses Python to orchestrate which layers each token runs, how many times, and when to stop.
+
+## Execution & Verification {#en-execution--verification}
+
+- **planner**: The component of pLLM that reads workload declarations at engine build time, assigns each method's step position and stream, and computes memory reservations; `pllm.explain` prints its plan. See [Inspecting Costs: pllm.explain](/pllm/docs/guides/explain/).
+- **admission**: The moment pLLM accepts something. Request admission is when a request enters the engine, receives a state copy, and binds the state version it reads; model or pattern admission checks at build time whether a model or feature is supported, raising an error if not.
+- **Inductor**: PyTorch `torch.compile`'s code generator, which fuses adjacent small ops into a single kernel; vLLM uses it when compiling model CUDA graphs, and pLLM uses it to fuse read-only lookups.
+- **phase (`pllm.Phase`)**: Time windows within a step: `BEFORE_FORWARD`, `IN_FORWARD`, `AFTER_FORWARD`, `BEFORE_SAMPLE`, `AFTER_SAMPLE`, plus `AUTOMATIC` (chosen by pLLM). Each effect has a default phase that `@pllm.on(phase)` can override.
+- **anchor**: Named positions within a step printed by `pllm.explain`: `request.prepare`, `model.execute`, `state.publish`, `sampler.pre_draw`, `token.commit`, and so on.
+- **main stream / side stream (`lane`)**: `main` runs serially with the forward pass; `side` overlaps with the next forward pass.
+- **eager reason**: Why the model forward is not inside a CUDA graph (`eager_reason`); empty string if captured.
+- **neutral configuration (`neutral=`)**: The same workload with zero intervention strength; `testing.check` verifies that it leaves sampling unchanged.
+- **contract check**: Properties verified by `pllm.testing.check` (CPU) and `check_on_gpu` (GPU): row-order invariance, request isolation, chunking equivalence, preemption recomputation, version visibility, and neutrality. See [Checking Correctness](/pllm/docs/guides/checking/).
+- **budget**: The three fields in `ExecutionOptions` that cap pLLM memory: `state_page_budget_bytes`, `execution_peak_budget_bytes`, and `cuda_graph_pool_budget_bytes`. See [Configuration Options](/pllm/docs/reference/config/).
+
+</div>
+
+<div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN" markdown="1">
+
+<div id="zh-sec-1"></div>
 
 文档和 `pllm.explain` 输出里出现的词，一个词一个意思。每条后面的链接指向讲它的页面。
 
-## 写负载 {#sec-2}
+## 写负载 {#zh-sec-2}
 
 - **负载（workload）**：`pllm.Workload` 的子类，只放声明和张量数学。构建引擎时被读一次，之后由 pLLM 安排执行；
   它的方法不是运行时回调。见[负载的组成](/pllm/docs/guides/workload-anatomy/)。
@@ -40,7 +110,7 @@ nav: false
 - **组件**：作为 dataclass 字段放进另一个负载的负载；名字带字段名前缀，状态互相独立。见[组合负载](/pllm/docs/guides/composition/)。
 - **自写算子**：用 `torch.library.custom_op` 包装、在方法里调用的 kernel。见[自写算子](/pllm/docs/guides/custom-ops/)。
 
-## 状态 {#sec-3}
+## 状态 {#zh-sec-3}
 
 - **状态**：负载里唯一可变的东西：一组有名字的张量字段，由 pLLM 分配显存、按版本更新。见[状态](/pllm/docs/guides/state/)。
 - **请求状态 / 实例状态**：`pllm.RequestState` 每个请求（或每组请求）一份；`pllm.InstanceState` 整个引擎一份。
@@ -58,7 +128,7 @@ nav: false
   `layers.load` / `layers.save` 读写。
 - **放置（`placement=`）**：只读的大表放在显存（`"device"`）还是锁页主机内存（`"host"`）。
 
-## 训练 {#sec-4}
+## 训练 {#zh-sec-4}
 
 - **请求行训练**：`@pllm.train` 方法读运行中请求的行、每行返回一个 loss，pLLM 按状态归约、反向、更新。
   见[在线训练](/pllm/docs/guides/training/)。
@@ -70,7 +140,7 @@ nav: false
 - **前向内训练（`@pllm.train_in_forward`）**：在 forward 运行时，用投影的输入输出训练一份请求状态，并把它的增量
   加到投影上（TTT、In-Place TTT 一类）。见[改模型](/pllm/docs/guides/model-edits/)。
 
-## 改模型与 forward {#sec-5}
+## 改模型与 forward {#zh-sec-5}
 
 - **激活补丁（`ActivationPatch`）**：从状态读值，改某些层的输出（引导向量、ReFT）。
 - **Adapter**：把状态当作权重增量加到指定投影上（LoRA 一类），不管状态由谁写。
@@ -81,7 +151,7 @@ nav: false
   （滑动窗口、prompt 加窗口、跨层共享）。
 - **custom forward（`@pllm.custom_forward`）**：用 Python 编排每个 token 跑哪些层、跑几遍、何时停。
 
-## 执行与检查 {#sec-6}
+## 执行与检查 {#zh-sec-6}
 
 - **规划器**：pLLM 构建引擎时读负载声明、决定每个方法在一步的什么位置、哪条 stream 上运行、预留多少显存的那一部分；
   `pllm.explain` 打印的就是它的计划。见[看成本：pllm.explain](/pllm/docs/guides/explain/)。
@@ -103,7 +173,11 @@ nav: false
 
 </div>
 
-<div class="zine-doc-footer">
-  <a class="zine-pill-link" href="/pllm/#docs">← Back to pLLM Documentation Hub</a>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/reference/glossary.md" target="_blank" rel="noopener">Edit / View on GitHub ↗</a>
 </div>
+
+<div class="zine-doc-footer">
+  <a class="zine-pill-link" data-i18n-zh="← 返回 pLLM 项目与文档中心" data-i18n-en="← Back to pLLM Project &amp; Docs" href="/pllm/#docs">← Back to pLLM Project &amp; Docs</a>
+  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/reference/glossary.md" target="_blank" rel="noopener">GitHub &middot; doc/reference/glossary.md ↗</a>
+</div>
+
+<script defer src="/assets/js/bilingual-post.js"></script>

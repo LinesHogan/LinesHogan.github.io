@@ -1,29 +1,421 @@
 ---
 layout: page
-title: "宿主循环与批训练"
-description: "pLLM · User Guides (用户指南)"
+title: "Host Loops and Batch Training"
+description: "pLLM Documentation · User Guides"
 permalink: /pllm/docs/guides/host-loops/
 nav: false
 ---
 
-<div class="zine-dispatch">
+<link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
+
+<div class="zine-dispatch" data-title-zh="宿主循环与批训练" data-title-en="Host Loops and Batch Training">
   <div class="zine-dispatch-links">
-    <a class="zine-pill-link primary" href="/pllm/#docs">← pLLM Project &amp; Docs</a>
-    <a class="zine-pill-link" href="/pllm/docs/">All Docs Index</a>
-    <span class="zine-lang-badge">Doc (中文)</span>
+    <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
+    <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>
+    <span class="zine-lang-badge" data-i18n-zh="用户指南" data-i18n-en="User Guides">User Guides</span>
   </div>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/guides/host-loops.md" target="_blank" rel="noopener">View Source on GitHub ↗</a>
+  <a class="zine-pill-link" data-i18n-zh="GitHub 源码 ↗" data-i18n-en="View on GitHub ↗" href="https://github.com/LinesHogan/pLLM/blob/main/doc/guides/host-loops.md" target="_blank" rel="noopener">View on GitHub ↗</a>
 </div>
 
-<div id="markdown-content" markdown="1">
+<div id="markdown-content">
 
-<div id="sec-1"></div>
+<div class="zine-lang-panel" data-lang-panel="en" lang="en" markdown="1">
+
+<div id="en-host-loops-and-batch-training"></div>
+
+> **Prerequisites**: [State](/pllm/docs/guides/state/); Tutorial [05 Feedback Loops](/pllm/docs/tutorials/05_host_feedback/) (TTRL, host batch training).
+>
+> **What this guide covers**: How to organize "generate → score → train" closed loops on the Python host side (such as TTRL, GRPO, and reward-head fitting), how to feed external batches into the engine, and how to unit-test host state without a model engine.
+
+## Motivation: Why Host Batch Training and Feedback Loops? {#en-motivation-why-host-batch-training-and-feedback-loops}
+
+In many test-time reinforcement learning (TTRL, GRPO), test-time training (TTT), or adaptive search algorithms, updates cannot happen in place during a single token's forward pass:
+1. **Dependence on global feedback or complete sequences**: majority voting must wait until every sampled answer in a group finishes before counting votes for a pseudo-label; GRPO needs rewards across all candidate sequences in a group to compute advantages and group-level normalization.
+2. **Training through the full model or external heads**: an algorithm may need to backpropagate a causal language modeling loss through the model to update LoRA factors, or simply fit a lightweight reward head.
+
+Maintaining two separate systems—an inference engine and a training framework—forces cross-process serialization, transfer, and weight synchronization on every round, adding major engineering complexity and overhead.
+
+In pLLM, host code and the engine share the same state and VRAM:
+- The host Python loop generates completions, computes scores/rewards, and constructs batch objects;
+- The workload declares methods that read host-supplied batch fields (`pllm.batch(...)`);
+- The engine automatically runs an optimizer step at the start of the next `generate(..., batch=...)` call—immediately using the updated parameters for generation—or steps host-only training independently via `pllm.host.make_host`.
+
+---
+
+## Core Mechanism: Reading Host Batches with `pllm.batch` {#en-core-mechanism-reading-host-batches-with-pllmbatch}
+
+Inside a `@pllm.train`-decorated method, declare parameter defaults with `pllm.batch("field_name")` to inject batches sent from the host.
+
+### Three Batch Types {#en-three-batch-types}
+
+Which `pllm.batch` fields a method reads determines the batch type it consumes and the optimizer bound to it:
+
+| Batch Type | Fields | Bound Optimizer & Step Rule | Use Cases |
+| :--- | :--- | :--- | :--- |
+| `pllm.host.WeightedRowBatch` | `hidden`, `targets`, `weights` | `pllm.AdamW`, one step per batch | Reward head training, feature regression, FTTT and other hidden-vector fitting (can run purely on host) |
+| `pllm.host.CausalTrainBatch` | `input_ids`, `labels`, optional `attention_mask`, optional `weights` | `pllm.AdamW`, one step per batch | Causal LM training (e.g., TTRL, online GRPO, TLM) backpropagating end-to-end through the model into LoRA factors |
+| `pllm.host.WeightedCEBatch` | `hidden`, `base_logits`, `labels`, `weights` | `pllm.SGD`, runs `steps=` steps with `reset=` | Weighted cross-entropy batch training (e.g., Output LoRA), supporting per-prompt batches (`WeightedCEBatch.for_prompts`) |
+
+> [!IMPORTANT]
+> Every `pllm.batch` field read by a single training method must belong to the same batch type; mixing fields across batch types is not allowed.
+
+### Causal Language Model Port: `pllm.causal_model` {#en-causal-language-model-port-pllmcausal_model}
+
+When an algorithm needs end-to-end autoregressive training through the language model itself, declare a parameter:
+```text
+model: pllm.model.CausalModel = pllm.causal_model("adapter_name")
+```
+where `"adapter_name"` is the attribute name of a `pllm.model.Adapter` declared on the workload. The injected `CausalModel` provides:
+- `model(input_ids, attention_mask=None)`: returns logits with the adapter applied; gradients flow directly into the adapter's bound state factors.
+- `model.base(input_ids, attention_mask=None)`: returns logits from the frozen base model without the adapter (useful for off-policy importance weights or baseline scoring).
+- `model.token_logprobs(input_ids, labels, attention_mask=None, ignore_index=-100)`: computes chunked next-token log-probabilities at every position, returning a float32 tensor of shape `[num_seqs, seq_len - 1]`.
+  - **Why chunked**: autoregressive vocabularies are often huge (e.g., 150k tokens). Materializing a full `[num_seqs, seq_len, vocab_size]` logits tensor before cross-entropy can instantly consume gigabytes of VRAM and trigger OOM. `token_logprobs` chunks the LM head projection internally to avoid materializing full-vocabulary logits for the whole batch. Positions whose label equals `ignore_index` (default `-100`) receive log-probability `0`.
+
+---
+
+## Loss Reduction Contract: Reduce Yourself and Return a Scalar {#en-loss-reduction-contract-reduce-yourself-and-return-a-scalar}
+
+In ordinary per-request training, methods return a per-row loss (`[rows]`) and the framework reduces it via `reduction="mean"` or `"sum"`. In host batch training, the rule is completely different:
+
+**Host batch training methods must perform their own loss reduction and return a scalar directly (or `pllm.UpdateOutput`). Passing `reduction=` to `@pllm.train` on a host batch method is rejected at declaration time.**
+
+### Why Host Batch Training Disallows External `reduction=` {#en-why-host-batch-training-disallows-external-reduction}
+
+In per-request training, how many request rows appear in each engine step is decided dynamically by the continuous-batching scheduler, so user code cannot know the scheduling layout ahead of time and delegates reduction to the framework.
+
+A host batch, by contrast, consists of complete sequences assembled by your own Python host code. In sequence-level RL and alignment algorithms, how sequence lengths $$|o_i|$$ and group size $$G$$ are normalized is part of the algorithm's core mathematics and cannot be expressed during token-by-token generation:
+
+| Algorithm | Scalar Loss Reduction Formula | Normalization Behavior and Meaning |
+| :--- | :--- | :--- |
+| **GRPO** | $$\frac{1}{G}\sum_{i=1}^{G} A_i \frac{1}{\|o_i\|} \sum_{t} \ell_{i,t}$$ | Averages each sequence internally by its own generated length $$\|o_i\|$$, then averages across the $$G$$ candidates in the group. Every sequence gets equal weight regardless of length. |
+| **DAPO** | $$\frac{\sum_{i=1}^{G} \sum_{t} A_i \ell_{i,t}}{\sum_{i=1}^{G} \|o_i\|}$$ | Sums all token losses across all sequences in the group and divides by the total token count. Longer sequences contribute proportionally more to the total gradient. |
+| **RLOO / REINFORCE** | $$\frac{1}{G}\sum_{i=1}^{G} A_i \sum_{t} \ell_{i,t}$$ | Sums token losses within each sequence and averages across the $$G$$ candidate sequences in the group. |
+| **Dr.GRPO** | $$\frac{1}{G}\sum_{i=1}^{G} A_i \frac{1}{L_{\max}} \sum_{t} \ell_{i,t}$$ | Replaces dynamic sequence length $$\|o_i\|$$ with a fixed maximum length constant $$L_{\max}$$, eliminating implicit length-normalization bias. |
+
+Because only the algorithm author knows which reduction formula applies—and those formulas depend on full sequence lengths and advantage weights—the framework requires the method to compute the reduction explicitly and return a single scalar.
+
+---
+
+## Feeding Batches into the Engine: `llm.generate(batch=...)` {#en-feeding-batches-into-the-engine-llmgeneratebatch}
+
+In a typical "generate → vote/score → update" loop, training batches are passed into `llm.generate`:
+
+```text
+outputs = llm.generate(prompts, sampling, batch=batch)
+```
+
+1. **Update timing and visibility**: when `batch` is provided, the engine executes the training method and takes one optimizer step at the start of that `generate` call. Once state (such as LoRA parameters) updates, all tokens generated in that call immediately use the updated parameters.
+2. **VRAM budget: `max_host_training_rows`**:
+   - Backpropagating through the full model requires substantial temporary activation memory.
+   - At engine initialization, pLLM statically reserves this workspace based on `ExecutionOptions(max_host_training_rows=N)` so generation never hits unexpected OOM during a training backward pass.
+   - Passing a batch whose row count exceeds `max_host_training_rows` is rejected before execution.
+3. **First-shape compilation cost**:
+   - The first time a previously unseen batch shape arrives (e.g., a new sequence count or max token length), pLLM compiles the training graph for that shape, making that round noticeably slower.
+   - Once batch shapes stabilize, subsequent training steps reuse the compiled graph at full speed.
+
+### Constraints and Reasons for Causal Batch Training {#en-constraints-and-reasons-for-causal-batch-training}
+
+Using `CausalTrainBatch` with `pllm.causal_model` enforces four requirements:
+1. **State scope**: must update an `InstanceState` configured with `pllm.AdamW`. Why: causal batch training runs forward and backward across the whole model, updating weight deltas shared by all requests.
+2. **Base model dtype**: the base model must be BF16 (`bfloat16`), and neither `embed_tokens` nor `lm_head` may be quantized. Why: autograd must flow in BF16 through token embeddings and the LM head, and quantized layers do not support floating-point backpropagation directly.
+3. **Single GPU**: requires `tensor_parallel_size=1`. Why: full-model causal forward and backward currently execute within a single GPU context; cross-rank backward and gradient aggregation under tensor parallelism are not supported yet.
+4. **Low-rank initialization**: when using a LoRA adapter, `init=pllm.Computed(...)` must be provided (e.g., random $$A$$, zero $$B$$). Why: if both $$A$$ and $$B$$ start at zero, initial gradients for both are identically zero and the optimizer can never update the LoRA weights.
+
+---
+
+## Pure Host State: `pllm.host.make_host` Without a Model Engine {#en-pure-host-state-pllmhostmake_host-without-a-model-engine}
+
+If a state is read and trained solely by host code (such as a reward head scoring final hidden vectors or an external classifier), it does not need a GPU vLLM engine at all.
+
+You can compile the workload with `pllm.host.make_host` into a `HostTrainer` that supports single-step debugging and execution even on CPU.
+
+### Runnable Example: `RewardHead` on CPU {#en-runnable-example-rewardhead-on-cpu}
+
+The code below declares a reward-head workload and runs AdamW training on `WeightedRowBatch` on CPU via `make_host`:
+
+```python
+from dataclasses import dataclass
+import torch
+import pllm
+from pllm.host import HostConfig, HostTrainer, TrainStep, WeightedRowBatch, make_host
+
+@dataclass(frozen=True)
+class RewardHead(pllm.Workload):
+    head = pllm.InstanceState({"w": pllm.Field(lambda width, _: (width,))}, optimizer=pllm.AdamW(1e-2))
+
+    @pllm.train(state="head")
+    def fit(
+        self,
+        hidden: torch.Tensor = pllm.batch("hidden"),
+        targets: torch.Tensor = pllm.batch("targets"),
+        weights: torch.Tensor = pllm.batch("weights"),
+        w: torch.Tensor = pllm.parameter("head", "w"),
+    ) -> torch.Tensor:
+        error = (hidden @ w - targets).square()
+        return (weights * error).sum() / weights.sum().clamp_min(1)
+
+
+with make_host(HostConfig(torch.device("cpu"), hidden_size=896), RewardHead()) as head:
+    batch = WeightedRowBatch(torch.randn(4, 896), torch.ones(4), torch.ones(4))
+    step = head.train(batch)
+    print(step.loss is not None, tuple(step.parameters["w"].shape), head.version)
+```
+
+- `make_host(config, workload)`: compiles the workload and initializes its instance state.
+- `head.train(batch)`: runs one training step and returns a `TrainStep` (containing scalar `loss` and the updated `parameters` dictionary).
+- `head.version`: the state's published version counter (incrementing from 0).
+- `head.diagnostics()`: returns training diagnostics (`loss_count`, `update_count`, `trained_rows`, etc.).
+- `head.close()` or a `with` context manager: releases resources on exit.
+
+---
+
+## Defining Causal Host Training and Inspecting Costs (`pllm.explain`) {#en-defining-causal-host-training-and-inspecting-costs-pllmexplain}
+
+Before launching causal batch training on GPU, you can use `pllm.explain` on CPU to inspect the execution plan and memory overhead of a TTRL workload:
+
+```python
+import math
+from collections.abc import Mapping
+
+def lora_init(fields: Mapping[str, torch.Tensor], generator: torch.Generator) -> None:
+    for name, value in fields.items():
+        if name.startswith("a_"):
+            torch.nn.init.kaiming_uniform_(value, a=math.sqrt(5), generator=generator)
+        else:
+            value.zero_()
+
+
+@dataclass(frozen=True)
+class TTRL(pllm.Workload):
+    rank: int = 8
+    learning_rate: float = 1e-4
+
+    @property
+    def lora(self) -> pllm.InstanceState:
+        return pllm.InstanceState(
+            {
+                "a": pllm.Field(lambda inputs, outputs: (self.rank, inputs)),
+                "b": pllm.Field(lambda inputs, outputs: (outputs, self.rank)),
+            },
+            optimizer=pllm.AdamW(self.learning_rate),
+            init=pllm.Computed(lora_init),
+        )
+
+    @property
+    def adapter(self) -> pllm.model.Adapter:
+        targets = (pllm.model.Projection("q_proj"), pllm.model.Projection("v_proj"))
+        return pllm.model.Adapter("lora", targets, operator="low_rank", scale=2.0)
+
+    @pllm.train(state="lora")
+    def learn(
+        self,
+        input_ids: torch.Tensor = pllm.batch("input_ids"),
+        labels: torch.Tensor = pllm.batch("labels"),
+        attention_mask: torch.Tensor | None = pllm.batch("attention_mask"),
+        model: pllm.model.CausalModel = pllm.causal_model("adapter"),
+    ) -> torch.Tensor:
+        logprobs = model.token_logprobs(input_ids, labels, attention_mask=attention_mask)
+        return -logprobs.sum() / labels[:, 1:].ne(-100).sum()
+
+
+config = pllm.ModelConfig(
+    "Qwen/Qwen2.5-0.5B-Instruct",
+    max_model_len=640,
+    max_num_seqs=8,
+    execution=pllm.ExecutionOptions(max_host_training_rows=8),
+)
+report = pllm.explain(TTRL(), config)
+print(report.states[0].name)
+```
+
+`pllm.explain` runs entirely on CPU without loading real weights or allocating CUDA memory, letting you validate workload structure and memory budgets while writing code.
+
+---
+
+## Building Closed Loops: Retry Loops and `llm.generate_feedback` {#en-building-closed-loops-retry-loops-and-llmgenerate_feedback}
+
+pLLM offers two ways to structure host loops:
+1. **Explicit global loop (`llm.generate(batch=...)`)**: re-generates samples for all prompts each round, computes global rewards on the host to assemble a `CausalTrainBatch`, and updates model weights at the start of the next generation round (e.g., TTRL / GRPO).
+2. **Fine-grained retry loop (`llm.generate_feedback(...)`)**: targets workflows that retry only failed samples across rounds (such as math self-consistency retries or FTTT), with per-sample retries and synchronization barriers.
+
+### Fine-Grained Retry Mechanism: `generate_feedback` {#en-fine-grained-retry-mechanism-generate_feedback}
+
+The calling pattern for `llm.generate_feedback` is:
+
+```python
+from vllm import SamplingParams
+
+from pllm.workloads import DummyWorkload
+from pllm.workloads.reward_head import RewardHeadConfig, RewardHeadFeedback, RewardHeadWorkload
+
+gpu_config = pllm.ModelConfig("Qwen/Qwen2.5-0.5B-Instruct", max_num_seqs=8, gpu_memory_utilization=0.3)
+prompts = ["What is 2 + 3? Put the final answer in \\boxed{}.", "What is 7 * 6? Put the final answer in \\boxed{}."]
+sampling = SamplingParams(n=4, max_tokens=64, temperature=0.8, seed=0)  # 4 samples per prompt for voting
+head_workload = RewardHeadWorkload(RewardHeadConfig(rank=16, learning_rate=1e-3))
+host_cfg = HostConfig(torch.device("cuda"), hidden_size=896)
+
+# generate_feedback collects each completion's final hidden state, so the engine needs a workload;
+# observation-only DummyWorkload is enough
+with pllm.make_llm(gpu_config, workload=DummyWorkload()) as llm, make_host(host_cfg, head_workload) as head_trainer:
+    feedback_handler = RewardHeadFeedback(head_trainer, head_workload.config)
+    for completion_input, vote_result in llm.generate_feedback(
+        prompts,
+        sampling,
+        feedback=feedback_handler,
+        group_id="vote_group_1",
+        max_rounds=3,
+    ):
+        print(f"Samples in round: {len(completion_input.completions.entries)}, updates: {vote_result.update_count}")
+```
+
+- **Arguments**:
+  - `prompts`: list of prompts to evaluate.
+  - `sampling`: `SamplingParams` sampling `n` completions per prompt. Retries happen per sample: any sample marked `RETRY` is re-sampled individually (`n=1`) in the next round while keeping its sample index slot within the prompt—the $$j$$-th sample of round $$k$$ has index `k*n + j`. When `seed` is set, sample $$i$$ uses `seed + i`, so retries draw fresh samples.
+  - `feedback`: user callback of type `Callable[[CompletionInput], FeedbackT | None]`.
+  - `group_id`: group identifier for this batch of requests.
+  - `max_rounds`: maximum number of iteration rounds.
+- **Callback input `CompletionInput`**:
+  - `completions` (`CompletionBatch`): all `Completion` objects from the current round (each carrying `identity`, `text`, `token_ids`, `finish_reason`, etc.).
+  - `hidden`: final-position hidden activation vector for each generated completion (`torch.Tensor` of shape `[num_samples, hidden_size]` in float32).
+- **Callback return value**: the returned object must expose these attributes (returning `None` terminates the loop early):
+  - `retry_controls` (`tuple[RetryControl, ...]`): per-sample scheduling decisions. Each `RetryControl` has `action` (`RetryAction.ACCEPT`, `RetryAction.RETRY`, or `RetryAction.STOP`), `reason` (`ControlReason`), and `retry_after_update` (bool indicating whether the retry must wait for an update).
+  - `update_barriers` (`tuple[UpdateBarrier, ...]`): synchronization barriers declaring a set of `request_ids` and a state (`BarrierState.READY` or `BLOCKED`); update-dependent requests are re-sampled only when the barrier is ready and `update_count > 0`.
+  - `update_count` (int): how many parameter updates occurred in this round.
+- **Built-in helpers**:
+  - `majority_vote(value: CompletionInput, config: RewardHeadConfig)`: extracts `\boxed{}` math answers, runs majority voting, marks agreeing samples `ACCEPT` and disagreeing ones `RETRY`, and builds `UpdateBarrier` plus a `WeightedRowBatch` for training the reward head.
+  - `pllm.workloads.RewardHeadFeedback(head, config)`: pre-packaged feedback callback that runs `majority_vote`, trains the reward head via `head.train(vote.batch)`, and returns the vote outcome.
+
+### Choosing Between `generate(batch=)` and `generate_feedback` {#en-choosing-between-generatebatch-and-generate_feedback}
+
+- **Use `generate(batch=)`**: when each round re-evaluates the current policy across all prompts (e.g., online RL, TTRL, GRPO), re-sampling every request each round and training adapters inside the model forward pass (such as LoRA).
+- **Use `generate_feedback`**: when solving a concrete batch of tasks (e.g., self-correcting reasoning chains or verifier-guided retries) where any prompt with a valid answer exits immediately and only failed samples retry, or when the base model stays frozen and only a host-side reward head or scorer updates.
+
+---
+
+## Empty Selection Semantics {#en-empty-selection-semantics}
+
+In real feedback loops, an entire batch of candidates may fail filtering (for instance, unanimous agreement yields zero GRPO advantages, or no sample produces a valid answer).
+
+In that case, the training method can handle empty selection by:
+1. Returning `UpdateOutput(loss, changed, update_count, trained_rows)` with `changed = False` (as a 0-d device bool tensor) and `update_count = 0`; or
+2. Using `torch.where(total_weights > 0, loss, 0.0)` so the loss is zero when total weights are zero.
+
+**Guarantee**: when the selection is empty (`changed` is false), pLLM automatically publishes the unchanged state parameters and leaves optimizer internals (moments, step counter) untouched. Crucially, `changed` is passed as a device tensor, so **no CPU-GPU synchronization wait occurs**, preserving pipeline throughput.
+
+---
+
+## Complete GPU Loop Example (TTRL Majority Voting) {#en-complete-gpu-loop-example-ttrl-majority-voting}
+
+Below is a full GPU loop running TTRL (condensed from [Tutorial 05](/pllm/docs/tutorials/05_host_feedback/)):
+
+```python
+from collections import Counter
+import re
+from vllm import SamplingParams
+from pllm.host import CausalTrainBatch
+
+def get_boxed(text: str) -> str | None:
+    found = re.findall(r"\\boxed\{([^{}]*)\}", text)
+    return found[-1].strip() if found else None
+
+def prepare_batch(outputs, prompts, tokenizer) -> CausalTrainBatch | None:
+    candidates = []
+    for prompt, output in zip(prompts, outputs):
+        answers = [get_boxed(s.text) for s in output.outputs]
+        counts = Counter(a for a in answers if a is not None)
+        if not counts:
+            continue
+        majority, _ = counts.most_common(1)[0]
+        sample = next(s for s, a in zip(output.outputs, answers) if a == majority)
+        candidates.append((tokenizer(prompt).input_ids, list(sample.token_ids)))
+    if not candidates:
+        return None
+    width = max(len(p) + len(a) for p, a in candidates)
+    ids = torch.full((len(candidates), width), tokenizer.pad_token_id, dtype=torch.int64)
+    labels = torch.full_like(ids, -100)
+    mask = torch.zeros_like(ids)
+    for row, (p, a) in enumerate(candidates):
+        ids[row, : len(p) + len(a)] = torch.tensor(p + a)
+        labels[row, len(p) : len(p) + len(a)] = torch.tensor(a)
+        mask[row, : len(p) + len(a)] = 1
+    return CausalTrainBatch(ids.cuda(), labels.cuda(), mask.cuda())
+
+gpu_config = pllm.ModelConfig(
+    "Qwen/Qwen2.5-0.5B-Instruct",
+    max_model_len=640,
+    max_num_seqs=128,
+    max_num_batched_tokens=2048,
+    gpu_memory_utilization=0.25,
+    seed=0,
+    execution=pllm.ExecutionOptions(max_host_training_rows=8),
+)
+sampling = SamplingParams(n=8, temperature=0.8, top_p=0.95, max_tokens=256, seed=0)
+
+with pllm.make_llm(gpu_config, workload=TTRL()) as llm:
+    batch = None
+    for round_index in range(5):
+        outputs = llm.generate(prompts, sampling, batch=batch)
+        batch = prepare_batch(outputs, prompts, tokenizer)
+        print(f"Round {round_index} complete, total updates: {llm.diagnostics().update_count}")
+```
+
+---
+
+## Common Errors and Troubleshooting {#en-common-errors-and-troubleshooting}
+
+For exact error messages, root causes, and fixes when declarations on this page are rejected, see [State and training](/pllm/docs/reference/errors/#en-state-and-training) and [Memory budgets](/pllm/docs/reference/errors/#en-memory-budgets) in the Error Catalog.
+
+---
+
+## Self-Check {#en-self-check}
+
+1. Why must `max_host_training_rows` be declared upfront in `ExecutionOptions` when launching the engine?
+
+<details><summary>Answer</summary>
+
+Backpropagating through the whole model temporarily consumes large amounts of activation and workspace VRAM. pLLM statically reserves this VRAM at engine startup based on the declared maximum row count so generation never hits unexpected OOM when allocating large training workspaces mid-run. Batches exceeding that row count are rejected immediately.
+</details>
+
+2. In a TTRL or GRPO loop, why do certain rounds take noticeably longer than others?
+
+<details><summary>Answer</summary>
+
+Whenever the incoming training batch shape changes (e.g., number of sequences or maximum token length), pLLM compiles a training computation graph for that new shape, incurring a one-time compilation cost on that round. Once batch shapes stabilize, later steps reuse the compiled graph and return to normal speed.
+</details>
+
+3. Why cannot `@pllm.train` use `reduction="mean"` on host batch training, forcing you to divide manually inside the method?
+
+<details><summary>Answer</summary>
+
+Different sequence-level RL and alignment algorithms (such as GRPO, DAPO, RLOO, and Dr.GRPO) normalize sequence lengths and candidate groups differently (per-sequence length, total batch tokens, or fixed max length). That math can only be expressed explicitly by the algorithm author on the host batch; a single generic reduction parameter cannot capture all of them.
+</details>
+
+4. When should you use `llm.generate(batch=...)` versus `llm.generate_feedback(...)`?
+
+<details><summary>Answer</summary>
+
+Use `generate(batch=...)` when the algorithm re-samples all prompts every round and trains adapters inside the model forward (such as TTRL or online RL); use `generate_feedback(...)` when performing fine-grained partial retries (retrying only samples that failed verification, or keeping the model frozen while fitting a host-side reward head).
+</details>
+
+---
+
+## Related Docs {#en-related-docs}
+
+- Tutorial: [05 Feedback Loops: TTRL](/pllm/docs/tutorials/05_host_feedback/)
+- Guides: [Online Training](/pllm/docs/guides/training/) · [State](/pllm/docs/guides/state/) · [Workload Anatomy](/pllm/docs/guides/workload-anatomy/) · [Seeing Costs: pllm.explain](/pllm/docs/guides/explain/)
+- Reference: [Configuration](/pllm/docs/reference/config/) · [Core Concepts](/pllm/docs/explain/core-concepts/)
+
+</div>
+
+<div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN" markdown="1">
+
+<div id="zh-sec-1"></div>
 
 > **先决条件**：[状态](/pllm/docs/guides/state/)；教程 [05 反馈循环](/pllm/docs/tutorials/05_host_feedback/)（TTRL、宿主批训练）。
 >
 > **本文回答**：如何在 Python 宿主侧组织“生成 → 打分 → 训练”闭环（如 TTRL、GRPO、奖励头拟合）？怎样向引擎喂入外部批次，或者在没有模型引擎时单测宿主状态？
 
-## 动机：为什么需要宿主批训练与反馈循环 {#sec-2}
+## 动机：为什么需要宿主批训练与反馈循环 {#zh-sec-2}
 
 在很多测试时强化学习（TTRL、GRPO）、测试时训练（TTT）或自适应搜索算法中，更新逻辑无法在单步 token 的前向过程中就地完成：
 1. **依赖全局反馈或完整序列**：例如多数投票（Majority Vote）必须等一组采样的所有答案生成完毕后，统计投票选出伪标签；GRPO 需要拿到组内所有候选序列的奖励以计算优势值并进行组内归一化。
@@ -38,11 +430,11 @@ nav: false
 
 ---
 
-## 核心机制：声明读取宿主批次（`pllm.batch`） {#sec-3}
+## 核心机制：声明读取宿主批次（`pllm.batch`） {#zh-sec-3}
 
 在 `@pllm.train` 装饰的方法中，声明参数的默认值为 `pllm.batch("字段名")`，即可将外部宿主送入的批次注入训练方法。
 
-### 三种批次类型 {#sec-4}
+### 三种批次类型 {#zh-sec-4}
 
 方法的输入参数读取了哪些 `pllm.batch` 字段，直接决定了该方法消费的批次类型与绑定的优化器：
 
@@ -55,7 +447,7 @@ nav: false
 > [!IMPORTANT]
 > 一个训练方法读取的所有 `pllm.batch` 字段必须全部属于同一个批次类型，不能跨批次类型混合读取。
 
-### 因果语言模型端口：`pllm.causal_model` {#sec-5}
+### 因果语言模型端口：`pllm.causal_model` {#zh-sec-5}
 
 当算法需要对语言模型本身做端到端自回归训练时，在方法参数中声明：
 ```text
@@ -69,13 +461,13 @@ model: pllm.model.CausalModel = pllm.causal_model("adapter_name")
 
 ---
 
-## 损失归约约定：方法自行归约并返回单标量 {#sec-6}
+## 损失归约约定：方法自行归约并返回单标量 {#zh-sec-6}
 
 在普通的逐请求训练中，方法为每行返回一个 loss（形状为 `[rows]`），由框架依据 `reduction="mean"` 或 `"sum"` 归约。但在宿主批训练中，规则完全不同：
 
 **宿主批训练的方法必须自行完成损失归约，并直接返回一个标量（或 `pllm.UpdateOutput`）。在 `@pllm.train` 上显式传入 `reduction=` 会在声明期被直接拒绝。**
 
-### 为什么宿主批训练不接受外部 `reduction=` {#sec-7}
+### 为什么宿主批训练不接受外部 `reduction=` {#zh-sec-7}
 
 逐请求训练在每个引擎步处理多少个请求的行，是由连续批处理调度器动态决定的，算法代码无法预知调度结果，因此归约必须交给框架。
 
@@ -92,7 +484,7 @@ model: pllm.model.CausalModel = pllm.causal_model("adapter_name")
 
 ---
 
-## 批次如何进入引擎：`llm.generate(batch=...)` {#sec-8}
+## 批次如何进入引擎：`llm.generate(batch=...)` {#zh-sec-8}
 
 在典型的“生成 → 投票/打分 → 更新”循环中，训练批次通过 `llm.generate` 送入：
 
@@ -109,7 +501,7 @@ outputs = llm.generate(prompts, sampling, batch=batch)
    - 首次遇到一个此前未见过的批次形状（例如序列数、最大 token 长度发生变化）时，pLLM 需要编译该形状的训练计算图，该轮用时会明显延长。
    - 批次形状稳定后，后续训练复用已编译的图，恢复正常运行速度。
 
-### 因果批训练的约束与原因 {#sec-9}
+### 因果批训练的约束与原因 {#zh-sec-9}
 
 当使用 `CausalTrainBatch` 与 `pllm.causal_model` 时，底层有以下明确要求：
 1. **状态类型**：必须更新 `InstanceState`，并配置 `pllm.AdamW` 优化器。原因：因果批训练作用于整模型的前向与反向，更新的是所有请求共享的模型权重增量。
@@ -119,13 +511,13 @@ outputs = llm.generate(prompts, sampling, batch=batch)
 
 ---
 
-## 纯宿主状态：无需模型引擎的 `pllm.host.make_host` {#sec-10}
+## 纯宿主状态：无需模型引擎的 `pllm.host.make_host` {#zh-sec-10}
 
 如果一个状态只被宿主代码读取与训练（例如从生成的最终隐层向量学习打分的奖励头、外部文本分类器），它完全不需要启动占用 GPU 的 vLLM 模型引擎。
 
 你可以使用 `pllm.host.make_host` 将负载编译为一个宿主训练器 `HostTrainer`，它完全支持在 CPU 上单步调试与运行。
 
-### 可运行示例：CPU 上的 RewardHead {#sec-11}
+### 可运行示例：CPU 上的 RewardHead {#zh-sec-11}
 
 以下代码完整演示了如何声明一个奖励头负载，并使用 `make_host` 在 CPU 上对 `WeightedRowBatch` 执行 AdamW 训练：
 
@@ -165,7 +557,7 @@ with make_host(HostConfig(torch.device("cpu"), hidden_size=896), RewardHead()) a
 
 ---
 
-## 宿主端因果训练定义与成本推导（`pllm.explain`） {#sec-12}
+## 宿主端因果训练定义与成本推导（`pllm.explain`） {#zh-sec-12}
 
 在向 GPU 启动因果批训练前，你可以通过 `pllm.explain` 在 CPU 上推导 TTRL 负载的执行计划与显存开销：
 
@@ -228,13 +620,13 @@ print(report.states[0].name)
 
 ---
 
-## 闭环构建：重试循环与 `llm.generate_feedback` {#sec-13}
+## 闭环构建：重试循环与 `llm.generate_feedback` {#zh-sec-13}
 
 pLLM 提供了两种构建宿主循环的形态：
 1. **显式全局循环（`llm.generate(batch=...)`）**：每轮对所有提示词重新生成样本，宿主计算全局奖励并组织 `CausalTrainBatch`，在下一次生成开始时更新模型权重（如 TTRL / GRPO）。
 2. **细粒度重试循环（`llm.generate_feedback(...)`）**：针对需要多次重试部分未通过样本的场景（如数学自洽性重试、FTTT），支持局部重试与同步栅栏。
 
-### 细粒度重试机制：`generate_feedback` {#sec-14}
+### 细粒度重试机制：`generate_feedback` {#zh-sec-14}
 
 `llm.generate_feedback` 的调用模式如下：
 
@@ -280,14 +672,14 @@ with pllm.make_llm(gpu_config, workload=DummyWorkload()) as llm, make_host(host_
   - `majority_vote(value: CompletionInput, config: RewardHeadConfig)`：自动提取数学题 `\boxed{}` 中的答案并进行多数投票，一致者标记为 ACCEPT，不一致者标记为 RETRY，同时构造 `UpdateBarrier` 与用于训练奖励头的 `WeightedRowBatch`。
   - `pllm.workloads.RewardHeadFeedback(head, config)`：封装好的反馈回调，内部调用 `majority_vote`，并在 `head.train(vote.batch)` 训练奖励头后返回投票结果。
 
-### 选型建议：何时用 `generate(batch=)`，何时用 `generate_feedback` {#sec-15}
+### 选型建议：何时用 `generate(batch=)`，何时用 `generate_feedback` {#zh-sec-15}
 
 - **使用 `generate(batch=)`**：算法每轮需要评估当前策略对全部提示词的整体表现（例如在线强化学习、TTRL、GRPO），每轮重新采样所有请求，训练的是注入模型前向的适配器（如 LoRA）。
 - **使用 `generate_feedback`**：算法旨在解决一批具体任务（如推理链自我修正、带判别器的生成重试），只要某个提示词给出了合格答案就立即退出，仅对失败的请求进行重试；或者模型本身保持冻结，仅更新宿主侧维护的奖励头或打分器。
 
 ---
 
-## 空选择语义（Empty Selection） {#sec-16}
+## 空选择语义（Empty Selection） {#zh-sec-16}
 
 在实际反馈循环中，有时一整批候选样本可能均未通过筛选（例如全票一致导致 GRPO 优势全为 0，或者没有一个样本提取出了有效答案）。
 
@@ -299,7 +691,7 @@ with pllm.make_llm(gpu_config, workload=DummyWorkload()) as llm, make_host(host_
 
 ---
 
-## 完整 GPU 循环示例（TTRL 多数投票） {#sec-17}
+## 完整 GPU 循环示例（TTRL 多数投票） {#zh-sec-17}
 
 以下是在真实的 GPU 环境中运行 TTRL 的循环代码（来自 [教程 05](/pllm/docs/tutorials/05_host_feedback/) 的精简版本）：
 
@@ -356,13 +748,13 @@ with pllm.make_llm(gpu_config, workload=TTRL()) as llm:
 
 ---
 
-## 常见错误与排查 {#sec-18}
+## 常见错误与排查 {#zh-sec-18}
 
-这一页的写法被拒绝时的报错原文、原因和改法，见报错目录的[状态与训练](/pllm/docs/reference/errors/#sec-6)、[显存预算](/pllm/docs/reference/errors/#sec-11)几节。
+这一页的写法被拒绝时的报错原文、原因和改法，见报错目录的[状态与训练](/pllm/docs/reference/errors/#zh-sec-6)、[显存预算](/pllm/docs/reference/errors/#zh-sec-11)几节。
 
 ---
 
-## 自测 {#sec-19}
+## 自测 {#zh-sec-19}
 
 1. 为什么 `max_host_training_rows` 必须在启动引擎时的 `ExecutionOptions` 中事先声明？
 
@@ -394,7 +786,7 @@ with pllm.make_llm(gpu_config, workload=TTRL()) as llm:
 
 ---
 
-## 相关文档 {#sec-20}
+## 相关文档 {#zh-sec-20}
 
 - 教程：[05 反馈循环：TTRL](/pllm/docs/tutorials/05_host_feedback/)
 - 指南：[在线训练](/pllm/docs/guides/training/) · [状态](/pllm/docs/guides/state/) · [负载的组成](/pllm/docs/guides/workload-anatomy/) · [看成本：pllm.explain](/pllm/docs/guides/explain/)
@@ -402,7 +794,11 @@ with pllm.make_llm(gpu_config, workload=TTRL()) as llm:
 
 </div>
 
-<div class="zine-doc-footer">
-  <a class="zine-pill-link" href="/pllm/#docs">← Back to pLLM Documentation Hub</a>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/guides/host-loops.md" target="_blank" rel="noopener">Edit / View on GitHub ↗</a>
 </div>
+
+<div class="zine-doc-footer">
+  <a class="zine-pill-link" data-i18n-zh="← 返回 pLLM 项目与文档中心" data-i18n-en="← Back to pLLM Project &amp; Docs" href="/pllm/#docs">← Back to pLLM Project &amp; Docs</a>
+  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/guides/host-loops.md" target="_blank" rel="noopener">GitHub &middot; doc/guides/host-loops.md ↗</a>
+</div>
+
+<script defer src="/assets/js/bilingual-post.js"></script>
