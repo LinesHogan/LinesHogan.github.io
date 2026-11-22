@@ -2,6 +2,7 @@
 set -euo pipefail
 
 tmp_dir="$(mktemp -d)"
+tmp_src="${tmp_dir}/src"
 tmp_override="${tmp_dir}/distill-override.yml"
 tmp_site="${tmp_dir}/site"
 
@@ -10,7 +11,38 @@ cleanup() {
 }
 trap cleanup EXIT
 
+mkdir -p "${tmp_src}"
+tar -cf - --exclude=.git --exclude=_site --exclude=node_modules --exclude=resolution-hypothesis . | tar -xf - -C "${tmp_src}"
+
+mkdir -p "${tmp_src}/_posts"
+if [ ! -f "${tmp_src}/_posts/2018-12-22-distill.md" ]; then
+  cat >"${tmp_src}/_posts/2018-12-22-distill.md" <<'MD'
+---
+layout: distill
+title: a distill-style blog post
+description: an example of a distill-style blog post and main elements
+tags: distill formatting
+giscus_comments: true
+date: 2021-05-22
+mermaid:
+  enabled: true
+  zoomable: true
+tikzjax: true
+authors:
+  - name: Albert Einstein
+    url: "https://en.wikipedia.org/wiki/Albert_Einstein"
+    affiliations:
+      name: IAS, Princeton
+bibliography: 2018-12-22-distill.bib
+---
+
+Fixture post for Distill integration test.
+MD
+fi
+
 cat >"${tmp_override}" <<'YAML'
+imagemagick:
+  enabled: false
 giscus:
   repo: alshedivat/al-folio
   repo_id: R_kgDOExample
@@ -18,7 +50,7 @@ giscus:
   category_id: DIC_kwDOExample
 YAML
 
-bundle exec jekyll build --config "_config.yml,${tmp_override}" -d "${tmp_site}" >/dev/null
+bundle exec jekyll build --config "${tmp_src}/_config.yml,${tmp_override}" -s "${tmp_src}" -d "${tmp_site}" >/dev/null
 
 distill_page="${tmp_site}/blog/2021/distill/index.html"
 

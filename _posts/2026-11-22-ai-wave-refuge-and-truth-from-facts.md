@@ -9,7 +9,7 @@ related_posts: true
 ---
 
 <div class="zine-dispatch" data-title-zh="AI浪潮与逃难，还有实事求是" data-title-en="The AI Wave, Seeking Refuge, and Seeking Truth from Facts">
-  <a class="zine-pill-link" data-i18n-zh="同步发布于知乎 ↗" data-i18n-en="Cross-posted on Zhihu ↗" href="https://zhuanlan.zhihu.com/p/2107815235616883810" target="_blank" rel="noopener">同步发布于知乎 &nearr;</a>
+  <a class="zine-pill-link" data-i18n-zh="同步发布于知乎 ↗" data-i18n-en="Cross-posted on Zhihu ↗" href="https://zhuanlan.zhihu.com/p/2107815235616883810" target="_blank" rel="noopener">同步发布于知乎 ↗</a>
   <div class="zine-lang-switch" role="group" aria-label="Language">
     <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
     <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>

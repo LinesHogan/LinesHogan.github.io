@@ -39,5 +39,5 @@ My earlier work introduces **Exploratory Sampling (ESamp)**, a decoding-time met
 <div class="zine-bio-actions">
   <a class="zine-pill-link primary" href="{{ '/blog/' | relative_url }}">Read Blog</a>
   <a class="zine-pill-link accent" href="{{ '/resolution-hypothesis/' | relative_url }}">Resolution Hypothesis</a>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/tLLM" target="_blank" rel="noopener">tLLM on GitHub &nearr;</a>
+  <a class="zine-pill-link" href="https://github.com/LinesHogan/tLLM" target="_blank" rel="noopener">tLLM on GitHub ↗</a>
 </div>
