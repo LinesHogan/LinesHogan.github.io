@@ -35,15 +35,15 @@ nav_order: 3
 
 <div class="zine-lang-panel" data-lang-panel="en" lang="en">
   <figure class="pllm-hero-figure">
-    <img src="{{ '/assets/img/pllm/doc/assets/pllm-architecture-en.svg' | relative_url }}" alt="pLLM Architecture: Declarative Workload, CPU Pre-Flight Verifier, and Unmodified vLLM Dual-Stream Execution">
-    <figcaption class="pllm-fig-caption">Architecture Overview &middot; Declare what internal activations to read, what state to own, and where effects apply; pLLM verifies multi-tenant contracts on CPU and compiles into vLLM's main &amp; side CUDA Graph streams.</figcaption>
+    <img src="{{ '/assets/img/pllm/doc/assets/pllm-architecture-en.svg' | relative_url | bust_file_cache }}" alt="pLLM Architecture: Declarative Workload, CPU Pre-Flight Verifier, and Unmodified vLLM Execution">
+    <figcaption class="pllm-fig-caption">Architecture Overview &middot; Declare what internal representations to read, what state to own, and where interventions apply; pLLM verifies multi-tenant contracts on CPU and compiles into unmodified vLLM—fusing inline into CUDA graphs by default and overlapping independent work on demand.</figcaption>
   </figure>
 </div>
 
 <div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN">
   <figure class="pllm-hero-figure">
-    <img src="{{ '/assets/img/pllm/doc/assets/pllm-architecture-zh.svg' | relative_url }}" alt="pLLM 架构总览：声明式负载、CPU 静态契约核验与未修改 vLLM 双流执行">
-    <figcaption class="pllm-fig-caption">架构总览 · 声明读取位置、状态归属与作用站点；pLLM 在 CPU 上完成多租户隔离契约核验，并编译进原版 vLLM 的主旁双流静态 CUDA Graph。</figcaption>
+    <img src="{{ '/assets/img/pllm/doc/assets/pllm-architecture-zh.svg' | relative_url | bust_file_cache }}" alt="pLLM 架构总览：声明式负载、CPU 静态契约核验与未修改 vLLM 执行流水线">
+    <figcaption class="pllm-fig-caption">架构总览 · 声明读取位置、状态归属与前向/采样干预；pLLM 在 CPU 上完成多租户契约核验，编译进原版 vLLM 执行流水线（默认内联融合进静态 CUDA Graph，仅在存在独立异步任务时按需重叠）。</figcaption>
   </figure>
 </div>
 
@@ -335,14 +335,14 @@ pllm skill --install claude   # or: codex | cursor
 
   <div class="zine-lang-panel" data-lang-panel="en" lang="en">
     <figure class="pllm-hero-figure">
-      <img src="{{ '/assets/img/pllm/blog/assets/system-anatomy-en.svg' | relative_url }}" alt="Inference Engine Anatomy Map for the 10-Part Deep-Dive Series">
+      <img src="{{ '/assets/img/pllm/blog/assets/system-anatomy-en.svg' | relative_url | bust_file_cache }}" alt="Inference Engine Anatomy Map for the 10-Part Deep-Dive Series">
       <figcaption class="pllm-fig-caption">System Anatomy Map &middot; Each standalone article dissects one concrete subsystem of a modern continuous-batching inference engine.</figcaption>
     </figure>
   </div>
 
   <div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN">
     <figure class="pllm-hero-figure">
-      <img src="{{ '/assets/img/pllm/blog/assets/system-anatomy-zh.svg' | relative_url }}" alt="现代连续批处理推理引擎解剖路标（十篇系列文章对应位置）">
+      <img src="{{ '/assets/img/pllm/blog/assets/system-anatomy-zh.svg' | relative_url | bust_file_cache }}" alt="现代连续批处理推理引擎解剖路标（十篇系列文章对应位置）">
       <figcaption class="pllm-fig-caption">推理引擎解剖路标 · 每篇独立文章对应现代连续批处理推理引擎上的一个具体硬件或调度部位。</figcaption>
     </figure>
   </div>
