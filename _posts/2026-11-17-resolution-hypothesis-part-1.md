@@ -1,13 +1,31 @@
 ---
 layout: post
 title: "分辨率假说（一）：Agent 自进化为什么总在“原地踏步”？"
+title_en: "The Resolution Hypothesis (Part 1): Why Does Agent Self-Evolution Keep Running in Place?"
 date: 2026-11-17 18:00:00 +0800
 description: "对 6 个模型、7 种主流进化框架与 13 个基准的 1,030 次独立进化实验做方差分解：为什么单次评估的标准差盖过了绝大多数方法之间的真实差距？"
+description_en: "A variance decomposition across 1,030 independent evolution runs spanning 6 models, 7 frameworks, and 13 benchmarks: why single-run standard deviation swamps the true gap between most methods. (Bilingual EN / 中文 with TL;DR)"
 tags: agent-evolution evaluation research
 categories: research-notes
 thumbnail: /resolution-hypothesis/assets/noise.png
 related_posts: true
 ---
+
+<div class="zine-dispatch" data-title-zh="分辨率假说（一）：Agent 自进化为什么总在“原地踏步”？" data-title-en="The Resolution Hypothesis (Part 1): Why Does Agent Self-Evolution Keep Running in Place?">
+  <a class="zine-pill-link" data-i18n-zh="论文 arXiv:2611.23068 ↗" data-i18n-en="Paper · arXiv:2611.23068 ↗" href="https://arxiv.org/abs/2611.23068" target="_blank" rel="noopener">论文 arXiv:2611.23068 ↗</a>
+  <div class="zine-lang-switch" role="group" aria-label="Language">
+    <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
+    <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
+  </div>
+</div>
+
+<div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">
+
+<div class="zine-tldr" markdown="1">
+
+**TL;DR：** 将主流 Agent 进化方法统一为“提议—评估—选择”的零阶优化循环后，我们在 6 个模型、7 种框架与 13 个基准的 1,030 次独立进化中对单次得分做方差分解 $$\text{Var}(\hat{Y}) = \sigma^2 + \tau^2$$。结果显示，单次运行的标准差（1.7–4.1 pp）盖过了超过 60% 同基准方法对的真实差距，也恰好吞没了 9 篇代表论文中 3.4 pp 的中位 SOTA 领先幅度——按常规只跑 1 次实验，在 Terminal-Bench 上从 4 种方法中挑出第一名的概率仅 33%（盲猜为 25%）。这引出了“分辨率假说”：卡住 Agent 自进化的并非提议能力，而是评估系统自身的分辨率下限。
+
+</div>
 
 > **《分辨率假说》系列（1/3）** · [论文 arXiv:2611.23068](https://arxiv.org/abs/2611.23068) · [项目主页与 30s 互动小游戏](/resolution-hypothesis/) · [幕后手记](/blog/2026/resolution-hypothesis-behind-the-scenes/)
 > **连载导航**：**（一）原地踏步与方差账** · [（二）高通滤波器与捷径审计](/blog/2026/resolution-hypothesis-part-2/) · [（三）好 Skill 与失明的选择器](/blog/2026/resolution-hypothesis-part-3/)
@@ -114,3 +132,123 @@ $$
 ---
 
 如果大家对我们的工作感到赞赏或有所启发，欢迎阅读论文全文 [arXiv:2611.23068](https://arxiv.org/abs/2611.23068)、前往[项目主页](/resolution-hypothesis/)查看交互式数据与 30 秒互动小游戏，或在 [HuggingFace Papers](https://huggingface.co/papers/2611.23068) 点赞评论支持！
+
+</div>
+
+<div class="zine-lang-panel is-hidden" data-lang-panel="en" lang="en" markdown="1">
+
+<div class="zine-tldr" markdown="1">
+
+**TL;DR:** Unifying mainstream agent-evolution frameworks as a zeroth-order Propose–Evaluate–Select loop, we run 1,030 independent evolutions across 6 models, 7 methods, and 13 benchmarks and decompose single-run score variance into $$\text{Var}(\hat{Y}) = \sigma^2 + \tau^2$$. The single-run standard deviation (1.7–4.1 pp) exceeds the true mean gap in over 60% of same-benchmark method pairs and squarely swallows the 3.4 pp median SOTA margin reported across 9 papers—leaving single-run top-1 identification among 4 methods on Terminal-Bench at just 33% (versus 25% random chance). This points to _The Resolution Hypothesis_: the bottleneck in agent self-evolution is not proposing better artifacts, but the evaluation pipeline's own measurement resolution floor.
+
+</div>
+
+> **_The Resolution Hypothesis_ Series (1/3)** · [Paper arXiv:2611.23068](https://arxiv.org/abs/2611.23068) · [Project Page & 30s Interactive Game](/resolution-hypothesis/) · [Behind the Scenes](/blog/2026/resolution-hypothesis-behind-the-scenes/)
+> **Series Navigation**: **(1) Running in Place & the Variance Ledger** · [(2) The High-Pass Filter & Shortcut Audit](/blog/2026/resolution-hypothesis-part-2/) · [(3) Good Skills & Blind Selectors](/blog/2026/resolution-hypothesis-part-3/)
+
+Over the past six months, our team spent a huge amount of effort exploring and reproducing "Self-Evolving Agents"—a line of work that has lately picked up a trendier name, "RSI." The premise is undeniably appealing: keep the base model's weights $$W$$ frozen, let the agent reflect on its interactions with an environment, and iteratively refine an external persistent artifact $$A$$ (a prompt, a skill document, a memory bank, or even the agent's own harness code) to evolve capabilities at test time.
+
+Yet when we lined up the field's leading evolution algorithms side by side, we kept running into a puzzling pattern: **findings from different papers constantly contradicted one another.** The exact same algorithm would post steady gains on Paper A's benchmark, fail to move the needle when used as a baseline in Paper B, and—once placed on tough, realistic software-engineering benchmarks like Terminal-Bench—almost every method would stall out within a few rounds.
+
+To get to the bottom of it, we ran 1,030 independent evolution experiments across 6 models, 7 mainstream evolution frameworks, and 13 benchmarks, evaluating each run hundreds of times (over 2.1 million trajectories and 10 million LLM calls in total—likely the largest public empirical study of its kind). Across this three-part series, we step back from method-specific engineering tweaks and use one unified mathematical and intuitive lens to answer the central question that crystallized from our runs: **what is actually choking agent self-evolution?**
+
+---
+
+### A Unified View of Agent Evolution
+
+Before launching a single experiment, we asked a foundational question: some methods rewrite prompts (GEPA), some distill skills (SkillOpt, Trace2Skill), some accumulate memories (ReasoningBank), and others rewrite agent source code directly (Meta-Harness, AHE). **Under the hood, what are all these methods actually doing?**
+
+If conventional fine-tuning is gradient descent in continuous parameter space, $$W_t = W_{t-1} - \eta \nabla L(W_{t-1})$$, agent evolution operates over a discrete space of text or code. Because the external artifact $$A$$ only influences the final score through multi-step stochastic rollouts (trajectories) in an environment, we obviously cannot differentiate with respect to $$A$$.
+
+Consequently, every existing agent-evolution framework mathematically reduces to the same zeroth-order "Propose–Evaluate–Select" optimization loop:
+
+$$
+C_t = \text{Propose}(A_{t-1}, \mathcal{T}_{\text{train}}), \quad A_t = \text{Select}\big(A_{t-1}, C_t; \hat{Y}\big) \tag{1}
+$$
+
+In each round $$t$$, a proposer inspects training trajectories $$\mathcal{T}_{\text{train}}$$ and drafts a candidate artifact $$C_t$$; an evaluator measures its observed validation score $$\hat{Y}$$; and a selector uses $$\hat{Y}$$ to decide which candidates survive into the next round.
+
+Through the lens of Eq. (1), the community's representative methods line up cleanly in a single table—differing only in the evolved object $$A$$, the granularity of proposal, and the selection rule:
+
+| Method            | Artifact $$A$$                | Proposer $$\text{Propose}$$                    | Selector $$\text{Select}$$                                               |
+| ----------------- | ----------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------ |
+| **GEPA**          | Prompt                        | Full rewrite each round                        | 3-task train gate + validation Pareto-front sampling                     |
+| **SkillOpt-Lite** | Skill document                | 1 localized edit per round                     | Accept if validation score beats current artifact by $$\ge 2\text{ pp}$$ |
+| **Trace2Skill**   | Skill document                | 1 patch per trajectory, hierarchically merged  | Degenerate selector (unconditionally accepts all patches)                |
+| **ReasoningBank** | Memory bank                   | Extract and append $$\le 3$$ memories per task | Degenerate selector (unconditionally accepts all memories)               |
+| **HarnessLens**   | Instructions / skills / tools | 1 edit per round                               | Paired test confirmation on train + best-on-validation                   |
+| **Meta-Harness**  | Harness code                  | Full program rewrite per round (5 rounds)      | Best training score across 5 candidates                                  |
+| **AHE**           | Full code workspace           | Code edit per round (5 rounds)                 | Best validation score across 5 versions                                  |
+
+> **Note**: Methods like Trace2Skill and ReasoningBank—which append extracted lessons without filtering by validation score on standard benchmarks—are not "selector-free" under Eq. (1). They are equivalent to a **degenerate selector with constant acceptance probability $$1$$**: because they never verify good advice against bad advice via live re-execution, they face the exact same failure mode as a selector blinded by high noise.
+
+---
+
+### Climbing in Thick Fog and "The Resolution Hypothesis"
+
+Eq. (1) makes it obvious that climbing steadily requires two conditions at once: first, $$\text{Propose}$$ must genuinely generate better candidates (true expected gain $$\Delta = Y(C_t) - Y(A_{t-1}) > 0$$); second, $$\text{Select}$$ must be able to pick out those winners from the observed score $$\hat{Y}$$.
+
+Historically, nearly every paper in this space poured its energy into $$\text{Propose}$$—fancier reflection prompts, tree search, population archives—while quietly assuming $$\hat{Y}$$ was reliable. Pause for a moment, though, and the crack shows immediately: with weights frozen, a snippet of text $$A$$ only nudges the model's behavioral tendencies at inference time, while every single LLM rollout carries substantial sampling stochasticity on its own.
+
+![Conceptual illustration of The Resolution Hypothesis: hill-climbing under high-noise vs. low-noise evaluation and the evolution loop](/resolution-hypothesis/assets/teaser.png){: style="display: block; max-width: 100%; width: auto; height: auto; max-height: 620px; margin: 1.5rem auto; object-fit: contain; border-radius: 8px;" }
+
+A simple physical analogy captures it (Fig. 1a): imagine hiking up a mountain shrouded in thick fog. The proposer determines the true elevation change $$\Delta$$ of each step you try (say, $$+1$$ meter or $$-1$$ meter), while the evaluator is the noisy altimeter in your hand (jittering randomly by $$\pm 5$$ meters). **Whenever your true step size $$\Delta$$ is smaller than the altimeter's measurement error, picking your path by reading the dial is no better than flipping a coin.**
+
+If we define an evaluation pipeline's **Resolution** as the smallest true improvement it can reliably distinguish from noise, then the seemingly contradictory behaviors we saw in our experiments collapse into one crisp hypothesis—**The Resolution Hypothesis**:
+
+**The bottleneck in agent self-evolution is not that models fail to propose better artifacts, but that evaluation systems lack the resolution to identify them.**
+
+It is worth clarifying upfront that this is not merely saying "evaluation is noisy, so tighten the statistical gate" (as in pre-commit gating approaches like PACE). What we will demonstrate across these three posts is a deeper constraint: the **measurement resolution floor** of the feedback signal itself. It acts like a **high-pass filter**: real incremental gains below the floor vanish into noise regardless of whether you make the selection rule greedier (causing false-acceptance drift) or stricter (causing stagnation at initialization). Only edits large enough to punch through the noise survive—which neatly explains why the field simultaneously stalls on hard tasks, flips rankings across studies, and posts +20 to +40 pp leaps via evaluation shortcuts on certain benchmarks.
+
+---
+
+### Two Orthogonal Components of Variance
+
+If insufficient resolution is the culprit, we need to measure the noise of evaluation scores rigorously.
+
+Consider an evolution method evaluated on a benchmark. Let $$Y(A) = \mathbb{E}[\hat{Y}\mid A]$$ denote an artifact $$A$$'s true capability (its expected score over infinitely many evaluations). A single observed evaluation can then be written as $$\hat{Y}(A) = Y(A) + \epsilon$$, where $$\epsilon$$ is zero-mean evaluation noise. At the same time, because evolution itself is stochastic, running the same method independently produces artifacts $$A$$ with different true qualities $$Y(A)$$.
+
+By the Law of Total Variance, the total variance of a single reported score $$\hat{Y}$$ decomposes cleanly into two orthogonal terms:
+
+$$
+\text{Var}(\hat{Y}) = \underbrace{\mathbb{E}_A\left[\text{Var}(\hat{Y} \mid A)\right]}_{\sigma^2\;\text{(evaluation noise)}} + \underbrace{\text{Var}_A\left(\mathbb{E}[\hat{Y} \mid A]\right)}_{\tau^2\;\text{(between-run variance)}} \tag{2}
+$$
+
+Simple as Eq. (2) looks, it immediately tells us **what caps resolution in two distinct regimes**:
+
+- Inside the evolution loop (candidate level), when judging whether **one fixed candidate $$A$$** beats the baseline, $$A$$ is held constant, so resolution is limited solely by $$\sigma^2$$.
+- In a paper's main table (method level), when comparing **two evolution methods**, every run draws a fresh artifact $$A$$, so resolution is bounded by the total variance $$\tau^2 + \sigma^2$$! That means even if you re-evaluate one evolved artifact 100 times on the test set (driving test noise $$\sigma^2/M$$ near zero), running evolution only once ($$R=1$$) still leaves your reported score carrying the full irreducible between-run variance $$\tau^2$$.
+
+To pin down exact numbers for $$\sigma$$ and $$\tau$$, we ran all 150 configurations across 7 methods and 6 models on ALFWorld, SpreadsheetBench, OfficeQA, and Terminal-Bench v2.1 for $$R=8\sim 16$$ independent evolution runs each, evaluating every resulting artifact $$M=8\sim 16$$ independent times on the test set, and separated $$\hat{\sigma}$$ and $$\hat{\tau}$$ using unbiased ANOVA moment estimators.
+
+![Method mean gaps vs. single-run comparison SD and required run budgets](/resolution-hypothesis/assets/noise.png){: style="display: block; max-width: 100%; width: auto; height: auto; max-height: 620px; margin: 1.5rem auto; object-fit: contain; border-radius: 8px;" }
+
+Stacking those numbers next to the published literature yields three stark conclusions:
+
+1. **The true gap between most methods is smaller than one single-run standard deviation.** Across the four benchmarks, evaluation noise $$\sigma$$ spans $$1.0\sim 4.5\text{ pp}$$ (percentage points), while between-run SD $$\tau$$ spans $$0\sim 12.3\text{ pp}$$. Combined, the single-run standard deviation $$s = \sqrt{\tau^2 + \sigma^2}$$ ("evolve once, evaluate once") has a per-benchmark median of $$1.7\sim 4.1\text{ pp}$$. Across all 341 same-model, same-benchmark method pairs, **over 60% of true mean differences fall within one single-run comparison standard deviation $$\sqrt{s_1^2 + s_2^2}$$** (the shaded region in Fig. 2a).
+2. **Published SOTA margins land squarely inside this noise band.** Across 171 valid comparison columns in the main tables of 9 representative agent-evolution papers, the median margin of the proposed method over the strongest competing method is exactly $$3.4\text{ pp}$$ (interquartile range $$1.2\sim 6.6\text{ pp}$$). Across all 171 columns, **not a single one reports variance or error bars**, and 152 do not even state how many evolution runs were performed. (Tellingly, in 4 papers, re-running a rival paper's strongest competitor actually scored _below_ the zero-shot baseline.)
+3. **Single-run leaderboards are close to drawing from a blind box.** From Eq. (2), identifying a true gap $$\Delta$$ at significance level $$\alpha=0.05$$ and statistical power $$1-\beta=80\%$$ requires the following number of independent evolution runs per method:
+
+   $$
+   N \ge 2 \cdot \left(\frac{z_{1-\alpha/2} + z_{1-\beta}}{\Delta}\right)^2 \cdot \left(\tau^2 + \frac{\sigma^2}{M}\right) \tag{3}
+   $$
+
+   At the literature's median margin $$\Delta = 3.4\text{ pp}$$ (with single evaluation $$M=1$$), resolving the difference requires **5, 10, 19, and 23 independent evolution runs per method** on SpreadsheetBench, OfficeQA, ALFWorld, and Terminal-Bench respectively (and at the lower quartile of $$1.2\text{ pp}$$, Terminal-Bench demands **181 runs**). That dwarfs current reporting norms. Under the standard 1-run convention, picking the true #1 among 4 text-evolution methods on Terminal-Bench succeeds just 33% of the time (pure guessing is 25%), and getting the full 4-method ranking right happens only 8% of the time.
+
+---
+
+### The Paradox
+
+Once the method-level variance ledger is laid bare, it is easy to see why algorithms constantly trade places within a two-to-three-point band.
+
+Yet that immediately raises an apparent contradiction: **if single-run resolution can barely detect a $$3\sim 4\text{ pp}$$ improvement, how do prior papers—and our own reproduction grid—regularly produce massive $$+20\text{ pp}$$ or even $$+40\text{ pp}$$ jumps on benchmarks like SpreadsheetBench, LiveMathematicianBench, and AIME?**
+
+In [Part 2](/blog/2026/resolution-hypothesis-part-2/), we follow _The Resolution Hypothesis_ straight into those +30-point artifacts to see what the models actually wrote.
+
+---
+
+If you find our work useful or thought-provoking, check out the full paper on [arXiv:2611.23068](https://arxiv.org/abs/2611.23068), explore the interactive figures and 30-second game on the [project page](/resolution-hypothesis/), or upvote and join the discussion on [HuggingFace Papers](https://huggingface.co/papers/2611.23068)!
+
+</div>
+
+<script defer src="/assets/js/bilingual-post.js"></script>

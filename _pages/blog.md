@@ -29,9 +29,9 @@ pagination:
   </div>
 {% else %}
   <header class="zine-masthead">
-    <div class="zine-kicker">Field Notes &amp; Essays &middot; Zine</div>
-    <h1 class="post-title">Blog</h1>
-    <p class="zine-deck">Research notes, behind-the-scenes dispatches, and essays on LLM agents, systems, and AI.</p>
+    <div class="zine-kicker" data-i18n-zh="研究笔记与随笔 · Zine" data-i18n-en="Field Notes &amp; Essays &middot; Zine">Field Notes &amp; Essays &middot; Zine</div>
+    <h1 class="post-title" data-i18n-zh="博客" data-i18n-en="Blog">Blog</h1>
+    <p class="zine-deck" data-i18n-zh="关于 LLM 智能体、系统与 AI 的研究笔记、幕后手记与随笔。" data-i18n-en="Research notes, behind-the-scenes dispatches, and essays on LLM agents, systems, and AI.">Research notes, behind-the-scenes dispatches, and essays on LLM agents, systems, and AI.</p>
   </header>
 {% endif %}
 
@@ -70,6 +70,10 @@ pagination:
 {% assign is_even = featured_posts.size | modulo: 2 %}
 <div class="row row-cols-{% if featured_posts.size <= 2 or is_even == 0 %}2{% else %}3{% endif %}">
 {% for post in featured_posts %}
+{% assign title_zh = post.title_zh | default: post.title %}
+{% assign title_en = post.title_en | default: post.title %}
+{% assign desc_zh = post.description_zh | default: post.description %}
+{% assign desc_en = post.description_en | default: post.description %}
 <div class="col mb-4">
 <a href="{{ post.url | relative_url }}">
 <div class="card hoverable">
@@ -79,8 +83,8 @@ pagination:
 <div class="float-right">
 <i class="fa-solid fa-thumbtack fa-xs"></i>
 </div>
-<h3 class="card-title text-lowercase">{{ post.title }}</h3>
-<p class="card-text">{{ post.description }}</p>
+<h3 class="card-title text-lowercase" data-i18n-zh="{{ title_zh | escape }}" data-i18n-en="{{ title_en | escape }}">{{ post.title }}</h3>
+<p class="card-text" data-i18n-zh="{{ desc_zh | escape }}" data-i18n-en="{{ desc_en | escape }}">{{ post.description }}</p>
 
                     {% if post.external_source == blank %}
                       {% assign read_time = post.content | number_of_words | divided_by: 180 | plus: 1 %}
@@ -116,6 +120,10 @@ pagination:
     {% endif %}
 
     {% for post in postlist %}
+    {% assign title_zh = post.title_zh | default: post.title %}
+    {% assign title_en = post.title_en | default: post.title %}
+    {% assign desc_zh = post.description_zh | default: post.description %}
+    {% assign desc_en = post.description_en | default: post.description %}
 
     {% if post.external_source == blank %}
       {% assign read_time = post.content | number_of_words | divided_by: 180 | plus: 1 %}
@@ -135,17 +143,17 @@ pagination:
 {% endif %}
         <h3>
         {% if post.redirect == blank %}
-          <a class="post-title" href="{{ post.url | relative_url }}">{{ post.title }}</a>
+          <a class="post-title" data-i18n-zh="{{ title_zh | escape }}" data-i18n-en="{{ title_en | escape }}" href="{{ post.url | relative_url }}">{{ post.title }}</a>
         {% elsif post.redirect contains '://' %}
-          <a class="post-title" href="{{ post.redirect }}" target="_blank">{{ post.title }}</a>
+          <a class="post-title" data-i18n-zh="{{ title_zh | escape }}" data-i18n-en="{{ title_en | escape }}" href="{{ post.redirect }}" target="_blank">{{ post.title }}</a>
           <svg width="2rem" height="2rem" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
             <path d="M17 13.5v6H5v-12h6m3-3h6v6m0-6-9 9" class="icon_svg-stroke" stroke="#999" stroke-width="1.5" fill="none" fill-rule="evenodd" stroke-linecap="round" stroke-linejoin="round"></path>
           </svg>
         {% else %}
-          <a class="post-title" href="{{ post.redirect | relative_url }}">{{ post.title }}</a>
+          <a class="post-title" data-i18n-zh="{{ title_zh | escape }}" data-i18n-en="{{ title_en | escape }}" href="{{ post.redirect | relative_url }}">{{ post.title }}</a>
         {% endif %}
       </h3>
-      <p>{{ post.description }}</p>
+      <p data-i18n-zh="{{ desc_zh | escape }}" data-i18n-en="{{ desc_en | escape }}">{{ post.description }}</p>
       <p class="post-meta">
         {{ read_time }} min read &nbsp; &middot; &nbsp;
         {{ post.date | date: '%B %d, %Y' }}
@@ -206,3 +214,5 @@ pagination:
 {% endif %}
 
 </div>
+
+<script defer src="{{ '/assets/js/bilingual-post.js' | relative_url }}"></script>

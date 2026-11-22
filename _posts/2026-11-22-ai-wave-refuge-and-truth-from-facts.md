@@ -1,8 +1,10 @@
 ---
 layout: post
 title: "AI浪潮与逃难，还有实事求是"
+title_en: "The AI Wave, Seeking Refuge, and Seeking Truth from Facts"
 date: 2026-11-22 13:00:00 +0800
 description: "在算法、Infra 与业务之间跨界“逃难”，往往只是把外行的转换成本误当成了 AI 跨不过去的护城河。（支持 EN / 中文 一键切换，含 TL;DR）"
+description_en: "Pivoting across algorithms, infrastructure, and business logic to outrun AI mistakes an outsider's switching costs for a durable moat. (Bilingual EN / 中文 with TL;DR)"
 tags: ai-essays reflections career
 categories: essays
 related_posts: true
@@ -124,90 +126,4 @@ To return to where we started: everyone is looking for an escape route from AI, 
 
 </div>
 
-<script>
-(function () {
-  var dispatch = document.querySelector(".zine-dispatch");
-  var menuList = document.querySelector("#navbar .navbar-menu-list");
-  if (menuList && dispatch && !menuList.querySelector(".zine-nav-lang")) {
-    var navItem = document.createElement("li");
-    navItem.className = "nav-item zine-nav-lang";
-    var navSwitch = document.createElement("div");
-    navSwitch.className = "zine-lang-switch";
-    navSwitch.setAttribute("role", "group");
-    navSwitch.setAttribute("aria-label", "Language");
-    var btnEn = document.createElement("button");
-    btnEn.type = "button";
-    btnEn.className = "zine-lang-btn";
-    btnEn.setAttribute("data-lang-target", "en");
-    btnEn.setAttribute("aria-pressed", "false");
-    btnEn.textContent = "EN";
-    var btnZh = document.createElement("button");
-    btnZh.type = "button";
-    btnZh.className = "zine-lang-btn is-active";
-    btnZh.setAttribute("data-lang-target", "zh");
-    btnZh.setAttribute("lang", "zh-CN");
-    btnZh.setAttribute("aria-pressed", "true");
-    btnZh.textContent = "中文";
-    navSwitch.appendChild(btnEn);
-    navSwitch.appendChild(btnZh);
-    navItem.appendChild(navSwitch);
-    var searchBtn = document.getElementById("search-toggle");
-    var searchLi = searchBtn ? searchBtn.closest("li") : null;
-    if (searchLi && searchLi.parentNode === menuList) {
-      menuList.insertBefore(navItem, searchLi);
-    } else {
-      menuList.appendChild(navItem);
-    }
-  }
-  var buttons = document.querySelectorAll("[data-lang-target]");
-  var panels = document.querySelectorAll("[data-lang-panel]");
-  var heading = document.querySelector(".post-header h1.post-title");
-  var i18nNodes = document.querySelectorAll("[data-i18n-zh][data-i18n-en]");
-  var titleSep = document.title.indexOf(" | ");
-  var titleSuffix = titleSep !== -1 ? document.title.slice(titleSep) : "";
-  if (!buttons.length || !panels.length) return;
-  function applyLang(lang, updateUrl) {
-    var target = lang === "en" ? "en" : "zh";
-    buttons.forEach(function (btn) {
-      var active = btn.getAttribute("data-lang-target") === target;
-      btn.classList.toggle("is-active", active);
-      btn.setAttribute("aria-pressed", active ? "true" : "false");
-    });
-    panels.forEach(function (panel) {
-      var match = panel.getAttribute("data-lang-panel") === target;
-      panel.classList.toggle("is-hidden", !match);
-    });
-    if (dispatch) {
-      var nextTitle = dispatch.getAttribute(target === "en" ? "data-title-en" : "data-title-zh");
-      if (nextTitle) {
-        if (heading) heading.textContent = nextTitle;
-        document.title = nextTitle + titleSuffix;
-      }
-    }
-    i18nNodes.forEach(function (el) {
-      el.textContent = el.getAttribute(target === "en" ? "data-i18n-en" : "data-i18n-zh");
-    });
-    document.documentElement.lang = target === "en" ? "en" : "zh-CN";
-    document.documentElement.classList.toggle("lang-zh", target === "zh");
-    document.documentElement.classList.toggle("lang-en", target === "en");
-    if (updateUrl) {
-      try {
-        var url = new URL(window.location.href);
-        url.searchParams.set("lang", target);
-        window.history.replaceState(null, "", url.toString());
-      } catch (e) {}
-    }
-  }
-  buttons.forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      applyLang(btn.getAttribute("data-lang-target"), true);
-    });
-  });
-  var initial = "zh";
-  try {
-    var param = new URLSearchParams(window.location.search).get("lang");
-    if (param === "en" || param === "zh") initial = param;
-  } catch (e) {}
-  applyLang(initial, false);
-})();
-</script>
+<script defer src="/assets/js/bilingual-post.js"></script>
