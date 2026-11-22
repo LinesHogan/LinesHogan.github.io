@@ -30,7 +30,7 @@ I am Zeng Yuanhao (曾缘浩), a 1st-year PhD student at <a href="https://www.sh
 
 My research focuses on algorithm-system codesign for large language model agents — I design efficient algorithms that solve real-world challenges and build systems that make them practical. I enjoy (very) smart ideas in theory, algorithms, and systems, and will share some cool insights in my blogs.
 
-I develop <a href="https://github.com/LinesHogan/tLLM">tLLM</a>, a "mod loader" for vLLM that enables efficient decoding with test-time algorithms that intervene on the model's internal states.
+I develop <a href="{{ '/pllm/' | relative_url }}">pLLM</a> (<a href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">Programmable LLM</a>), an eBPF-like declarative programmability layer for vLLM that runs stateful and adaptive inference-time algorithms under continuous batching and CUDA graphs.
 
 Our latest study introduces **[The Resolution Hypothesis](https://arxiv.org/abs/2611.23068)** ([project page](/resolution-hypothesis/) · [blog](/blog/2026/resolution-hypothesis-behind-the-scenes/)), a large-scale audit (>10M LLM calls, 400K CPU hours) showing that frozen-weight agent evolution stalls not from failing to propose better skills, but because low-resolution evaluations cannot tell real improvements apart from noise.
 
@@ -38,6 +38,7 @@ My earlier work introduces **Exploratory Sampling (ESamp)**, a decoding-time met
 
 <div class="zine-bio-actions">
   <a class="zine-pill-link primary" href="{{ '/blog/' | relative_url }}">Read Blog</a>
-  <a class="zine-pill-link accent" href="{{ '/resolution-hypothesis/' | relative_url }}">Resolution Hypothesis</a>
-  <a class="zine-pill-link" href="https://github.com/LinesHogan/tLLM" target="_blank" rel="noopener">tLLM on GitHub ↗</a>
+  <a class="zine-pill-link accent" href="{{ '/pllm/' | relative_url }}">pLLM Project</a>
+  <a class="zine-pill-link" href="{{ '/resolution-hypothesis/' | relative_url }}">Resolution Hypothesis</a>
+  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">pLLM on GitHub ↗</a>
 </div>

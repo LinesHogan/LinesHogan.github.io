@@ -1,0 +1,53 @@
+name: Sync pLLM Blog & Docs
+
+on:
+  repository_dispatch:
+    types:
+      - pllm-updated
+  schedule:
+    - cron: "7 */12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-pllm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout LinesHogan.github.io
+        uses: actions/checkout@v4
+
+      - name: Checkout LinesHogan/pLLM
+        uses: actions/checkout@v4
+        with:
+          repository: LinesHogan/pLLM
+          path: _pllm_upstream
+          fetch-depth: 50
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install JS deps
+        run: npm ci
+
+      - name: Synchronize pLLM blog posts and docs
+        run: |
+          python3 bin/sync_pllm.py --pllm-dir _pllm_upstream
+          rm -rf _pllm_upstream
+          npx prettier --write "_posts/*-pllm-*.md"
+
+      - name: Commit synced updates if changed
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Already up to date with LinesHogan/pLLM."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _posts _pllm_docs _data/pllm_sync.yml assets/img/pllm 2>/dev/null || git add _posts _pllm_docs _data/pllm_sync.yml
+          git commit -m "chore(pllm): auto-sync blog posts and docs from LinesHogan/pLLM"
+          git push

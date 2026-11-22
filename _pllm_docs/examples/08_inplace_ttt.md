@@ -1,0 +1,307 @@
+---
+layout: page
+title: "08 In-Place TTT：一边读一边改权重的模型"
+description: "pLLM · Algorithm Family Examples (06–13) (算法族示例与实测 (06–13))"
+permalink: /pllm/docs/examples/08_inplace_ttt/
+nav: false
+---
+
+<div class="zine-dispatch">
+  <div class="zine-dispatch-links">
+    <a class="zine-pill-link primary" href="/pllm/#docs">← pLLM Project &amp; Docs</a>
+    <a class="zine-pill-link" href="/pllm/docs/">All Docs Index</a>
+    <span class="zine-lang-badge">Notebook (.ipynb)</span>
+  </div>
+  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/examples/08_inplace_ttt.ipynb" target="_blank" rel="noopener">Open .ipynb on GitHub ↗</a>
+</div>
+
+<div id="markdown-content" markdown="1">
+
+<div id="sec-1"></div>
+
+如果你想在服务里跑一个测试时训练（Test-Time Training，TTT）模型，先会遇到一个问题：它和普通推理模型存"记忆"的地方不一样。
+
+普通模型在推理时权重固定不变，它对上文的记忆全部存在 KV cache 里。TTT 的想法是：模型在读输入的同时，把一部分权重当作"快权重"不断更新，直接用权重记住上文。ByteDance Seed 提出的 In-Place TTT（论文 *In-Place Test-Time Training*，arXiv 2604.06169）之所以叫 "In-Place"，是因为它不往模型里加新层，而是直接把已有 MLP 的最后一个投影矩阵（down projection）当成快权重来改。
+
+把这种模型放进推理服务里，有三个具体的难点：
+
+1. **每个请求都要有一份独立的快权重**：我们接下来要用的 4B 检查点里，快权重一共是 6 个矩阵、149,422,080 个数，按 FP32 存放每份约 570 MiB。不同请求之间不能串改。
+2. **更新发生在 forward 中途**：长 prompt 在 prefill 阶段读到一半就要更新快权重；到了逐 token 生成的 decode 阶段，凑够一块也要立刻更新。
+3. **官方推理代码只支持单请求**：官方实现基于 Hugging Face `generate`，一次只能跑一个请求（源码里写着 `assert len(input_ids) == 1, "only support bs=1 for TTT inference"`，作者在 issue #4 里说明这是实现上的限制）。
+
+这一节我们一步步做四件事：
+
+1. 用白话把 In-Place TTT 的更新规则讲清楚；
+2. 用 pLLM 自带的 `InPlaceTTTWorkload` 加载一个社区检查点；
+3. 让 decode 跨过块边界，亲眼看到快权重在生成中途更新、下一个 token 立刻读到新权重；
+4. 在同一张 RTX 4090 上和官方实现对比吞吐，并讲清 FP32 与 BF16 两种精度的取舍。
+
+## 方法与检查点来源 {#sec-2}
+
+在动手跑代码之前，我们先搞清楚两件事：模型到底在改哪块权重、怎么改，以及我们手头这个检查点是从哪来的。
+
+### 方法 {#sec-3}
+
+- **哪部分是快权重**：模型在选定层的 MLP 里，把 down projection 矩阵 $$W$$（在这个检查点里形状是 `[d_model, d_ff] = [2560, 9728]`）当作快权重。这个 36 层的检查点选了第 0、6、12、18、24、30 层（每 6 层选一个）。Attention 层以及 MLP 的另外两个矩阵在推理时保持不变。
+- **怎么按块更新**：输入的 token 按固定大小的块（这个检查点是 1024 个 token 一块）分组。每读完一整块，就算一次权重更新：
+  $$\Delta W = \eta \cdot V^\top Z$$
+  其中 $$Z$$ 是这一块里每个 token 在 MLP 中的中间激活（也就是进入 down projection 之前的输入）；$$V$$ 是"目标"，由 MLP 的输入经过一个学出来的一维卷积（卷积核长度为 5，只在当前块内部做卷积）和一个学出来的方阵投影算出来；$$\eta$$ 是学习率（这个检查点里是 3）。算完后，快权重更新为 $$W \leftarrow W + \Delta W$$。
+- **谁能看到更新后的权重**：按块严格隔离——第 $$i$$ 块的 token 只能读到前面 $$i-1$$ 块累积的更新。如果 prompt 很长，一次 prefill 过程里就会触发好几次更新；prompt 末尾凑不满一整块的 token 会先存起来，等到了 decode 阶段生成新 token 时继续往里攒。一旦凑满一块就触发更新：凑满那一块的最后一个 token 读到的还是旧权重，从下一个 token 开始读到的就是新权重。
+- **请求之间互不干扰**：每个请求都从检查点里原本的 $$W$$ 出发，各自维护自己的更新。
+- **推理时不需要标签**：上面提到的一维卷积和方阵投影的参数，是在"外层"继续预训练阶段学出来的（论文里基于 Qwen3-4B 先在 32K 长度上训练约 200 亿 token，再在 128K 长度上训练约 150 亿 token）。到了推理阶段，模型只管一边读 token 一边按上面的公式改 $$W$$，不需要外部标签。
+- **论文与官方代码的两处差别**：第一，论文里写目标 $$V$$ 来自 token embedding，而官方代码默认（以及这个检查点的配置）用的是 MLP 的输入（`ttt_target="hidden_states"`）；第二，论文在 Qwen3-4B 的评测里把每次更新按范数裁剪到 `1e-5`，而官方代码没有做裁剪。pLLM 的 `InPlaceTTTWorkload` 跟随官方代码和检查点的实际配置：用 MLP 输入作为目标，不做裁剪。
+
+### 检查点来源 {#sec-4}
+
+论文作者没有发布模型权重（作者在官方仓库的 issue #1 中说明，由于内部数据政策，无法发布训练数据和模型权重）。
+
+本示例使用的是社区用户上传的检查点 `zhongweixie/inplace-ttt-qwen3-4b-32k-ttt`（固定在一个 revision，见下面加载它的代码）。模型卡说明它基于 Qwen3-4B，在 32K 长度上训练了 6000 步。我们核对过它的配置文件与张量形状（共 6 层带快权重、每层包含一个卷积和一个投影、学习率 $$\eta=3$$、块长 1024），但没有核实它的训练过程，也不在这个示例里评测它的生成质量；下面只用它来观察运行机制和测量速度。
+
+下面我们先读取这个检查点的配置，看看快权重分布在哪几层、块长和学习率分别是多少。
+
+```python
+import os
+
+os.environ["VLLM_LOGGING_LEVEL"] = "ERROR"  # 只显示 vLLM 的报错，省掉启动日志
+
+import argparse
+from dataclasses import replace
+from pathlib import Path
+
+import torch
+from vllm import SamplingParams
+
+import pllm
+from pllm.benchmark import throughput
+from pllm.workloads.inplace_ttt import InPlaceTTTConfig, InPlaceTTTWorkload
+
+CHECKPOINT = "zhongweixie/inplace-ttt-qwen3-4b-32k-ttt"  # 社区训练的检查点，不是论文作者发布的
+REVISION = "1f6aa7ea4bac2149358c86afea614f9edbd73c54"
+ttt = InPlaceTTTConfig.from_checkpoint(CHECKPOINT, revision=REVISION)
+print("快权重所在的层:", [target.layer for target in ttt.targets])
+print("块长:", ttt.chunk_size, " 学习率:", ttt.learning_rate)
+```
+
+```text
+快权重所在的层: [0, 6, 12, 18, 24, 30]
+块长: 1024  学习率: 3.0
+```
+
+上面的输出里，`InPlaceTTTConfig.from_checkpoint` 直接从检查点的 `config.json` 中读出了带快权重的层号 `[0, 6, 12, 18, 24, 30]`、块长 `1024` 和学习率 `3.0`。
+
+## 负载长什么样，以及它要占多少显存 {#sec-5}
+
+这一步我们要弄清楚两个问题：在 pLLM 里写一个 In-Place TTT 负载需要写多少代码？在真正把 8 GB 的模型权重加载进 GPU 之前，怎么先算清楚这些快权重会花掉多少显存？
+
+`InPlaceTTTWorkload` 的实现在 `pllm/workloads/inplace_ttt.py`，正文大约 60 行。它的核心是一个带 `@pllm.train_in_forward` 装饰器的方法：每次拿到一块的 MLP 输入（`targets`）、MLP 中间激活（`inputs`）以及当前累积的快权重增量 `delta`，先算卷积和投影得到 $$V$$，再算出这一块的权重更新，最后返回更新后的 `delta` 和这一块输出所需的修正项。下面是简化后的摘录：
+
+```python
+@pllm.train_in_forward(
+    visibility="exact",
+    state="dense_fast_weights",
+    targets=targets,                                 # def targets(self): return self.config.targets
+    weight="delta",
+    chunk=chunk_size,                                # def chunk_size(self): return self.config.chunk_size
+    tokens="all",
+)
+def step(self, delta=pllm.parameter("dense_fast_weights", "delta"), inputs=pllm.operand("input"),
+         targets=pllm.operand("target"), conv=pllm.parameter("target_parameters", "conv"),
+         proj=pllm.parameter("target_parameters", "proj")):
+    values = conv1d(targets, conv) @ proj            # V：块内卷积，再投影
+    update = (values.T @ inputs) * learning_rate     # ΔW = η · Vᵀ Z
+    return delta + update, inputs @ delta.T          # 新的 delta；这一块读到的修正
+```
+
+工作负载只负责写出上面的数学公式，剩下的事情由框架接管：
+
+- **每个请求独立一份 `delta`**：声明为 `RequestState`，按请求、prompt 和样本隔离，不会互相污染。
+- **按块攒行**：凑不满一整块（1024 个 token）的输入行，会自动跨 forward 保存起来，等后续 token 到来再凑块。
+- **块间可见性**：声明 `visibility="exact"` 后，框架保证后面的块读到前面块已经算出的更新。
+- **共享参数直接从检查点加载**：一维卷积和方阵投影参数声明为所有请求共享的 `InstanceState(init=pllm.ModelCheckpoint(...))`，由 pLLM 直接从检查点读入，vLLM 加载底座模型时会自动跳过这些张量。
+
+在启动引擎加载 8 GB 的模型权重之前，我们先调用 `pllm.explain`（详见[写代码时就看到成本](/pllm/docs/guides/explain/)），看看单并发（`max_num_seqs=1`）下这个负载需要多少显存、为什么会选择对应的执行模式。
+
+```python
+small = pllm.ModelConfig(CHECKPOINT, revision=REVISION, max_model_len=2048, max_num_seqs=1,
+                         max_num_batched_tokens=2048, gpu_memory_utilization=0.4)
+plan = pllm.explain(InPlaceTTTWorkload(ttt), small)
+print("eager 原因:", plan.eager_reason)
+for state in plan.states:
+    print(f"{state.name:20s} {state.scope:8s} 每份 {state.bytes_per_root / 2**20:6.1f} MiB × {state.roots} 份")
+```
+
+```text
+eager 原因: 
+dense_fast_weights   request  每份  714.0 MiB × 4 份
+target_parameters    instance 每份   75.1 MiB × 1 份
+```
+
+我们逐行看一下 `pllm.explain` 给出的结果：
+
+- **`eager 原因` 为空**：默认设置下，decode 中途的精确块边界更新也在 CUDA graph 里运行；这篇后面的几次运行和吞吐数字都开着 CUDA graph。关闭引擎会释放它的模型、请求状态和 graph，可以在同一进程中继续创建引擎。
+- **`dense_fast_weights`（每份 `714.0 MiB × 4 份`）**：这是每个请求独占的状态（`request` 作用域）。每份 `714.0 MiB` 里，包含 6 层 FP32 的 `delta` 矩阵（约 570 MiB），外加用来暂存还没凑满一整块的输入行的缓冲区。之所以给 1 个请求预留 4 份，是因为在更新时内存中需要同时保留正在写入的新版本和正在被读取的旧版本。
+- **`target_parameters`（每份 `75.1 MiB × 1 份`）**：这是那 6 层的一维卷积和方阵投影参数，属于实例级状态（`instance` 作用域），所有请求共享这一份，占约 75 MiB。
+
+## 验证 decode 中途的跨块更新 {#sec-6}
+
+看完了静态的显存账单，接下来我们验证一个关键行为：**当快权重的更新点刚好落在 decode 阶段中途时，到底哪一个 token 读旧权重、哪一个 token 开始读新权重？**
+
+为了亲眼看到分界线，我们设计一个小实验：
+
+- 文本取自 Python 标准库 `argparse` 模块的源码（每台装了 Python 的机器上都有这份文件）。
+- 我们截取前 **1023 个 token** 作为 prompt（比块长 1024 刚好少 1 个 token），然后用贪心解码连续生成 5 个 token。
+- 我们跑两组对比：第一组（`TTT`）使用正常的块长 1024；第二组（`不更新`）作为对照组，把块长改成 2048。因为整条序列加起来只有 $$1023 + 5 = 1028$$ 个 token，凑不满 2048，所以对照组的快权重从头到尾不会更新。
+
+下面运行这组对比，打印两组的更新次数和每一步生成 token 的 logprob。
+
+```python
+from transformers import AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT, revision=REVISION)
+text = Path(argparse.__file__).read_text()  # 一段每台机器上都有的长文本：argparse 模块的源码
+ids = tokenizer(text, add_special_tokens=False).input_ids
+print("长文本共", len(ids), "个 token")
+
+prompt = [{"prompt_token_ids": ids[:1023]}]  # 比一块（1024）少一个 token
+five = SamplingParams(temperature=0.0, max_tokens=5, ignore_eos=True, logprobs=0)
+runs = {}
+for name, config in (("TTT", ttt), ("不更新", replace(ttt, chunk_size=2048))):
+    with pllm.make_llm(small, workload=InPlaceTTTWorkload(config)) as llm:
+        sample = llm.generate(prompt, five, use_tqdm=False)[0].outputs[0]
+        runs[name] = [(token, step[token].logprob) for token, step in zip(sample.token_ids, sample.logprobs)]
+        print(f"{name}: 快权重更新了 {llm.diagnostics().update_count} 次")
+
+print("两组生成的 token 相同:", [t for t, _ in runs["TTT"]] == [t for t, _ in runs["不更新"]])
+print("\n生成的 token   算出它的位置   TTT 的 logprob   不更新的 logprob   差")
+for k, ((token, a), (_, b)) in enumerate(zip(runs["TTT"], runs["不更新"])):
+    print(f"{tokenizer.decode(token)!r:14s} {1022 + k:6d}      {a:10.4f}       {b:10.4f}      {a - b:+.4f}")
+```
+
+```text
+长文本共 19736 个 token
+TTT: 快权重更新了 6 次
+不更新: 快权重更新了 0 次
+两组生成的 token 相同: True
+
+生成的 token   算出它的位置   TTT 的 logprob   不更新的 logprob   差
+' _'             1022         -0.4400          -0.4400      +0.0000
+'get'            1023         -1.9058          -1.9058      +0.0000
+'_default'       1024         -2.2565          -2.3191      +0.0626
+'_action'        1025         -1.8538          -1.8214      -0.0324
+'(action'        1026         -1.7855          -1.7124      -0.0732
+```
+
+输出把跨块更新的时机展示得很清楚：
+
+- **更新次数**：`TTT` 组一共更新了 **6 次**，对应 6 个快权重层 × 1 个凑满的块；对照组（`不更新`）因为块长是 2048，全程更新了 **0 次**。
+- **前两个生成的 token（logprob 差为 `+0.0000`）**：
+  - 第 1 个生成的 token `' _'` 是由位置 `1022`（也就是 prompt 的最后一个 token，第 1023 个 token）算出来的，此时还没凑满 1024，两边的 logprob 都是 `-0.4400`。
+  - 第 2 个生成的 token `'get'` 是由位置 `1023`（全序列的第 1024 个 token）算出来的。位置 `1023` 的到来正好凑满了第一块（1024 个 token）并触发快权重更新，但**凑满这一块的最后一个 token 自己读到的仍然是旧权重**，所以两边的 logprob 依然完全一致（都是 `-1.9058`，差为 `+0.0000`）。
+- **从第 3 个生成的 token 起（logprob 开始出现差异）**：
+  - 第 3 个 token `'_default'` 由位置 `1024`（第二块的第 1 个位置）算出，它读到了刚刚更新过的快权重，logprob 从不更新时的 `-2.3191` 变成了 `-2.2565`（差 `+0.0626`）。
+  - 随后的位置 `1025` 和 `1026` 同样读到了新权重，logprob 差分别为 `-0.0324` 和 `-0.0732`。（在这 5 步贪心解码里，虽然 logprob 变了，两边选出来的 token 相同：输出里的 `两组生成的 token 相同: True`。）
+
+这就是论文里定义的块级可见性。它在 vLLM 的逐 token decode 过程中自动发生，而我们在编写 `InPlaceTTTWorkload` 时并没有手写"什么时候攒够一块、什么时候切换可见权重"的调度代码。
+
+确认了行为是对的，接下来我们看大家关心的另一个问题：把这套机制放进 pLLM 里跑，和官方的 Hugging Face 实现相比速度怎么样？
+
+```python
+def measure(llm, length: int, batch: int) -> float:
+    """batch 个同样的 prompt（前 length 个 token），各贪心生成 256 个 token 的吞吐。"""
+    prompts = [{"prompt_token_ids": ids[:length]}] * batch
+    return throughput(llm, prompts, SamplingParams(temperature=0.0, max_tokens=256, ignore_eos=True))
+
+
+long = pllm.ModelConfig(CHECKPOINT, revision=REVISION, max_model_len=16640, max_num_seqs=1,
+                        max_num_batched_tokens=8192, enable_chunked_prefill=True, gpu_memory_utilization=0.5)
+for dtype in (torch.float32, torch.bfloat16):
+    with pllm.make_llm(long, workload=InPlaceTTTWorkload(ttt, dtype=dtype)) as llm:
+        for length in (4096, 16384):
+            print(f"pllm {str(dtype)[6:]:8s} 1 个请求  prompt {length:5d}: {measure(llm, length, 1):6.2f} token/s")
+```
+
+```text
+pllm float32  1 个请求  prompt  4096:  59.64 token/s
+pllm float32  1 个请求  prompt 16384:  42.27 token/s
+pllm bfloat16 1 个请求  prompt  4096:  57.12 token/s
+pllm bfloat16 1 个请求  prompt 16384:  40.64 token/s
+```
+
+```python
+# 4 个请求各一份快权重（含在途版本共 10 份），再加上 CUDA graph 的私有池，24 GiB 的卡要给 vLLM 少留一点显存。
+four = replace(long, max_model_len=4416, max_num_seqs=4, max_num_batched_tokens=4416, gpu_memory_utilization=0.48)
+with pllm.make_llm(four, workload=InPlaceTTTWorkload(ttt)) as llm:
+    print(f"pllm float32  4 个请求  prompt  4096: {measure(llm, 4096, 4):6.2f} token/s")
+```
+
+```text
+pllm float32  4 个请求  prompt  4096: 111.38 token/s
+```
+
+## 与官方实现对比吞吐 {#sec-7}
+
+这一步我们要回答的问题是：在相同的硬件和相同的输入输出长度下，pLLM 的吞吐和官方实现相比如何？当从单请求变成多请求并发时，吞吐能提升多少？
+
+我们先对齐两边的测试协议：
+
+- **硬件与输入**：同一张 RTX 4090；使用同一段 prompt token（上面 `argparse` 源码的前 4096 个或前 16384 个 token）。
+- **解码设置**：贪心解码、不在 EOS 处提前停止、固定生成 256 个 token。
+- **计时方式**：先跑 1 轮预热，再跑 3 轮计时取中位数；吞吐定义为 `生成的 token 总数 / 整次 generate 的耗时（含 prefill）`。pLLM 这边用的 `pllm.benchmark.throughput` 就是这样计时的。
+
+官方实现来自仓库 `ByteDance-Seed/In-Place-TTT` 的推理代码，基于 Hugging Face `generate`，使用 BF16 精度和 FlashAttention 2。因为它依赖另一套 Python 环境（`torch 2.8.0`、`transformers 4.57.3`），我们在同一台机器上单独运行它（两边在同一张 RTX 4090 上分别运行）。
+
+官方实现的测法（在它自己的环境里运行）：
+
+```python
+from inference_model.hf_qwen3.modeling_qwen3 import Qwen3ForCausalLM  # 官方仓库里的模型类
+
+model = Qwen3ForCausalLM.from_pretrained(checkpoint, dtype=torch.bfloat16,
+                                         attn_implementation="flash_attention_2").eval().cuda()
+model.generate(input_ids=prompt, attention_mask=torch.ones_like(prompt), max_new_tokens=256,
+               min_new_tokens=256, do_sample=False, eos_token_id=None, pad_token_id=151643, use_cache=True)
+```
+
+把刚才两格跑出来的数字和官方实现的测量结果放在一起对比（单位均为 `token/s`；pLLM 用 vLLM 0.32.0、开着 CUDA graph；官方实现在同一天、同一张卡上按同样协议测得）：
+
+| | 1 个请求，prompt 4096 | 1 个请求，prompt 16384 | 4 个请求，prompt 4096 |
+| --- | --- | --- | --- |
+| 官方 HF 实现（BF16） | 54.79 | 34.89 | 不支持（只支持 1 个请求） |
+| pLLM，float32 快权重 | 59.64 | 42.27 | 111.38（4 个请求合计） |
+| pLLM，bfloat16 快权重 | 57.12 | 40.64 | 未测 |
+
+我们可以从表格里读出几条直接的结论：
+
+- **单请求下的对比**：pLLM 的 `bfloat16` 模式（复现官方的 BF16 舍入行为）在 prompt 4096 时比官方快约 4%（`57.12` 对 `54.79`），在 prompt 16384 时快约 16%（`40.64` 对 `34.89`）。pLLM 默认的 `float32` 模式在两档长度上都更快（`59.64` 和 `42.27`）。为什么 `float32` 反而比 `bfloat16` 快？因为在 `float32` 模式下，每次投影只需要额外做一次 `inputs @ delta`；而在 `bfloat16` 模式下，为了严格复现官方把更新直接加到底座上的 BF16 舍入效果，需要先将底座权重和 `delta` 合成并舍入成 BF16，再做两次矩阵乘，多了一些计算工作。
+- **多请求并发**：当 4 个请求一起跑时，pLLM（`float32` 快权重）的合计吞吐达到 `111.38 token/s`，大约是单请求 `float32`（`59.64 token/s`）的 1.9 倍；而官方实现由于 `bs=1` 的限制，不支持多请求同时推理。4 个请求各一份快权重（含在途版本共 10 份，每份 714 MiB），再加上 CUDA graph 的私有池，在 24 GiB 的卡上要把 vLLM 的显存比例降到 0.48 才装得下。
+- **关于生成结果的逐位对比**：pLLM 生成的 token 序列与官方实现并不逐位相同。这是因为两边的矩阵乘切分方式和浮点舍入顺序不同，当贪心解码遇到两个候选 token 的得分非常接近时，微小的数值差异就会让后续走向不同的 token。
+
+## 精度选择：快权重该用 FP32 还是 BF16？ {#sec-8}
+
+在上面的测速里，我们看到了 `float32` 和 `bfloat16` 两种快权重模式。最后一节我们来搞清楚：这两种模式在数值上到底有什么区别？平时该选哪一种？
+
+论文里并没有说明推理时快权重应该用什么浮点精度存放。看官方仓库的代码可以发现，它是把原本的 down projection 矩阵复制一份作为快权重，每算出一块的 $$\Delta W$$ 就直接加到这份矩阵上。因此，当模型以 BF16 加载时，这份快权重也是 BF16，并没有单独保留一份 FP32 的主副本。
+
+这种做法有一个数值上的隐患：**把一个很小的更新量直接加到一个数值较大的 BF16 矩阵上，大部分更新会被 BF16 的尾数精度直接舍入掉（大数吃小数）。**
+
+我们在该检查点第 0 层的真实 down projection 矩阵上做过一个舍入测试：如果生成一个范数为 `1e-5` 的更新矩阵（也就是论文评测 Qwen3-4B 时每次更新被裁剪到的大小），直接用 BF16 加到第 0 层的矩阵上，在全部 `24,903,680` 个元素里，只有 `472` 个元素的值发生了变化，实际生效的改变量只有预期值的约 `0.97%`。（说明一下：这只是一个用来展示浮点舍入效应的数值演示，不是模型质量实验；而且我们手头这个社区检查点没有开裁剪，单次更新的幅度比 `1e-5` 大得多。）
+
+为了避免小更新被底座权重吃掉，pLLM 提供了两种工程选择：
+
+- **默认用 FP32 单独存增量（`dtype=torch.float32`）**：底座权重保持 BF16 不动，每个请求用 FP32 单独存放累积的增量 `delta`，前向计算时在底座输出上加上 `inputs @ delta`。这样即使单次更新很小，也能在 FP32 的 `delta` 里累积起来，不会被舍入掉。
+- **对齐官方舍入的 BF16 模式（`InPlaceTTTWorkload(ttt, dtype=torch.bfloat16)`）**：如果你想和官方代码逐步对齐舍入方式，可以显式传入 `dtype=torch.bfloat16`。在这个模式下，每次更新后快权重都会按照与官方一致的方式做 BF16 舍入；同时，这个舍入后的结果与底座权重之间的差值仍然用 FP32 存放，不会再额外多丢精度。
+
+这两种方式都是合理的工程选择；由于论文没有规定精度，pLLM 默认选择保留小更新的 FP32 模式。
+
+### 小结 {#sec-9}
+
+1. **In-Place TTT 的核心机制**：不加新层，把选定层 MLP 的 down projection 当作快权重，每读满一块（如 1024 个 token）就用卷积+投影算出的目标更新一次权重，后续块立刻读到更新后的权重。
+2. **用 pLLM 运行与观测**：完整实现在 [`pllm/workloads/inplace_ttt.py`](https://github.com/LinesHogan/pLLM/blob/main/pllm/workloads/inplace_ttt.py)。借助 `pllm.explain` 可以在加载权重前看到每个请求的快权重要占多少显存；在 decode 跨过块边界时，框架会自动完成快权重更新与可见性切换，并支持多请求并发推理。
+3. **与其他教程的联系**：如果你读过上一篇 [07 改写残差连接](/pllm/docs/examples/07_custom_residual/)
+，会发现那里的记忆子层和这里的 In-Place TTT 是同一种"按块更新、块内只读旧状态"的计算结构。
+
+</div>
+
+<div class="zine-doc-footer">
+  <a class="zine-pill-link" href="/pllm/#docs">← Back to pLLM Documentation Hub</a>
+  <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/blob/main/doc/examples/08_inplace_ttt.ipynb" target="_blank" rel="noopener">Edit / View on GitHub ↗</a>
+</div>

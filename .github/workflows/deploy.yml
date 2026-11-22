@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - "assets/**"
+      - "bin/sync_pllm.py"
       - "resolution-hypothesis/**"
       - "**.bib"
       - "**.html"
@@ -23,6 +24,7 @@ on:
       - "!.github/workflows/docker-slim.yml"
       - "!.github/workflows/lighthouse-badger.yml"
       - "!.github/workflows/prettier.yml"
+      - "!.github/workflows/sync-pllm.yml"
       - "!lighthouse_results/**"
       - "!docs/CONTRIBUTING.md"
       - "!docs/CUSTOMIZE.md"
@@ -35,6 +37,7 @@ on:
       - main
     paths:
       - "assets/**"
+      - "bin/sync_pllm.py"
       - "resolution-hypothesis/**"
       - "**.bib"
       - "**.html"
@@ -51,12 +54,18 @@ on:
       - "!.github/workflows/docker-slim.yml"
       - "!.github/workflows/lighthouse-badger.yml"
       - "!.github/workflows/prettier.yml"
+      - "!.github/workflows/sync-pllm.yml"
       - "!lighthouse_results/**"
       - "!docs/CONTRIBUTING.md"
       - "!docs/CUSTOMIZE.md"
       - "!docs/FAQ.md"
       - "!docs/INSTALL.md"
       - "!README.md"
+  repository_dispatch:
+    types:
+      - pllm-updated
+  schedule:
+    - cron: "23 */6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -91,6 +100,13 @@ jobs:
           cache: "npm"
       - name: Install JS deps 📦
         run: npm ci
+      - name: Sync pLLM blog & docs 🔄
+        run: |
+          if git clone --depth 50 https://github.com/LinesHogan/pLLM.git /tmp/pllm-repo; then
+            python3 bin/sync_pllm.py --pllm-dir /tmp/pllm-repo
+          else
+            echo "::warning::Could not reach LinesHogan/pLLM; building with committed pLLM snapshot."
+          fi
       - name: Update _config.yml ⚙️
         uses: fjogeleit/yaml-update-action@main
         with:

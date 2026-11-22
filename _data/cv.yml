@@ -23,4 +23,4 @@ cv:
         location: ICML 2026
         highlights:
           - Proposed Exploratory Sampling (ESamp), a decoding-time method for semantic exploration in LLM generation.
-          - Released the tLLM implementation at https://github.com/LinesHogan/tLLM.
+          - Released pLLM (Programmable LLM) at https://github.com/LinesHogan/pLLM (project & docs: https://lineshogan.github.io/pllm/).
