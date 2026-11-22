@@ -8,7 +8,7 @@ pagination:
   enabled: true
   collection: posts
   permalink: /page/:num/
-  per_page: 5
+  per_page: 10
   sort_field: date
   sort_reverse: true
   trail:
@@ -27,7 +27,13 @@ pagination:
     <h1>{{ site.blog_name }}</h1>
     <h2>{{ site.blog_description }}</h2>
   </div>
-  {% endif %}
+{% else %}
+  <header class="zine-masthead">
+    <div class="zine-kicker">Field Notes &amp; Essays &middot; Zine</div>
+    <h1 class="post-title">Blog</h1>
+    <p class="zine-deck">Research notes, behind-the-scenes dispatches, and essays on LLM agents, systems, and AI.</p>
+  </header>
+{% endif %}
 
 {% if site.display_tags and site.display_tags.size > 0 or site.display_categories and site.display_categories.size > 0 %}
 
