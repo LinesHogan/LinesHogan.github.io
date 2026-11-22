@@ -23,6 +23,7 @@ module.exports = {
     // and page chrome (scroll-progress bar, ToC) bleeds through a zoomed image.
     "medium-zoom-overlay",
     "medium-zoom-image--opened",
+    "mjx-container",
     "is-active",
     "is-hidden",
     "zine-kicker",

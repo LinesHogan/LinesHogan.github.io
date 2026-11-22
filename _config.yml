@@ -585,8 +585,8 @@ third_party_libraries:
     local:
       fonts: "output/chtml/fonts/woff-v2/"
     url:
-      fonts: "https://cdn.jsdelivr.net/npm/mathjax@{{version}}/es5/output/chtml/fonts/woff-v2/"
-      js: "https://cdn.jsdelivr.net/npm/mathjax@{{version}}/es5/tex-mml-chtml.js"
+      fonts: "https://cdnjs.cloudflare.com/ajax/libs/mathjax/{{version}}/es5/output/chtml/fonts/woff-v2/"
+      js: "https://cdnjs.cloudflare.com/ajax/libs/mathjax/{{version}}/es5/tex-mml-chtml.js"
     version: "3.2.2"
   tikzjax:
     integrity:
