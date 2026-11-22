@@ -116,6 +116,9 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+      - name: Wait for artifact indexing ⏳
+        if: github.event_name != 'pull_request'
+        run: sleep 5
       - name: Deploy 🚀
         id: deployment
         if: github.event_name != 'pull_request'
