@@ -15,7 +15,7 @@ nav_order: 3
 <div class="post">
 
 <header class="zine-masthead">
-  <div class="zine-kicker" data-i18n-zh="开源推理系统 · Programmable LLM · vLLM 0.27–0.34" data-i18n-en="Open-Source Inference System &middot; Programmable LLM &middot; vLLM 0.27–0.34">Open-Source Inference System &middot; Programmable LLM &middot; vLLM 0.27–0.34</div>
+  <div class="zine-kicker" data-i18n-zh="开源推理系统 · Programmable LLM · Release v0.5.0 · vLLM 0.27–0.34" data-i18n-en="Open-Source Inference System &middot; Programmable LLM &middot; Release v0.5.0 &middot; vLLM 0.27–0.34">Open-Source Inference System &middot; Programmable LLM &middot; Release v0.5.0 &middot; vLLM 0.27–0.34</div>
   <h1 class="post-title" data-i18n-zh="pLLM：可编程大语言模型推理层" data-i18n-en="pLLM: Programmable LLM">pLLM: Programmable LLM</h1>
   <p class="zine-deck" data-i18n-zh="面向未修改 vLLM 的类 eBPF 声明式可编程层——无需拉私有分支，即可将有状态推理期算法、每请求快权重与解码期在线训练直接编译进连续批处理与静态 CUDA Graph。" data-i18n-en="An eBPF-like declarative programmability layer for unmodified vLLM—compiling stateful inference-time algorithms, per-request fast weights, and online decode-time training into continuous batching and CUDA graphs with zero engine forks.">An eBPF-like declarative programmability layer for unmodified vLLM—compiling stateful inference-time algorithms, per-request fast weights, and online decode-time training into continuous batching and CUDA graphs with zero engine forks.</p>
 </header>
@@ -23,6 +23,7 @@ nav_order: 3
 <div class="zine-dispatch" data-title-zh="pLLM：可编程大语言模型推理层" data-title-en="pLLM: Programmable LLM">
   <div class="zine-dispatch-links">
     <a class="zine-pill-link primary" href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">GitHub &middot; LinesHogan/pLLM ↗</a>
+    <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/releases/tag/v0.5.0" target="_blank" rel="noopener">Release v0.5.0 ↗</a>
     <a class="zine-pill-link accent" data-i18n-zh="双语文档中心 ↓" data-i18n-en="Documentation ↓" href="#docs">Documentation ↓</a>
     <a class="zine-pill-link" data-i18n-zh="技术专栏 ({{ pllm_posts.size }}) ↓" data-i18n-en="Blog Series ({{ pllm_posts.size }}) ↓" href="#blog">Blog Series ({{ pllm_posts.size }}) ↓</a>
     <a class="zine-pill-link" data-i18n-zh="ICML 2026 论文 (ESamp) ↗" data-i18n-en="ICML 2026 Paper (ESamp) ↗" href="https://proceedings.mlr.press/v306/zeng26m.html" target="_blank" rel="noopener">ICML 2026 Paper (ESamp) ↗</a>
