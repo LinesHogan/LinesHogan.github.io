@@ -1,9 +1,9 @@
 ---
 layout: post
-title: "分辨率假说（二）：高噪声是个高通滤波器——那些暴涨 30 分的 Agent 到底学到了什么？"
+title: "分辨率假说（二）：高噪声是个高通滤波器——那些涨了 30 分的 Agent 到底学到了什么？"
 title_en: "The Resolution Hypothesis (Part 2): High Noise Is a High-Pass Filter—What Did Those +30-Point Agents Actually Learn?"
 date: 2026-11-17 19:00:00 +0800
-description: "对 12 个基准的评测器源码与进化产物逐行审计：一句话就能复现 90% 的惊人涨幅，修好评测漏洞后中位涨幅从 17.6 pp 跌到 0.8 pp。"
+description: "逐行审计 12 个基准的评测器源码与进化产物：往基线后补一句话就能复现 90% 的涨幅，修好评测问题后，中位涨幅从 17.6 pp 降到 0.8 pp。（支持 EN / 中文 一键切换，含 TL;DR）"
 description_en: "A line-by-line audit of graders and evolved artifacts across 12 benchmarks: one sentence recovers 90% of the headline gains, and repairing the graders drops the median from 17.6 pp to 0.8 pp. (Bilingual EN / 中文 with TL;DR)"
 tags: agent-evolution evaluation research
 categories: research-notes
@@ -11,7 +11,7 @@ thumbnail: /resolution-hypothesis/assets/gain_ledger.png
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="分辨率假说（二）：高噪声是个高通滤波器——那些暴涨 30 分的 Agent 到底学到了什么？" data-title-en="The Resolution Hypothesis (Part 2): High Noise Is a High-Pass Filter—What Did Those +30-Point Agents Actually Learn?">
+<div class="zine-dispatch" data-title-zh="分辨率假说（二）：高噪声是个高通滤波器——那些涨了 30 分的 Agent 到底学到了什么？" data-title-en="The Resolution Hypothesis (Part 2): High Noise Is a High-Pass Filter—What Did Those +30-Point Agents Actually Learn?">
   <a class="zine-pill-link" data-i18n-zh="论文 arXiv:2611.23068 ↗" data-i18n-en="Paper · arXiv:2611.23068 ↗" href="https://arxiv.org/abs/2611.23068" target="_blank" rel="noopener">论文 arXiv:2611.23068 ↗</a>
   <div class="zine-lang-switch" role="group" aria-label="Language">
     <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
@@ -23,99 +23,88 @@ related_posts: true
 
 <div class="zine-tldr" markdown="1">
 
-**TL;DR：** 高噪声评估在进化循环中扮演了一台“高通滤波器”：只帮少数题目提分 2–5 pp 的扎实技巧会被噪声淹没，只有跨全题库生效的评测捷径才能刺穿阈值。通过对 12 个基准的逐行审计，我们在全部 27 组原涨幅超 3 pp 的配置中仅往空基线追加一句话，就复现了中位 90% 的收益；修好评测漏洞后，中位涨幅从 17.6 pp 暴跌至 0.8 pp。无论是 SpreadsheetBench 上“30 分百发百中、6 分淹没在噪声里”的对照，还是 LiveMathematicianBench 里进化自动磨出“劝降话术”攻破模型数学自尊心的案例，都直接印证了：分辨率决定了进化到底能留住什么。
+**TL;DR：** 高噪声评估在进化循环里像一台高通滤波器：只帮一两道题提分 2.5–5 pp 的扎实技巧很容易被方差盖住，真正能稳稳穿过噪声底板的，往往是跨全题库生效的评测捷径。逐行核对 12 个基准的评测器源码与进化产物后，在全部 27 组原涨幅超 3 pp 的配置上，仅往未进化基线后补一句话，就能复现中位数 90% 的收益；把评测问题修好之后，中位涨幅从 17.6 pp 降到了 0.8 pp。进化本身其实是在老老实实优化最响的信号——SpreadsheetBench 上同一条规则“30 分时 8/8 留下、6 分时 12 里只剩 2”，以及 LiveMathematicianBench 上进化花轮次打磨话术去说服模型走捷径，都很直观地说明了这一点。清理掉这些表面增益后，真正困难的基准还留着大块空间，也把问题推向下一篇：在没有捷径可走时，好 Skill 究竟写不写得出来，又是在哪一步弄丢的。
 
 </div>
 
 > **《分辨率假说》系列（2/3）** · [论文 arXiv:2611.23068](https://arxiv.org/abs/2611.23068) · [项目主页与 30s 互动小游戏](/resolution-hypothesis/) · [幕后手记](/blog/2026/resolution-hypothesis-behind-the-scenes/)
-> **连载导航**：[（一）原地踏步与方差账](/blog/2026/resolution-hypothesis-part-1/) · **（二）高通滤波器与捷径审计** · [（三）好 Skill 与失明的选择器](/blog/2026/resolution-hypothesis-part-3/)
+> **连载导航**：[（一）原地踏步与方差账](/blog/2026/resolution-hypothesis-part-1/) · **（二）高通滤波器与捷径审计** · [（三）好 Skill 与挑不出来的选择器](/blog/2026/resolution-hypothesis-part-3/)
 
-在[上一篇](/blog/2026/resolution-hypothesis-part-1/)中，我们通过方差分解 $$\text{Var}(\hat{Y}) = \sigma^2 + \tau^2$$ 算清楚了一件事：常规 Agent 评估的单次标准差在 $$1.7\sim 4.1\text{ pp}$$ 左右，这导致两三个百分点的方法差距完全被淹没在了噪声里。
+在[上一篇](/blog/2026/resolution-hypothesis-part-1/)里，我们通过方差分解 $$\text{Var}(\hat{Y}) = \sigma^2 + \tau^2$$ 算清了一笔账：常规 Agent 评估的单次标准差大概在 $$1.7\sim 4.1\text{ pp}$$ 之间，换句话说，两三个百分点的方法差距，基本都会被单次采样的噪声盖过去。
 
-但正如我们在上一篇末尾提到的，文献和我们的复现网格里明明存在另一类现象：在 SpreadsheetBench、LiveMathematicianBench、AIME 2025 等基准上，进化后的产物相比 Baseline 动辄暴涨 $$10\sim 40\text{ pp}$$，远远超出了单次运行的噪声范围。
+不过上一篇末尾也留了个悬念。不管是在文献里，还是在我们自己跑出的复现网格里，确实有不少看上去非常硬气的数字：在 SpreadsheetBench、LiveMathematicianBench、AIME 2025 这些基准上，进化后的产物相比 Baseline 动辄高出 $$10\sim 40\text{ pp}$$，早就远远超出了单次运行的噪声区间。
 
-这是否说明进化算法在这些任务上真正涌现出了有效的提升？
+看到这种涨幅，人的第一反应自然是：至少在这些任务上，进化算法是真的学到了点东西吧？
 
-当我们顺着“分辨率假说”的逻辑去审视这些暴涨，并把进化出来的产物逐行拆开、对照评测器源码做完审计后，我们发现了一个非常离谱的情况：**高噪声的评估系统，在进化循环中实际上扮演了一个“高通滤波器（High-Pass Filter）”的角色。**
+顺着“分辨率假说”的思路，我们把这些涨幅最大的进化产物一行一行拆开，再对照着评测器的源码逐条核对了一遍。查完之后，背后的机制其实相当直白：**在进化循环里，高噪声的评估系统，干的就是一台高通滤波器（High-Pass Filter）的活。**
 
 ---
 
-### 低分辨率评估偏爱“捷径”
+这件事其实不难凭直觉想通。不妨假设验证集里有 40 道各不相同的任务，单次评估的噪声标准差在 $$3\sim 4\text{ pp}$$ 左右。
 
-不妨先从直觉上推演一下：假设验证集有 40 道各不相同的任务，评估噪声的标准差是 $$3\sim 4\text{ pp}$$。
+如果提议器（Proposer）总结出了一条**很扎实、但只适用于某类具体问题**的工程习惯——比如“处理 CSV 缺失值前先检查文件编码”——它也许能帮智能体多做对 1 到 2 道题，带来的真实提升大约是 $$\Delta \approx 2.5\sim 5\text{ pp}$$。放在单次评估的噪声里，这点收益很容易被某一次偶然的采样失手抹平，选择器（Selector）大概率根本认不出它。
 
-如果提议器（Proposer）总结出了一条**真正扎实但只针对某类具体任务**的技巧（例如“处理 CSV 缺失值时先检查编码格式”），它可能只会帮智能体多做对 1 到 2 道题，带来的真实提升 $$\Delta \approx 2.5\sim 5\text{ pp}$$。在单次评估的高噪声下，这么小的提升很容易被一次偶然的采样失败抵消掉，选择器根本认不出它。
+反过来想，什么样的改动能够单步拉出 $$+20\sim 40\text{ pp}$$ 的差距，稳稳穿过噪声底板、让选择器一眼相中？
 
-反过来，什么样的修改能够产生 $$+20\sim 40\text{ pp}$$ 的单步跳跃，从而毫无悬念地刺穿噪声阈值、被选择器一把抓住呢？
+它几乎必然是一条**跨过具体题目内容、能同时撬动整个测试集里大多数题目的全局规则**。而在现有的基准测试里，能做到这一点的，往往不是什么领域能力的跃迁，而是刚好踩中评测器习惯或漏洞的**评估捷径（Evaluation Shortcuts）**。
 
-**它必须是一条能够跨过具体任务内容的差异、一次性让测试集里几乎所有题目同时提分的全局规则。** 而在现有的基准测试中，能够做到这一点的，往往不是领域能力的突破，而是迎合评测器缺陷的**评估捷径（Evaluation Shortcuts）**。
+话也得说公道一点：进化算法找到这种捷径，并不是它在“作弊”，更不是优化器坏掉了。恰恰相反，这说明优化器正在老老实实地干活——循环里什么信号高过了噪声底板，选择压力就会顺着什么信号往下推。噪声越高，留给细水长流的局部改进的空间就越窄，最后能活下来的，自然只剩嗓门最大的那几条全局捷径。
 
-为了验证这个推论，我们对 12 个基准上报告的最大涨幅做了两项对照测试：
+为了验证这个判断，我们对 12 个基准上报告的最大涨幅做了两项对照审计：
 
-1. **一句话测试（The One-Rule Test）**：进化出来的 Skill 或 Prompt 往往包含几十条指令。我们通过 LLM 辅助筛查加人工核对，从中只挑出**一句话**，直接拼到未进化的 Baseline 后面（其余一字不改）；
-2. **修复评估测试（Repaired Evaluation）**：我们将评测脚本中违背基准原意的漏洞修好（例如恢复官方公式重算、将死板的字符串匹配改为语义等价判分、剔除题目泄露项），再用同一批进化产物重新测分。
+1. **一句话测试（The One-Rule Test）**：进化出来的 Skill 或 Prompt 动辄写满几十条指令。我们先用 LLM 辅助筛选，再对照评测器源码逐条人工核对，从中只抽出**一句话**，原封不动地拼在未进化的 Baseline 后面，其余一字不改；
+2. **修复评估测试（Repaired Evaluation）**：把评测脚本里偏离基准原意的问题修好——比如恢复官方公式重算、把死板的字符串匹配换成语义等价判分、核查题目里的泄露或残缺项——然后拿同一批进化产物重新测分。
 
 ![一句话复现与修复评估后的涨幅对比](/resolution-hypothesis/assets/gain_ledger.png){: style="display: block; max-width: 100%; width: auto; height: auto; max-height: 620px; margin: 1.5rem auto; object-fit: contain; border-radius: 8px;" }
 
-实验结果非常离谱地整齐：在所有原涨幅超过 $$3\text{ pp}$$ 的 27 个“模型-基准”对中，**仅往 Baseline 后面追加一句话，就复现了完整进化算法中位数 90% 的涨幅**（图 3a）；而一旦把评测器的漏洞修好，**中位数涨幅立刻从 17.6 pp 跌到了 0.8 pp**（图 3b）。哪怕我们在修复后的评测器下从头重新运行进化算法，昔日的暴涨也再没有回来。
+跑出来的数字整齐得几乎有点不好意思：在全部 27 个原涨幅超过 $$3\text{ pp}$$ 的“模型-基准”对里，**只往 Baseline 后面补这一句话，就复现了完整进化算法中位数 90% 的涨幅**（图 3a）；而只要把评测器的问题修好，**中位涨幅立刻从 17.6 pp 降到了 0.8 pp**（图 3b）。哪怕我们在修复后的评测器上把进化算法从头再跑一遍，昔日那些动辄二三十分的涨幅，也再没回来过。
 
 ---
 
-### 来鉴赏下非常离谱的案例
+比起汇总柱状图，审计过程中翻出来的几个具体案例，其实更能把“进化是怎么跟着分辨率走的”讲透。更多细节都记在我们论文 [arXiv:2611.23068](https://arxiv.org/abs/2611.23068) 的附录 E 里，这里挑三个最有意思的看看。
 
-比起宏观的统计数字，我们在审计具体基准时看到的几个微观案例，更能直观地展示“进化算法是如何与评估分辨率互动的”（可以在我们论文 [arXiv:2611.23068](https://arxiv.org/abs/2611.23068) 的附录 E 中看到更多细节）：
+**先看 SpreadsheetBench 上那道“30 分 vs 6 分”的门槛。** 在 SpreadsheetBench 上，不管是原论文还是我们的复现，进化方法都能拿到 $$+30\sim 40\text{ pp}$$ 的提升。把进化产物打开一看，真正起作用的核心就一句话：_“严禁向单元格写入 Excel 公式字符串，必须在 Python 中算出结果数值后直接填入纯数字或文本。”_
 
-#### 1. SpreadsheetBench 上的“30 分 vs 6 分”分辨率阈值
+写好好的 Excel 公式怎么会被判错呢？查完评测脚本就明白了：随某个方法一起开源的评测脚本在读取生成的 `.xlsx` 文件时，没有调用电子表格引擎去重新计算公式（Recalculate）。于是，所有没带缓存结果的公式单元格读出来全是空的，直接记 0 分。这种评测脚本里漏掉重算步骤的情况，在工程上其实挺容易不小心写出来；只不过落进进化循环里，就成了最显眼的优化目标。
 
-在 SpreadsheetBench 上，无论是原论文还是我们的复现，进化方法都能拿到 $$+30\sim 40\text{ pp}$$ 的惊人提升。检查进化产物后我们发现，核心全靠一句话：_“严禁向单元格写入 Excel 公式字符串，必须在 Python 中算出结果数值后直接填入纯数字或文本。”_
+更有意思的还在修完之后。我们按官方评测标准接入 LibreOffice，在判分前对工作簿做公式重算，同一批进化产物的涨幅（以 GPT-5.4 nano 为例）就从 $$+31.1\text{ pp}$$ 降到了 $$+6.7\text{ pp}$$。为什么还剩大约 $$6\text{ pp}$$ 的正收益？因为有几道题用到了较新的 Excel 函数，连 LibreOffice 也算不出来，所以“用 Python 算好再填数值”在修好的评测器下，依然是一条货真价实能稳赚 $$6\text{ pp}$$ 的策略。
 
-为什么写 Excel 公式会被判错？因为伴随某方法开源的评测脚本在读取生成的 `.xlsx` 文件时，**没有调用电子表格引擎去重新计算公式（Recalculate），导致所有未缓存求值的公式单元格全被读成了空值（0 分）**。
+问题也跟着来了：既然修完评测器后，这条规则还是有 $$+6\text{ pp}$$ 的真实收益，为什么我们拿修好的评测器从头重跑进化，算法却学不会它了？
 
-这里最值得玩味的是修复前后的对比实验：
+算笔账就清楚了。验证集一共 39 道题，$$+6\text{ pp}$$ 折算下来也就 **2 到 3 道题**的差别，刚好落进单次评估的随机噪声里。结果就是：在旧评测器下（价值 $$30\text{ pp}$$），8 次独立运行全部学会并留住了这一行为（8/8）；换到修复后的评测器下（价值 $$6\text{ pp}$$），我们从头重跑了 12 次，其中一半确实在某一轮提议过这句话，但走到最后真正留下来并照着执行的，只剩 **2 个**（2/12）。一模一样的一条规则，值 $$30\text{ pp}$$ 时次次都能被稳稳接住，降到 $$6\text{ pp}$$ 就悄悄淹没在噪声里——分辨率决定进化能留住什么，大概没有比这更直接的对照了。
 
-当我们按照官方评测标准，引入 LibreOffice 在判分前对工作簿做公式重算后，上述进化产物的涨幅从 $$+31.1\text{ pp}$$（以 GPT-5.4 nano 为例）降到了 $$+6.7\text{ pp}$$。为什么还剩大约 $$6\text{ pp}$$ 的真实正收益？因为有少部分题目用到了较新的 Excel 函数，LibreOffice 也不支持求值，所以“直接用 Python 算好填数值”在修复后的评测器下，依然是一个能稳赚 $$6\text{ pp}$$ 的有效策略。
+**再看 LiveMathematicianBench：模型不肯走捷径，进化就学着去做思想工作。** LiveMathematicianBench 把最新的 arXiv 数学论文定理改写成了五选一选择题。我们在核对数据时注意到一个构建上的巧合：全部 177 道题里，有 85 道题包含一个选项——“其余选项中有一个是正确的，但可以证明一个更强的结果（stronger result）”。只要这个选项出现，它 100% 就是标准答案（测试集 106 道题里占了 46 道）。
 
-那么问题来了：**既然在修复后的评测器下，这条规则依然有 $$+6\text{ pp}$$ 的真实收益，为什么我们用修复后的评测器从头重新跑进化，算法却学不会它了呢？**
+原本以为“一句话测试”在这里会直接通关，结果跑出来反而出了个小意外。当我们直接把大白话规则——_“如果某个选项说其余某项正确但能证明更强结果，就选它”_——拼到 Baseline 后面时，三个模型在含该选项的题目上照做的比例分别只有 **4%、54% 和 27%**；而完整进化出来的 Skill，照做比例能达到 **67%、86% 和 92%**。
 
-算一笔账就明白了：验证集一共有 39 道题，$$+6\text{ pp}$$ 只相当于 **2 到 3 道题**的差距，刚好掉进了单次评估的随机噪声区间里。结果，在原评测器（该规则价值 $$30\text{ pp}$$）下，8 次独立运行 100% 学会并保留了这一行为；而在修复后的评测器（价值 $$6\text{ pp}$$）下重跑的 12 个进化产物中，虽然有一半在某轮提议时把这句话写进了文本，但最终真正保留并执行这一行为的只有 **2 个**。
+为什么把答案喂到嘴边，模型还不肯吃呢？大概是因为训练得足够好的基座模型，多少有点“数学自尊心”：面前摆着一道正经的图论或代数定理题，你直白地命令它别管推导、直接挑个含糊的兜底选项，模型在推理时会自己犯嘀咕，干脆不听你的。
 
-同一个行为准则，收益 $$30\text{ pp}$$ 时百发百中，收益 $$6\text{ pp}$$ 时就淹没在噪声里——这正是“分辨率决定哪些改进能被保留”的直接证据。
+等我们把完整进化出来的 Skill 文本逐段拆开，才发现进化循环在多轮迭代里，居然对着基座模型的心理防线做了一整套“修辞优化”：
 
-#### 2. 当基座模型抗拒“走捷径”时，进化算法学会了“说服”
+1. 它先给出一个听起来很像那么回事的学术理由：提醒模型，出题人写的具体数学选项 _“几乎总是被故意弱化表述的（almost always deliberately understated）”_；
+2. 接着把举证责任倒置过来：规定除非你能严格证明某个具体选项的界已经是紧致的（sharp），否则默认就该选“更强结果”；
+3. 最后把这类选项常见的各种措辞变体全列出来，还在输出最终答案前再叮嘱一遍。
 
-在 **LiveMathematicianBench**（一个将最新 arXiv 数学论文定理转化为五选一选择题的基准）上，我们发现了一个严重的数据集构建漏洞：在全部 177 道题中，有 85 道题的选项里包含“其余选项中有一个是正确的，但可以证明一个更强的结果（stronger result）”，且**只要这个选项出现，它 100% 就是标准答案**（测试集 106 道题中有 46 道属于此类）。
+这事想想其实挺耐人寻味的：只要一个捷径的收益大到足以刺穿噪声，选择压力不仅能把它找出来，还会心甘情愿地花上好几轮迭代，专门打磨话术去把基座模型哄顺了。当然，要是把这 46 道题拿掉，只看测试集里剩下的 60 道不含该选项的正常数学题，所有模型的进化收益就全都回到了零附近（$$-1.7\sim 0.0\text{ pp}$$）。
 
-但有趣的事情发生在我们做“一句话测试”的时候：当我们直接把规则 _“如果某个选项说其余某项正确但能证明更强结果，就选它”_ 追加给 Baseline 时，三个模型在含该选项的题目上照做的比例只有 **4%、54% 和 27%**，远不如完整进化出的 Skill（照做比例高达 **67%、86% 和 92%**）。
+**最后顺带说说审计中碰到的两个基准插曲：SearchQA 和 ALFWorld**（细节见论文附录 E.3 与 E.4）。
 
-为什么一句直白的指令不管用？因为受过良好训练的基座模型有自己的“数学自尊心”——面对一道严肃的图论或代数定理题，你直接命令它不看推导、无脑选一个模糊的兜底选项，模型在推理时会抗拒执行。
+SearchQA 的设计初衷，是考察模型从给定的搜索引擎片段（Snippets）里抽取答案的能力。原版评测用了很严格的字面匹配——比如 `"George Calvert (the 1st Lord Baltimore)"` 会被判错，只认更短的写法——于是进化算法靠约束模型输出最短跨度，轻轻松松拿了十几个点的涨幅。可当我们换成语义判分，顺手把题目里提供的**所有搜索片段全部删干净、让模型闭卷裸考**时，DeepSeek-V4-Flash 的得分从 89.4% 变成了 90.2%，GPT-5.6 Luna 从 89.8% 变成了 90.7%。也就是说，把检索证据全撤掉，分数非但没跌，还略微涨了一点点：模型早就能凭预训练记忆答出这些题，而剩下的错题里，倒有 36% 是因为原数据集中 Jeopardy 题目丢掉了分类上下文，成了谁看都猜不准的死题。
 
-而当我们对比完整进化出来的 Skill 文本时，发现进化循环在多轮迭代中，实际上完成了一次针对基座模型心理防线的“修辞优化”：
-
-1. 它先编造了一个听起来很学术的理由：告诉模型出题人给出的具体数学选项 _“几乎总是被故意弱化表述的（almost always deliberately understated）”_；
-2. 它扭转了举证责任：规定除非你能严格证明某个具体选项已经是紧致的（sharp），否则必须默认选择“更强结果”；
-3. 它枚举了该选项的所有表面措辞变体，并在输出最终答案前再重复强调一次。
-
-也就是说，当某个捷径的潜在回报足够大（足以刺穿评估噪声）时，进化算法不仅能找到这个捷径，甚至能把选择压力用在“如何优化话术来哄骗基座模型听话”上。而一旦我们只看测试集里剩下的 60 道不含该选项的正常数学题，所有模型的进化收益全部归零（$$-1.7\sim 0.0\text{ pp}$$）。
-
-#### 3. 偏离目标的基准与一行配置引发的“大涨”
-
-在审计过程中，我们还顺带看清了许多基准测试本身的局限（详见论文附录 E.3 与 E.4）：
-
-- **不用检索的检索基准（SearchQA）**：SearchQA 本意是考察模型从给定的搜索引擎片段（Snippets）中提取答案的能力。它的原版评测采用严格字符串匹配（把 `"George Calvert (the 1st Lord Baltimore)"` 判错，只认简写），进化算法通过限制输出最短跨度获得了十几个点的提升。但当我们换用语义判分、并尝试**把题目里提供的所有搜索片段全部删光（让模型闭卷裸考）**时，DeepSeek-V4-Flash 的得分从 89.4% 变成了 90.2%，GPT-5.6 Luna 从 89.8% 变成了 90.7%——模型根本不需要看检索内容就能靠预训练知识答对，剩下的错题里反而有 36% 是因为原数据集中 Jeopardy 题目丢失了分类上下文导致的死题。
-- **一行历史窗口配置带来的 $$+30\text{ pp}$$（ALFWorld）**：在 ALFWorld 上，Meta-Harness 和 AHE 两个代码进化方法在 DeepSeek-V4-Flash 和 GPT-5.6 Luna 上暴涨了 $$16\sim 32\text{ pp}$$。我们去检查生成的代码才发现，初始的 Baseline Agent 代码里写死了一个极不合理的超参：**只保留最近 2 步的交互历史（History）**，导致智能体走两步就忘了自己搜过哪儿。其中一次进化运行什么别的代码都没动，仅仅把这个历史窗口放开，单步就暴涨了 $$29\text{ pp}$$。
+ALFWorld 那边则是另一种画风。在 ALFWorld 上，Meta-Harness 和 AHE 这两个代码进化方法在 DeepSeek-V4-Flash 和 GPT-5.6 Luna 上都涨了 $$16\sim 32\text{ pp}$$。我们翻出生成的代码 diff 一看，原因简单得让人没脾气：初始 Baseline Agent 的代码里写死了一个很窄的超参，**只保留最近 2 步的交互历史（History）**。智能体刚走两步，就忘了自己前脚刚搜过哪个抽屉。其中有一次进化运行别的什么逻辑都没改，仅仅把这行历史窗口的限制放开，单步就多拿了 $$+29\text{ pp}$$。起步脚手架顺手写个保守默认值本来也很常见，只是放在进化循环里，最先被优化出来的自然是这行配置，而不是什么高深的空间规划策略。
 
 ---
 
-### 娜拉出走之后怎么办？
+聊完这些案例，倒也没必要把板子打在具体哪篇论文或哪个评测脚本上。写基准、搭脚手架本来就是桩繁琐的脏活，漏掉公式重算、写窄一个历史窗口，或者在几百道题里留下出题模板痕迹，都是研究工程里再正常不过的疏忽。更值得留意的，其实是背后那条很实在的筛选机制：进化循环本身并不区分“真本事”和“评测捷径”，它只认信噪比。哪条改动的收益能稳稳高过噪声底板，优化就会往哪边用力。
 
-把这些评测捷径和基准缺陷清理干净之后，我们看到了一幅很真实的图景：
+而把这些捷径和配置插曲都清理干净之后，摆在面前的图景反而清晰多了：
 
-- 在 DocVQA、AIME 2025、PUPA 等基准上，修复评测后的 Baseline 本身就已经拿到了 $$88\sim 97$$ 分，留给进化的天花板（Headroom）本来就所剩无几；
-- 而在 **Terminal-Bench**、**OfficeQA** 等真正困难的基准上，Baseline 离满分还有 $$30\sim 45\text{ pp}$$ 的巨大空间，且没有表面捷径可钻，此时现有的进化算法就集体陷入了停滞（增益仅为 $$1.0\sim 3.6\text{ pp}$$，低于单次运行标准差）。
+- 在 DocVQA、AIME 2025、PUPA 这些基准上，修好评测后的 Baseline 本身就已经考到了 $$88\sim 97$$ 分，天花板（Headroom）本来就没剩多少；
+- 而在 **Terminal-Bench**、**OfficeQA** 这类真正难啃的基准上，Baseline 离满分还有 $$30\sim 45\text{ pp}$$ 的大片空间，同时也没有什么表面捷径好钻。到了这儿，现有的进化算法就集体慢了下来，增益只剩 $$1.0\sim 3.6\text{ pp}$$，又掉回了单次运行的标准差里。
 
-这就把我们逼到了最核心的追问上：**在排除了评测捷径之后，面对像 Terminal-Bench 这样真正的硬骨头，大模型到底能不能写出真正有用的好 Skill？如果能，它们是怎么在进化循环里被弄丢的？**
+到这一步，真正核心的问题才算浮出水面：把评测捷径都撤掉之后，面对 Terminal-Bench 这样的硬骨头，大模型到底还写不写得出真正有用的好 Skill？如果它其实写得出来，那些好 Skill 又是在进化循环的哪一步被弄丢的？
 
-在[最后一篇](/blog/2026/resolution-hypothesis-part-3/)里，我们就把提议器（Proposer）和选择器（Selector）彻底拆开，到候选池的内部去找答案。
+在[最后一篇](/blog/2026/resolution-hypothesis-part-3/)里，我们就把提议器（Proposer）和选择器（Selector）彻底拆开，钻进候选池里面找答案。
 
 </div>
 
@@ -123,99 +112,88 @@ related_posts: true
 
 <div class="zine-tldr" markdown="1">
 
-**TL;DR:** Inside an evolution loop, noisy evaluation acts as a high-pass filter: solid task-specific techniques worth 2–5 pp drown in variance, while benchmark-wide evaluation shortcuts punch straight through the floor. Auditing graders and artifacts line by line across 12 benchmarks, appending a single sentence to the unevolved baseline recovers a median 90% of all gains above 3 pp across 27 model–benchmark pairs—and repairing the graders collapses the median gain from 17.6 pp to 0.8 pp. From SpreadsheetBench's 30 pp vs. 6 pp resolution threshold to LiveMathematicianBench's evolved rhetorical persuasion overcoming models' mathematical pride, the cases prove one point directly: resolution determines what evolution can keep.
+**TL;DR:** Inside an evolution loop, noisy evaluation behaves like a high-pass filter: solid task-specific habits worth 2.5–5 pp get lost in rollout variance, while benchmark-wide evaluation shortcuts clear the noise floor with room to spare. Auditing graders and evolved artifacts line by line across 12 benchmarks, appending a single sentence to the unevolved baseline recovers a median 90% of gains above 3 pp across 27 model–benchmark pairs, and repairing the graders brings the median gain down from 17.6 pp to 0.8 pp. This is not the optimizer misbehaving—it is doing real optimization against whatever signal rises above the noise, whether that means retaining a rule 8/8 times at 30 pp but only 2/12 times at 6 pp on SpreadsheetBench, or spending rounds polishing persuasive copy to talk models into a shortcut on LiveMathematicianBench. Once those artifacts are cleared away, the genuinely hard benchmarks still sit wide open, which sets up the next question: without shortcuts on the table, can models propose useful skills at all, and where do they get lost?
 
 </div>
 
 > **_The Resolution Hypothesis_ Series (2/3)** · [Paper arXiv:2611.23068](https://arxiv.org/abs/2611.23068) · [Project Page & 30s Interactive Game](/resolution-hypothesis/) · [Behind the Scenes](/blog/2026/resolution-hypothesis-behind-the-scenes/)
-> **Series Navigation**: [(1) Running in Place & the Variance Ledger](/blog/2026/resolution-hypothesis-part-1/) · **(2) The High-Pass Filter & Shortcut Audit** · [(3) Good Skills & Blind Selectors](/blog/2026/resolution-hypothesis-part-3/)
+> **Series Navigation**: [(1) Running in Place & the Variance Ledger](/blog/2026/resolution-hypothesis-part-1/) · **(2) The High-Pass Filter & Shortcut Audit** · [(3) Good Skills & Selectors That Miss Them](/blog/2026/resolution-hypothesis-part-3/)
 
-In [Part 1](/blog/2026/resolution-hypothesis-part-1/), our variance decomposition $$\text{Var}(\hat{Y}) = \sigma^2 + \tau^2$$ established a sobering baseline: standard single-run agent evaluations carry a standard deviation of $$1.7\sim 4.1\text{ pp}$$, completely swallowing two-to-three-point differences between methods.
+In [Part 1](/blog/2026/resolution-hypothesis-part-1/), the variance decomposition $$\text{Var}(\hat{Y}) = \sigma^2 + \tau^2$$ left us with a fairly plain accounting fact: a single standard run on an agent benchmark carries a standard deviation of roughly $$1.7\sim 4.1\text{ pp}$$. Two or three percentage points of separation between methods simply disappear into rollout noise.
 
-Yet as we noted at the close of Part 1, a striking counterweight sits right there in both the literature and our own reproduction grid: on benchmarks like SpreadsheetBench, LiveMathematicianBench, and AIME 2025, evolved artifacts routinely jump $$10\sim 40\text{ pp}$$ over the baseline—far outside any single-run noise band.
+Still, we left one loose thread at the end of Part 1. Sitting right there in both prior papers and our own reproduction grid are gains that look hard to dismiss: on SpreadsheetBench, LiveMathematicianBench, and AIME 2025, evolved artifacts regularly come out $$10\sim 40\text{ pp}$$ ahead of the baseline—well past any single-run variance band.
 
-Does that mean evolution is genuinely unlocking emergent capability on those tasks?
+Seeing jumps that large, the natural first thought is that evolution must be learning something real on those benchmarks.
 
-When we followed the logic of _The Resolution Hypothesis_ into those surges—dissecting the evolved artifacts line by line against the actual grader source code—we uncovered something remarkably stark: **inside an evolution loop, a noisy evaluation pipeline behaves like a high-pass filter.**
+Following the logic of _The Resolution Hypothesis_, we opened up the artifacts behind the largest gains and walked through them line by line alongside the actual grader source code. What fell out was a surprisingly plain mechanical effect: **inside an evolution loop, a noisy evaluator works as a high-pass filter.**
 
 ---
 
-### Why Low-Resolution Evaluation Selects for Shortcuts
+The intuition takes only a minute of arithmetic. Suppose your validation split has 40 distinct tasks and an evaluation noise standard deviation of $$3\sim 4\text{ pp}$$.
 
-Follow the intuition for a second. Suppose a validation split has 40 diverse tasks and an evaluation noise SD of $$3\sim 4\text{ pp}$$.
+If the proposer distills a **genuinely useful, task-specific engineering habit**—say, checking file encoding before handling missing CSV values—it might turn 1 or 2 failing tasks into passes, a real gain of $$\Delta \approx 2.5\sim 5\text{ pp}$$. Under single-run variance, an improvement that size is easily erased by one unlucky rollout, so the selector rarely notices it was there.
 
-If the proposer distills a **genuinely solid, task-specific engineering habit** (say, "inspect file encoding before handling missing CSV values"), it might flip 1 or 2 additional tasks from fail to pass—a true gain of $$\Delta \approx 2.5\sim 5\text{ pp}$$. Under single-run noise, a gain that modest is effortlessly wiped out by one unlucky rollout, and the selector never even sees it.
+Now ask the flip side: what kind of edit can produce a $$+20\sim 40\text{ pp}$$ jump in a single step, clearing the noise floor cleanly enough for the selector to lock it in?
 
-Conversely, what kind of edit can deliver a $$+20\sim 40\text{ pp}$$ single-step jump large enough to pierce the noise floor without fail and get locked in by the selector?
+Almost by necessity, it has to be **a global rule that cuts across task content and moves most of the test set at once.** On existing benchmarks, what delivers that sort of blanket lift is rarely a leap in domain capability—it is usually an **Evaluation Shortcut** matched to a quirk in the grader.
 
-**It has to be a global rule that cuts across task content and lifts almost every problem in the test set at once.** On existing benchmarks, what delivers that kind of across-the-board lift is rarely a breakthrough in domain skill—it is an **Evaluation Shortcut** tailored to a quirk in the grader.
+To be fair to the algorithms, finding a shortcut is not "cheating," nor does it mean the optimizer is broken. Quite the opposite: it is real optimization doing exactly what it was asked to do. Whatever signal rises above the noise floor is what selection pressure will push on. The noisier the evaluation, the narrower the odds for modest, local improvements—until the only things that survive are the loudest global shortcuts in the room.
 
-To test this prediction, we ran two controlled audits across the largest reported gains on 12 benchmarks:
+To test that reading, we ran two controlled checks across the largest reported gains on 12 benchmarks:
 
-1. **The One-Rule Test**: Evolved skills or prompts typically contain dozens of directives. Using LLM-assisted screening followed by manual verification against the grader, we extracted **a single sentence** and appended it verbatim to the unevolved baseline (changing nothing else).
-2. **Repaired Evaluation**: We fixed defects where the evaluation script departed from the benchmark's intent (restoring official spreadsheet recalculation, replacing brittle string matching with semantic equivalence, or auditing leaked/broken items) and re-scored the **exact same evolved artifacts**.
+1. **The One-Rule Test**: Evolved skills and prompts often run to dozens of instructions. Using LLM-assisted screening followed by manual verification against the grader code, we pulled out **a single sentence** and appended it verbatim to the unevolved baseline, touching nothing else.
+2. **Repaired Evaluation**: We patched places where the evaluation script departed from the benchmark's intent—restoring official spreadsheet recalculation, swapping brittle string matching for semantic equivalence, and auditing leaked or broken items—then re-scored the exact same evolved artifacts.
 
 ![Comparison of reported gains vs. one-rule baseline recovery and repaired evaluation](/resolution-hypothesis/assets/gain_ledger.png){: style="display: block; max-width: 100%; width: auto; height: auto; max-height: 620px; margin: 1.5rem auto; object-fit: contain; border-radius: 8px;" }
 
-The results lined up with eerie precision: across all 27 model–benchmark pairs with an original gain above $$3\text{ pp}$$, **appending a single sentence to the baseline recovered a median 90% of the full evolutionary gain** (Fig. 3a). And the moment the grader defects were repaired, **the median gain plunged from 17.6 pp to 0.8 pp** (Fig. 3b). Even when we re-ran evolution from scratch under the repaired graders, those headline surges never came back.
+The numbers lined up almost too neatly. Across all 27 model–benchmark pairs with an original gain above $$3\text{ pp}$$, **appending that one sentence to the baseline recovered a median 90% of the full evolutionary gain** (Fig. 3a). Once the grader issues were repaired, **the median gain dropped from 17.6 pp to 0.8 pp** (Fig. 3b). Even when we re-ran evolution from scratch under the repaired graders, those headline jumps did not come back.
 
 ---
 
-### A Gallery of Remarkably Absurd Cases
+Summary bars tell the macro story, but walking through a few individual benchmarks makes the interaction between resolution and optimization much easier to feel. The full audit sits in Appendix E of [arXiv:2611.23068](https://arxiv.org/abs/2611.23068); three cases in particular are worth lingering over.
 
-More than the aggregate numbers, a handful of concrete cases from our audit make vivid how evolution interacts with evaluation resolution (full details in Appendix E of [arXiv:2611.23068](https://arxiv.org/abs/2611.23068)):
+**Start with the 30 pp vs. 6 pp threshold on SpreadsheetBench.** On SpreadsheetBench, both earlier work and our reproductions saw evolution add $$+30\sim 40\text{ pp}$$. Opening the evolved artifacts showed that practically the entire lift rested on one instruction: _"Never write Excel formula strings into cells; compute the results in Python and write raw numbers or text directly."_
 
-#### 1. The "30 pp vs. 6 pp" Resolution Threshold on SpreadsheetBench
+Why would valid Excel formulas lose points? Reading the evaluation script released alongside one method made it clear: when opening the generated `.xlsx` files, the script never invoked a spreadsheet engine to recalculate formulas. Any formula cell without a cached value was read as empty and scored 0. Forgetting a recalculation pass is an easy enough plumbing slip in an evaluation script; inside an evolution loop, though, it turns into the loudest signal available.
 
-On SpreadsheetBench, both the original paper and our reproductions saw evolution surge by $$+30\sim 40\text{ pp}$$. Opening the evolved artifacts revealed that the entire gain hinged on one instruction: _"Never write Excel formula strings into cells; compute the results in Python and write raw numbers or text directly."_
+The instructive part came after the repair. Once we restored the official protocol—running LibreOffice to recalculate workbooks before grading—the same evolved artifact's gain on GPT-5.4 nano fell from $$+31.1\text{ pp}$$ to $$+6.7\text{ pp}$$. Why did roughly $$6\text{ pp}$$ of real upside remain? Because a handful of tasks use newer Excel functions that LibreOffice itself cannot evaluate, so computing answers in Python and writing raw values stayed a legitimately useful $$+6\text{ pp}$$ habit even under the repaired grader.
 
-Why were valid Excel formulas getting marked wrong? Because the evaluation script released alongside a method read the generated `.xlsx` files **without invoking a spreadsheet engine to recalculate formulas, reading every uncached formula cell as empty (0 points).**
+Which leads to the real test: if that exact rule is still worth a genuine $$+6\text{ pp}$$ after the fix, why did fresh evolution runs on the repaired grader stop learning it?
 
-The most telling part came from comparing before and after the repair:
+Do the arithmetic and it makes immediate sense. On a 39-task validation split, $$+6\text{ pp}$$ is just **2 to 3 tasks**, sitting right inside single-run sampling variance. Under the broken grader (where the rule paid $$30\text{ pp}$$), **8 out of 8** independent runs discovered and kept it (100%). Under the repaired grader (where it paid $$6\text{ pp}$$), half of our 12 fresh runs did propose the rule at some intermediate step, yet only **2** managed to keep and act on it by the end. The exact same behavioral rule—captured every time at $$30\text{ pp}$$, mostly lost to noise at $$6\text{ pp}$$—is about as direct a demonstration of how resolution governs selection as you could ask for.
 
-Once we restored the official evaluation protocol—invoking LibreOffice to recalculate workbooks before grading—the evolved artifact's gain on GPT-5.4 nano dropped from $$+31.1\text{ pp}$$ to $$+6.7\text{ pp}$$. Why did roughly $$6\text{ pp}$$ of real upside remain? Because a small subset of tasks used newer Excel functions that LibreOffice itself cannot evaluate, so computing values in Python remained a genuinely profitable $$+6\text{ pp}$$ strategy even under the repaired grader.
+**Next, LiveMathematicianBench—where the model hesitated to take a shortcut, so evolution learned persuasion.** LiveMathematicianBench converts theorems from recent arXiv math papers into 5-choice questions. Auditing the dataset turned up a structural quirk: out of 177 problems, 85 include an option reading _"one of the other options is correct, but a stronger result can be proved,"_ and whenever that option appears, it is 100% the ground-truth answer (46 of the 106 test problems fall into this group).
 
-Now comes the crucial question: **if that exact rule is still worth a genuine $$+6\text{ pp}$$ after repair, why couldn't evolution learn it when we re-ran from scratch on the repaired grader?**
+We expected the One-Rule Test to wrap this up in one line, and got a mild surprise instead. When we appended the plain instruction—_"if an option says another option is correct but a stronger result can be proved, select it"_—to the baseline, three models followed it on only **4%, 54%, and 27%** of the applicable problems. The full evolved skills, by contrast, got **67%, 86%, and 92%** compliance.
 
-Do the arithmetic and it clicks immediately: on a 39-task validation split, $$+6\text{ pp}$$ is just **2 to 3 tasks**, right inside single-run sampling noise. Under the broken grader (where the rule paid $$30\text{ pp}$$), **8 out of 8** independent runs discovered and kept it (100%). Under the repaired grader (where it paid $$6\text{ pp}$$), even though half of our 12 fresh evolution runs proposed the rule at some intermediate step, only **2** managed to retain and execute it by the end.
+Why ignore an answer handed over on a plate? Well-trained base models seem to have a quiet streak of mathematical pride: put a serious graph-theory or algebra theorem in front of them and bluntly tell them to skip the derivation and click a vague meta-option, and they tend to push back during reasoning.
 
-The exact same behavioral rule—100% captured at $$30\text{ pp}$$, drowned in noise at $$6\text{ pp}$$—is direct evidence that resolution governs which improvements survive.
+Reading the full evolved skill text showed what the loop had actually been doing across rounds—running a miniature **rhetorical optimization** against the base model's hesitation:
 
-#### 2. When Base Models Resist a Shortcut, Evolution Learns Rhetoric
+1. It offered an academic-sounding premise, informing the model that concrete mathematical options are _"almost always deliberately understated"_ by the problem authors.
+2. It flipped the burden of proof, instructing the model to default to the "stronger result" option unless it could rigorously prove a concrete bound was sharp.
+3. It listed surface phrasing variants of that option and repeated the instruction right before the final answer was emitted.
 
-On **LiveMathematicianBench** (a benchmark converting recent arXiv math theorems into 5-choice questions), we found a major dataset construction flaw: out of 177 problems, 85 include an option stating _"one of the other options is correct, but a stronger result can be proved,"_ and **whenever that option appears, it is 100% the ground-truth answer** (46 of the 106 test problems fall into this bucket).
+There is something dryly funny about watching that play out: once a shortcut's payoff is large enough to clear the noise floor, selection pressure does not just locate the loophole—it happily spends iterations polishing persuasive copy to talk the base model into taking it. Meanwhile, on the remaining 60 normal test problems without that option, evolutionary gains across every model sat right around zero ($$-1.7\sim 0.0\text{ pp}$$).
 
-The surprise came during our One-Rule Test: when we simply appended the blunt instruction _"if an option says another option is correct but a stronger result can be proved, select it"_ to the baseline, our three models obeyed it on only **4%, 54%, and 27%** of the applicable problems—far below the full evolved skills, which achieved **67%, 86%, and 92%** compliance.
+**Finally, two quieter surprises from the benchmarks themselves: SearchQA and ALFWorld** (full details in Appendix E.3 and E.4).
 
-Why did a plain directive fail? Because well-trained frontier models have a kind of "mathematical pride"—handed a serious graph-theory or algebra theorem, they push back when bluntly told to skip the proof and click a vague meta-option.
+SearchQA is meant to measure whether a model can extract answers from provided search snippets. Its original grader used strict string matching—marking `"George Calvert (the 1st Lord Baltimore)"` wrong in favor of a bare short span—which let evolution pick up double-digit gains simply by telling the model to keep answers ultra-short. When we switched to semantic grading and **deleted all of the retrieved snippets (forcing closed-book inference)**, DeepSeek-V4-Flash moved from 89.4% to 90.2%, and GPT-5.6 Luna moved from 89.8% to 90.7%. Removing the retrieval evidence nudged scores slightly _up_: models already know these answers from pretraining, and 36% of the remaining errors come from Jeopardy clues in the original dataset that are missing their category context.
 
-Inspecting the full evolved skill text revealed that across iterations, the evolutionary loop had effectively optimized a **rhetorical campaign** tailored to dismantle the base model's resistance:
-
-1. It invented an academic-sounding rationale, warning the model that concrete mathematical choices are _"almost always deliberately understated"_ by problem authors;
-2. It inverted the burden of proof, instructing the model to default to the "stronger result" option unless it could rigorously prove a concrete bound was sharp;
-3. It enumerated surface phrasings of the option and repeated the directive right before final answer emission.
-
-In other words, once a shortcut's payoff is large enough to clear the noise floor, selection pressure doesn't just find the loophole—it invests rounds in refining persuasive copy to talk the base model into taking it. Meanwhile, on the remaining 60 normal math test problems without that option, evolutionary gain across every model was zero ($$-1.7\sim 0.0\text{ pp}$$).
-
-#### 3. Misaligned Benchmarks and a One-Line Config Worth +30 pp
-
-Along the way, our audit surfaced broader benchmark defects as well (see Appendix E.3 and E.4):
-
-- **A retrieval benchmark that needs no retrieval (SearchQA)**: SearchQA is meant to test extracting answers from provided search snippets. Its original grader used strict string matching (marking `"George Calvert (the 1st Lord Baltimore)"` wrong in favor of a bare short span), letting evolution gain over ten points merely by enforcing ultra-short outputs. When we switched to semantic grading and **deleted 100% of the retrieved snippets (forcing closed-book inference)**, DeepSeek-V4-Flash moved from 89.4% to 90.2%, and GPT-5.6 Luna moved from 89.8% to 90.7%. Models answer the questions straight from pretraining weights—and 36% of the remaining errors stem from Jeopardy clues missing their category context in the original dataset.
-- **A one-line history cap worth $$+30\text{ pp}$$ (ALFWorld)**: On ALFWorld, the code-evolution methods Meta-Harness and AHE jumped $$16\sim 32\text{ pp}$$ on DeepSeek-V4-Flash and GPT-5.6 Luna. Inspecting the diffs showed that the starter baseline agent hardcoded a bizarre hyperparameter: **retaining only the last 2 turns of interaction history**, causing the agent to forget where it had just searched two steps ago. One evolution run changed nothing else—simply lifting that history window produced a $$+29\text{ pp}$$ single-step jump.
+ALFWorld turned out to be a different kind of surprise. There, the code-evolution methods Meta-Harness and AHE gained $$16\sim 32\text{ pp}$$ on DeepSeek-V4-Flash and GPT-5.6 Luna. Opening the diffs showed a disarmingly simple cause: the starter baseline agent hardcoded a tight hyperparameter that **kept only the last 2 turns of interaction history**, so after two steps the agent forgot where it had just looked. One evolution run touched nothing else—simply lifting that history window produced a $$+29\text{ pp}$$ gain in a single step. Shipping a starter harness with a conservative default is an ordinary enough engineering artifact, and when an optimizer sees a 29-point lever sitting in plain sight, it will naturally pull it first.
 
 ---
 
-### After the Mirage Clears: What Remains?
+None of this is a reason to point fingers at specific papers or benchmark authors. Building evaluation harnesses is messy work; missing a spreadsheet recalculation pass, shipping a narrow history window, or leaving a template artifact across a hundred questions are ordinary hazards of research engineering. The more useful takeaway is the selection dynamic underneath: an evolution loop does not care whether a gain comes from domain mastery or grader plumbing. It only sees signal-to-noise ratio, and it will faithfully optimize whatever clears the floor.
 
-Strip away the evaluation shortcuts and benchmark quirks, and a clear picture emerges:
+Once those shortcuts and harness quirks are cleared off the table, what remains is much easier to read:
 
-- On DocVQA, AIME 2025, and PUPA, the repaired baseline already sits at $$88\sim 97\%$$, leaving almost no headroom for evolution in the first place.
-- On genuinely hard benchmarks like **Terminal-Bench** and **OfficeQA**, baselines still sit $$30\sim 45\text{ pp}$$ below the ceiling with no surface shortcuts to exploit—and there, existing evolution algorithms stall out across the board (gains of just $$1.0\sim 3.6\text{ pp}$$, below a single run's standard deviation).
+- On DocVQA, AIME 2025, and PUPA, the repaired baselines already score $$88\sim 97\%$$, leaving very little headroom for evolution to begin with.
+- On genuinely hard benchmarks like **Terminal-Bench** and **OfficeQA**, baselines still have $$30\sim 45\text{ pp}$$ of real headroom and no surface shortcuts to lean on. There, existing evolution methods mostly stall out, with gains of $$1.0\sim 3.6\text{ pp}$$—back inside a single run's standard deviation.
 
-That brings us to the heart of the matter: **once shortcuts are off the table, on real hard problems like Terminal-Bench, can LLMs even write genuinely useful skills? And if they can, how does the evolution loop manage to lose them?**
+That leaves us with the question that actually matters: with shortcuts off the table, on hard problems like Terminal-Bench, can LLMs write genuinely useful skills at all? And if they can, where inside the evolution loop do those skills get lost?
 
-In [Part 3](/blog/2026/resolution-hypothesis-part-3/), we decouple the proposer from the selector completely and look inside the candidate pool for the answer.
+In [Part 3](/blog/2026/resolution-hypothesis-part-3/), we take the proposer and the selector apart and look inside the candidate pool.
 
 </div>
 

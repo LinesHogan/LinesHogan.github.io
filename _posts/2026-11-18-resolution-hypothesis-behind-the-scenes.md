@@ -3,8 +3,8 @@ layout: post
 title: "我们本来想做一个 Agent 进化算法，最后却给这个领域做了一次全面体检"
 title_en: "We Set Out to Build an Agent Evolution Algorithm—and Ended Up Running a Full-Body Diagnostic on the Field"
 date: 2026-11-18 12:00:00 +0800
-description: "从尝试设计新的 Agent 元进化算法，到在百万级容器轨迹里抓出评估盲区：一份《分辨率假说》的幕后手记与三个个人判断。"
-description_en: "From trying to design a new meta-evolution algorithm to uncovering evaluation blind spots across 2.1 million trajectories: the story behind The Resolution Hypothesis, plus three candid personal takes. (Bilingual EN / 中文 with TL;DR)"
+description: "从折腾新的 Agent 元进化算法，到在两百多万条容器轨迹里算清评估分辨率的账：一份《分辨率假说》的幕后手记，以及三个带点个人偏见的判断。（支持 EN / 中文 一键切换，含 TL;DR）"
+description_en: "From trying to build a new meta-evolution algorithm to auditing evaluation resolution across 2.1 million trajectories: the story behind The Resolution Hypothesis, plus three candid personal takes. (Bilingual EN / 中文 with TL;DR)"
 tags: agent-evolution evaluation research
 categories: research-notes
 thumbnail: /resolution-hypothesis/assets/optimism_drift.png
@@ -23,86 +23,86 @@ related_posts: true
 
 <div class="zine-tldr" markdown="1">
 
-**TL;DR：** 我们本来想做一个真正管用的 Agent 进化算法，却在硬核编程任务上集体撞墙，逼着自己做了一场“扔掉选择器、盲抽 100 个候选”的实验——结果发现池子里早躺着跨任务稳涨 +11.4 分的好 Skill，真正失明的是堪比抛硬币的选择器。顺藤摸瓜审计 12 个暴涨基准后，我们又揪出一连串评测捷径（一句话复现 90% 涨幅，修好后从 17.6 分跌到 0.8 分），索性放弃 ICLR 截稿、把百万轨迹推倒重跑写成《分辨率假说》。文末还摊开了三个更主观的判断：离散文本没有参数空间的记忆性、失明门控会把好 Prompt 磨成“高斯模糊”，以及短期避坑老范式、长期押注高分辨率过程尺子与上下文众包的理由。
+**TL;DR：** 我们原本想做一个真正管用的 Agent 进化算法，却先被“循环内曲线一路上涨、公开榜单动辄涨上几十分”的账面假象困住了。把选择器撤掉、盲抽 100 个候选并逐行审计 12 个基准后，我们才看清背后的测量机制：提议池里早就有跨任务稳涨 +11.4 分的好 Skill，真正失效的是低分辨率选择器——它把细水长流的真改进滤成了抛硬币，却专门放行一句话就能复现 90% 涨幅的评测漏洞（修好后中位涨幅从 17.6 分跌到 0.8 分）。于是我们放弃 ICLR 截稿、把基建搬上大集群重跑了 210 万条轨迹，写成《分辨率假说》。文末顺带摊开的三个偏主观判断——离散文本缺少参数空间的记忆性、失明门控会把好 Prompt 磨成“高斯模糊”，以及短期避坑老范式、长期留意过程诊断与上下文众包——谈不上看清终局，只是这半年吃瘪之后很难再绕开的几件事。
 
 </div>
 
 > **论文**：_The Resolution Hypothesis: Agent Evolution's Key Is Identifying Improvements_
 > **arXiv**：[2611.23068](https://arxiv.org/abs/2611.23068) · **PDF**：[arXiv PDF](https://arxiv.org/pdf/2611.23068) · **项目主页（含 30s 互动小游戏）**：[Resolution Hypothesis Project Page](/resolution-hypothesis/)
-> **三篇连载长文**：[（一）原地踏步与方差账](/blog/2026/resolution-hypothesis-part-1/) · [（二）高通滤波器与捷径审计](/blog/2026/resolution-hypothesis-part-2/) · [（三）好 Skill 与失明的选择器](/blog/2026/resolution-hypothesis-part-3/)
+> **三篇连载长文**：[（一）原地踏步与方差账](/blog/2026/resolution-hypothesis-part-1/) · [（二）高通滤波器与捷径审计](/blog/2026/resolution-hypothesis-part-2/) · [（三）好 Skill 与挑不出来的选择器](/blog/2026/resolution-hypothesis-part-3/)
 
-半年前刚立项的时候，我们压根没想过要写一篇给整个领域“泼冷水”的论文。我们最初的目标特别单纯：做出一个真正管用的 Agent 进化算法。
+半年前刚立项的时候，我们压根没想过要写一篇听起来像在给整个领域泼冷水的论文。最初的想法特别单纯：做一个真正管用的 Agent 进化算法。
 
-当时社区里关于 Self-Evolving Agents（现在更时髦的叫法是 RSI，递归自我改进）的工作正扎堆涌现。我们顺着最火的 SkillOpt 一路调研下来，心里其实一直犯嘀咕：在模型权重冻结的前提下，靠自然语言反思去改写几段 Prompt 或 Skill 文档，这种所谓的“文本空间优化”，跟直接让大模型把思维链和自我反思写扎实一点到底有什么本质区别？看多了总有一种强烈的既视感——很像把 2024 年 TextGrad 那批工作换了个壳，端上来重炒了一遍冷饭。
+那阵子社区里关于 Self-Evolving Agents（现在更时髦的叫法是 RSI，递归自我改进）的工作正扎堆冒出来。顺着当时最火的 SkillOpt 一路读下去，我心里其实一直有点犯嘀咕：在模型权重冻结的前提下，靠自然语言反思去改几段 Prompt 或 Skill 文档，这种所谓的“文本空间优化”，跟直接让大模型把思维链和自我反思写扎实一点，到底有什么实质区别？看多了总有一种挺熟悉的既视感——很像把 2024 年 TextGrad 那批工作换了个包装，端上来又炒了一遍冷饭。
 
-因为骨子里不太喜欢这种纯讲故事的路数，我们起初想走得更有“机器学习原则”一点：比如借类似 EM（期望最大化）的思路来组织多轮迭代，或者干脆把文本修改做某种合理的参数化来训练。结果试了一圈全撞了南墙——多轮环境交互的归因信号太稀薄，离散文本参数化极其别扭，训练数据也捉襟见肘。
+因为骨子里不太习惯这种偏重讲故事的路数，我们一开始想走得更有“机器学习原则”一点：比如借类似 EM（期望最大化）的思路组织多轮迭代，或者干脆想办法把文本修改做某种参数化来训练。结果试了一圈，每条路都走不太通——多轮环境交互的归因信号实在稀薄，离散文本做参数化处处别扭，手头的训练数据也远远不够。
 
-几条硬桥硬马的路走死之后，我们退了一步：既然试来试去只有类 AutoResearch 的路子效果看着最像样，不如在这上面打磨一套“元进化（Meta-Evolving）”算法。前期的曲线相当诱人——随着迭代轮次推进，只要对每轮生成的候选得分取个 max，你总能画出一条一路向右上方爬升的漂亮折线图。靠着这个苗头，阶段汇报很顺利，我们也拿到了继续扩量的支持。
+几条硬桥硬马的路走死之后，我们退了一步：既然试来试去只有类 AutoResearch 的路子账面看着最像样，不如在这上面打磨一套“元进化（Meta-Evolving）”算法。前期的曲线确实挺容易让人动心——随着迭代轮次推进，只要对每轮生成的候选得分取个 max，你总能画出一条稳步向右上方爬升的折线。靠着这点苗头，阶段汇报过得很顺利，我们也拿到了继续扩量的预算。
 
-直到真正的麻烦找上门来。
+麻烦是在真正扩量之后找上门的。
 
-当我们开始扩量，并且把这套策略搬到成熟起来的实战基准和 Terminal-Bench 这种硬核容器工程任务上时，所有招数——不管是我们自己攒的，还是社区论文里吹得神乎其神的框架——全都失灵了。表面上循环里的最高分还在爬坡，可把进化出来的 Skill 拿去实测，分数永远在初始基线上下晃荡两三个点，实际用起来毫无可见影响。眼看节点临近，交不出真正在硬任务上站得住脚的策略，所有人都坐不住了。
+等我们把这套策略搬到更成熟的实战基准，尤其是 Terminal-Bench 这类容器工程任务上时，所有招数——不管是我们自己攒的，还是社区论文里讲得很热闹的框架——差不多一起哑了火。表面上循环里的最高分还在慢慢往上走，可把进化出来的 Skill 拿去实测，分数永远在初始基线上下晃两三个点，实际用起来几乎看不出区别。眼看节点越来越近，手里却拿不出在硬任务上站得住脚的策略，组里难免都开始犯愁。
 
-### 一、从“先 Overfit”到那场盲抽实验
+---
 
-走投无路的时候，我们想起了 Karpathy 多年前写过的一条老派调试规矩：**怀疑机器学习系统有问题时，先别谈泛化，先去 Overfit；如果连单题过拟合都做不到，说明管线本身就是坏的。**
+实在没招的时候，我们翻出了 Karpathy 多年前写过的一条老派调试规矩：**怀疑机器学习系统有问题时，先别急着谈泛化，先去 Overfit；如果连单题过拟合都做不到，那多半是管线本身就坏了。**
 
-受早期做快速验证时的启发，我们干脆放下身段，对着具体错题手写极度直白的提示（Hint）硬喂给模型。结果发现了一件怪事：加上特定 Hint 后某几道题确实稳稳过了；可回头翻其他自动进化出来的普通 Skill 日志时，Hint 促成的关键正确动作，其实在普通 Skill 的某几次运行里也出现过！
+顺着早期做快速验证时的思路，我们干脆放下身段，对着具体错题手写最直白的提示（Hint）直接喂给模型。结果出现了一个挺有意思的现象：加上特定 Hint 之后，那几道题确实能稳稳跑过；可回头翻其他自动进化出来的普通 Skill 日志时，Hint 触发的那个关键正确动作，其实在普通 Skill 的某些运行里也出现过。
 
-为什么同一个正确动作，手写 Hint 能拿到稳稳的高分，普通进化产物却拿不到？
+同一个正确动作，为什么手写 Hint 能换来稳定的高分，普通进化产物却带不动分数？
 
-想通的那一刻真有点懊恼：**手写 Hint 做到的是“稳定扭转模型行为”，而普通 Skill 只是“偶尔撞上那个行为”，方差大得惊人。** 当时无论是文本派还是外面炒得很热的改脚手架代码（Harness）的 RSI，核心共识都是“拿实机跑一次验证集的分数做门控（Gate）”。但在这层高方差底下，能跨过 Gate 的无非两种情况：要么真改对了行为，要么纯粹是采样撞了大运；没跨过去的，可能是手气背，也可能是改对了三个必要动作里的两个、偏偏倒在了最后一步。你在循环里画出一条单调不减的曲线，什么都证明不了。
+想通那一刻，其实有点懊恼，因为道理简单得过分：**手写 Hint 做到的是“稳定扭转模型行为”，普通 Skill 只是“偶尔撞上那个行为”，底下藏着极大的采样方差。** 当时无论是文本派，还是外面聊得很热的改脚手架代码（Harness）的 RSI，默认做法都是拿验证集跑一次的分数当门控（Gate）。可在这层高方差底下，能跨过 Gate 的无非两种情况：要么真改对了行为，要么纯粹是那一次采样手气好；没跨过去的，可能是手气背，也可能是改对了三个必要步骤里的两个、偏偏倒在最后一步。你在循环里画出一条单调不减的折线，其实说明不了什么。
 
-恰好那周离组会还有几天空档，手头一时没新方向可试，池子里又闲着一批没人用的 API 额度。我们干脆做了一个带点“行为艺术”色彩的实验：**把选择器彻底扔掉，就在 Terminal-Bench 上让模型纯瞎提议（Propose）100 个候选 Skill，然后砸算力对每个候选重测十几遍，用经验贝叶斯模型把真实底牌洗出来。**
+恰好那周离组会还有几天空档，手头一时没新方向可试，池子里又闲着一批没人用的 API 额度。我们索性做了场带点“行为艺术”意味的实验：**把选择器干脆撤掉，就在 Terminal-Bench 上让模型纯盲抽地提议（Propose）100 个候选 Skill，再砸算力把每个候选重测十几遍，最后用经验贝叶斯模型把真实底牌洗出来。**
 
-做之前心里完全没底——既然选择器这么瞎，提议器会不会也一样菜？（当然，如果你拿千禧年数学难题让模型瞎提议，抽一万次也是零；好在常规软件工程任务还在当前基座模型的能力射程之内。）结果跑出来的那一刻，全组都震住了：**哪怕用最朴素的提议器，候选池里明明就躺着能跨 11 个编程任务平均稳涨 +11.4 个百分点的真东西！**（比如排头名的 `seed-027`，精准摁住了模型在自动化测试下擅自把导出类名 `Server` 美化成 `Servicer`、手搓空格破坏 BPE 换行分词计数等违约毛病。）
+跑之前心里其实完全没底——既然选择器这么不靠谱，提议器会不会也一样使不上劲？（当然，如果你让模型对着千禧年数学难题盲提一万次，多半还是零；好在常规软件工程任务尚在当前基座模型的能力射程之内。）结果洗出来之后，事情比想的还要直白：**哪怕用最朴素的提议器，候选池里本来就躺着能跨 11 个编程任务平均稳涨 +11.4 个百分点的好东西。** 排头名的 `seed-027` 写得相当具体，直接摁住了模型在自动化测试下擅自把导出类名 `Server` 改成 `Servicer`、或者手搓空格破坏 BPE 换行分词计数这类违约毛病。
 
-金子早就被写出来了，但回过头考考市面上的选择器：单次执行门控挑准更优候选的概率是 **49.7%**（抛硬币是 50.0%），放行接受的修改里 **62.1%** 其实是负优化；哪怕请 LLM 当裁判把几万字轨迹从头读到尾，三种主流裁判模板的准确率也只有 **45.4%–49.0%**——裁判自己的眼花叠加上环境随机波动，反而更瞎了。
+好 Skill 其实早就被写出来了。可回过头拿这同一批候选去考市面上的选择器，账就显得有些难看了：单次执行门控挑中更优候选的概率是 **49.7%**（抛硬币是 50.0%），放行接受的修改里 **62.1%** 其实是负优化；哪怕请 LLM 当裁判，把几万字的完整轨迹从头读到尾，三种主流裁判模板的准确率也只有 **45.4%–49.0%**——裁判自己的阅读偏差叠加上环境的随机波动，反而比直接看跑分还不准。
 
-那一刻我们意识到，这大概是一篇必须写出来给社区看的论文。
+算完这笔账，我们大概就确定了：这件事得写出来给社区看看。
 
-### 二、画不出的“Evolving Law”与推倒重跑的决定
+---
 
-真正按论文标准铺开 7 种主流方法、6 款模型去跑十几个公开基准时，一个差点掀翻我们立论的现象出现了：**在硬核编程基准上大家确实集体卡壳，可在 SpreadsheetBench、LiveMathematicianBench、AIME 这一批公开基准上，进化方法真的能哗哗暴涨 20 到 40 分！**
+不过真按论文标准铺开实验——把 7 种主流方法、6 款模型丢进十几个公开基准里跑一遍——一个差点让我们推翻前面判断的现象冒了出来：**在硬核编程基准上大家确实普遍卡壳，可在 SpreadsheetBench、LiveMathematicianBench、AIME 这几个公开基准上，进化方法确实能稳稳涨出 20 到 40 分。**
 
-起初我们猜“是不是 SWE 任务方差大、那些暴涨基准方差小”？组里同学跑完统计回来直摇头——那些基准的单次方差一点也不小。当时为了赶 ICLR 截稿，我们甚至花了一周时间，想用基础正确率和方差拟合一条类似 Scaling Law 的 **“Evolving Law”** 去预测进化收益，结果画出来的散点图永远是一团乱麻。
+起初我们猜，是不是软件工程任务方差偏大、那几个涨幅明显的基准方差小？组里同学跑完统计回来直摇头——那些基准的单次方差一点也不小。那会儿为了赶 ICLR 截稿，我们甚至花了一周时间，试着用基础正确率和方差去拟合一条类似 Scaling Law 的 **“Evolving Law”** 来预测进化收益，结果画出来的散点图怎么看都是一团乱麻。
 
-机器学习最朴素的常识又救了我们一次：**你不可能在一个没搞懂底层分布的混合脏数据上拟合出定律。**
+机器学习里最朴素的常识又救了我们一次：**底层数据分布都没摸清的时候，在一堆混杂的脏数据上是拟合不出定律的。**
 
-那位同学停下画图，直接扎进那 12 个基准的评测器源码和进化产物里逐行对账，结果抓出了一连串让人哭笑不得的现场：
+那位同学停下画图，直接扎进这 12 个基准的评测器源码和进化产物里逐行对账，结果翻出了一连串多少有点幽默的现场：
 
-- **SpreadsheetBench** 暴涨三四十分，是因为伴随开源的评测脚本读 `.xlsx` 时漏了公式重算，写正规公式全判 0 分，进化只是学会了一句“Python 算好填纯数字，别写公式”。最绝的是接入 LibreOffice 修好重算之后：因极少数新函数不支持求值，这句话其实还剩 **+6.7 分**的真收益；但在 39 道验证题上，6 分刚巧跌回两三道题的采样噪声带——原评测器下（值 30 分）8 次进化 **8/8** 全学会，修好后重跑 12 次进化，最终保住这一习惯的只剩 **2/12**！
-- **LiveMathematicianBench** 里有 85 道题包含“其余某项正确，但可证明更强结果”且 **100% 是标准答案**。直接用一句话命令基座模型盲选它时，模型端着“数学自尊心”最低只有 **4%** 肯听话；多轮进化却自动磨出一套学术劝降话术（先骗模型具体选项都被出题人故意弱化了，再倒置证明责任），硬把盲选服从率哄到了 **92%**。
-- **SearchQA** 把检索资料 100% 删空逼模型闭卷裸考，DeepSeek-V4-Flash 和 GPT-5.6 Luna 分数不降反升；**ALFWorld** 代码进化单步暴涨 29 分，仅因解除了初始代码硬编码的“只保留 2 步历史”。
+- **SpreadsheetBench** 涨出三四十分，是因为随开源代码附带的评测脚本在读 `.xlsx` 时漏了公式重算，老老实实写正规公式全判 0 分，进化只是学会了一句“用 Python 算好填纯数字，别写公式”。更有意思的是接入 LibreOffice 修好重算之后：因为极少数新函数仍不支持求值，这句话其实还留着 **+6.7 分**的真实收益；但在 39 道验证题上，6 分多恰巧跌回了两三道题的采样噪声带——原评测器下（值 30 分）8 次进化 **8/8** 全学会了，修好后重跑 12 次，最终保住这条习惯的只剩 **2/12**。
+- **LiveMathematicianBench** 里有 85 道题带着“其余某项正确，但可证明更强结果”这个选项，且它 **100% 是标准答案**。直接附一句话命令基座模型盲选时，模型端着一股“数学自尊心”，服从率最低只有 **4%**；多轮进化却自动磨出了一套颇具学术味的劝降话术——先告诉模型具体选项大都被出题人故意弱化了，再把证明责任倒置过来——愣是把盲选服从率拉到了 **92%**。
+- **SearchQA** 里把检索资料 100% 删空、逼模型闭卷裸考，DeepSeek-V4-Flash 和 GPT-5.6 Luna 的分数不降反升；**ALFWorld** 的代码进化单步涨了 29 分，只是因为它删掉了初始代码里硬编码的“只保留 2 步历史”。
 
-在全部 27 组高涨幅配置里，往空基线后**只加一句话**就能复现中位 **90%** 的收益；修好评测漏洞后，12 个基准中位涨幅直接从 **17.6 分跌到 0.8 分**。
+统计下来，在全部 27 组高涨幅配置里，往空基线后**只补一句话**就能复现中位 **90%** 的收益；把评测漏洞修好之后，12 个基准的中位涨幅直接从 **17.6 分跌到了 0.8 分**。
 
-这时候两块拼图彻底咬合死了：**评估系统的分辨率决定了进化能留住什么。** 在单次对比标准差动辄 2~4 分（文献 171 列打榜结果的中位 SOTA 优势恰好只有 3.4 分，且 0 列给误差棒，Terminal-Bench 单次挑对第一名概率仅 33%）的粗糙尺子下，细水长流的真改进全被滤掉了，只有通吃全场的评测漏洞能刺穿噪声活下来。
+到这里，前面两块拼图算是彻底对上了：**评估系统的分辨率，决定了进化循环究竟能留住什么。** 当一把尺子的单次对比标准差动辄落在 2 到 4 分（我们翻了 9 篇论文里的 171 列打榜结果，中位 SOTA 优势恰好只有 3.4 分，且 0 列给出误差棒；Terminal-Bench 上单次运行从 4 个方法里挑对第一名的概率也只有 33%），细水长流的真改进会被噪声洗掉，能稳定刺穿噪声活下来的，往往只剩通吃全场的评测漏洞。
 
-看着越挖越深的数据，我们做了一个很干脆的决定：**不赶 ICLR 死线了，改投 ARR。** 同时，为了彻底排除早期我们在单台 64 核 256G 开发机上硬塞 64 个并发 Docker 带来的出口代理超时和缓存争抢干扰，全组咬牙把管线搬上公司几百核几 T 内存的大集群，配足单容器资源与网络白名单，趁着长假把几乎所有实验推倒重跑了一遍（重跑后发现光把基建修干净，整体通过率就涨了一截——我现在严重怀疑市面上不少论文里奇低无比的 Baseline，测出来的其实是一半校园网 NAT 超时率）。这 1,030 次独立进化、210 万条轨迹攒下来的账本，就是现在的 **《分辨率假说（The Resolution Hypothesis）》**。
+看到账本越挖越深，我们做了一个挺干脆的决定：**放弃 ICLR 截稿，改投 ARR。** 顺带着，为了把早期在单台 64 核 256G 开发机上硬塞 64 个并发 Docker 带来的代理超时和缓存争抢彻底清干净，大家索性把整套管线搬上了公司几百核、几 T 内存的大集群，配足单容器资源与网络白名单，趁着长假把几乎所有实验推倒重跑了一遍。重跑完才发现，光把基建修干净，整体通过率就肉眼可见地往上抬了一截——我现在颇有些怀疑，市面上不少论文里低得不太合理的 Baseline，测出来的其实有一半是校园网 NAT 的超时率。这 1,030 次独立进化、210 万条轨迹攒下来的账本，就是现在的 **《分辨率假说（The Resolution Hypothesis）》**。
 
-> **如果你只有 1 分钟：这篇工作和此前说“评测有噪声”的研究到底差在哪？**
+> **如果你只有 1 分钟：这篇工作和此前说“评测有噪声”的研究差在哪？**
 >
-> 1. **不是门控规则问题，而是测量分辨率下限**：贪心门控会误接受漂移（循环内 +6.9 至 +9.0 分，8× 重测为 +0.4 至 −3.2 分），LLM 裁判会叠加阅读噪声（准确率 45.4%–49.0%），而把门控改保守只会停滞于起点（修复评测下 HarnessLens 71 次运行有 47 次退回初始版本）。
-> 2. **一台高通滤波器统一解释三大悬案**：低分辨率把 +1 至 +3 分的真实进步滤成抛硬币（导致演化停滞与跨运行榜单洗牌），却专门放行 +10 至 +40 分的全局评测捷径（一句话复现 90%，修好评测从 17.6 分跌到 0.8 分）。
-> 3. **提议已够强，且因果验证成立**：盲抽 100 个候选里已经躺着跨任务稳涨 +11.4 分的好 Skill；直接用 16× 验证采样拉高分辨率后，最优运行从 64.8% 跃升至 72.7%。真正该投入的不是更复杂的 Proposer，而是低方差的过程诊断（降噪 13×–57×）与提议/选择解耦评估。
+> 1. **不是门控规则调参问题，而是测量分辨率下限**：贪心门控会因为误接受而漂移（循环内 +6.9 至 +9.0 分，8× 重测跌回 +0.4 至 −3.2 分）；LLM 裁判会叠加独立阅读噪声（准确率 45.4%–49.0%）；把门控改保守又会让系统停在原地（修复评测后，HarnessLens 的 71 次运行里有 47 次退回初始版本）。
+> 2. **用一台高通滤波器统一解释三个现象**：低分辨率把 +1 至 +3 分的真实进步滤成抛硬币（表现为演化停滞和跨运行榜单洗牌），却稳定放行 +10 至 +40 分的全局评测捷径（一句话复现 90%，修好评测后从 17.6 分跌到 0.8 分）。
+> 3. **提议器本来就够用，且因果验证成立**：盲抽 100 个候选里已包含跨任务稳涨 +11.4 分的好 Skill；直接把验证采样提到 16× 拉高分辨率，最优运行即从 64.8% 升至 72.7%。真正划算的投入不是继续雕琢 Proposer，而是低方差的过程诊断（可降噪 13×–57×）以及提议与选择解耦的评估方式。
 
-### 三、账本之外，三个更主观的判断
+---
 
-实验数据论文里都有，最后我想把这半年折腾下来几个带点个人偏见的结论摊开聊聊：
+具体的实验账本论文里都写得很全了。收尾之前，我想把这半年折腾下来攒出的三个偏主观的判断也摊开聊聊——倒不是觉得它们有多铁板钉钉，只是踩过这半年坑之后，有些事确实很难再装作没看见。
 
-**第一，别拿《The Bitter Lesson》给现在的文本 RSI 贴金——离散文本根本没有参数空间的“记忆性”。**
-靠终端跑分反推修改本质上是强化学习，样本效率本就极低。传统 RL 在连续权重空间里之所以能慢慢攒出本事，是因为几百亿维向量更新有近似正交的几何性质，新方向叠上去不会轻易抹平旧方向，**参数天然是有记忆的**。离散文本和代码没有这种记忆性，重写两轮就把前人覆盖了；指望在极少样本、极高噪声下靠无记忆覆写攒出复利，本身就违背直觉。
+**第一，先别急着拿《The Bitter Lesson》给当下的文本 RSI 贴金——离散文本压根没有参数空间那种“记忆性”。**
+靠终端跑分反推怎么改写文本，本质上还是强化学习，样本效率本来就低。传统 RL 在连续权重空间里之所以还能一点点攒出能力，很大程度上是因为几百亿维的向量更新天然带有近似正交的几何性质，新方向叠上去不容易把旧方向抹掉，**参数本身是有记忆的**。离散文本和代码没有这层结构，重写两三轮就把前人的积累覆盖干净了。指望在极少样本、极高噪声的环境里，靠无记忆的覆写滚出复利，从机制上就不太说得通。
 
-**第二，好提示词需要“承担风险（Take Risk）”，而失明的门控只会制造“高斯模糊”。**
-聪明人写 Prompt 管用，是因为人懂整个系统的运行机理，敢下极具体、极锋利的死命令，同时自己兜得住不误伤别处的风险。自动进化系统每轮只拿到 0/1 那一丁点环境反馈，根本消不掉风险——锋利的修改碰上两次采样坏运气就被淘汰，最终能安全混过门控的，全是四平八稳、谁也不得罪、像加了一层“高斯模糊”一样的片汤话。
+**第二，好提示词往往得“承担风险（Take Risk）”，而失明的门控只会把东西磨成“高斯模糊”。**
+熟手写的 Prompt 之所以管用，是因为人心里明白整个系统的脾气，敢下非常具体、足够锋利的硬规矩，同时也清楚边界在哪，不至于把别处改坏。自动进化循环每轮只能从环境里拿到 0 或 1 这么一点反馈，根本算不清修改的风险账——真正锋利的改动，只要碰上两次采样手气不好就被淘汰了；最后能安安稳稳混过门控的，多半是四平八稳、谁也不得罪、像蒙了一层“高斯模糊”一样的片汤话。
 
-**第三，短期劝新人避开老范式，但长期我依然相信“文本”与任务特化。**
-如果今天有刚进组的同学问要不要顺着“提议—跑分—替换”的老路子开新坑，我的实话是**千万别碰**——留给你的空间太窄（哪怕暴力加码到 16 倍验证采样，救活分数的同时又会陷入拒斥多步探索的过度保守），辛辛苦苦抠出两三分，下一代基座模型一发版顺手就吃掉了。
+**第三，短期我会劝新人先避开老范式，但往远看，我依然看好“文本”与任务特化。**
+如果今天有刚进组的同学问，要不要顺着“提议—跑分—替换”的老路子开个新坑，我的实话是尽量别往里扎。这条路上留给算法的空间太窄——哪怕暴力把验证采样拉到 16 倍，救回准确率的同时又会把系统推向过度保守，反过来拒斥需要多步推进的探索——辛辛苦苦抠出来的两三分，下一代基座模型一发版顺手就吃掉了。
 
-但往远看，两条真正有戏的路已经露头了：一是我们在跑完 7 种方法后发现，改代码脚手架（Harness）之所以比纯改文本略占上风，是因为它逼着工具和检查流针对具体题目做了**特化**——顺着这个逻辑把评估也下沉到因题而异的确定性过程指标上（比如改完代码是否立刻跑了未掩盖报错的测试），噪声方差当场就能砍掉 **13 到 57 倍**；二是**上下文的单样本效率与众包潜力**。喂海量语料训权重换来的只是可怜的边际提升，而一段文本塞进上下文当场就能生效，且全世界每个正在用大模型的普通用户每天都在天然生产文本经验。
+但把目光放长一点，两条更值得留意的小路其实已经露了头。一是我们在跑完 7 种方法后发现，改代码脚手架（Harness）之所以比纯改文本略占一点上风，是因为它逼着工具和检查流针对具体任务做了**特化**；顺着这个思路，把评估本身也下沉到因题而异的确定性过程指标上（比如改完代码后有没有立刻跑一条不掩盖报错的测试命令），噪声方差当场就能压低 **13 到 57 倍**。二是**上下文的单样本效率与众包潜力**。喂海量语料去训权重，换来的常常只是相当有限的边际提升，而一段写得对路的文本塞进上下文当场就能起效；更妙的是，全世界每天都在用大模型的普通用户，其实都在天然地生产这类文本经验——如果哪天社区真把筛选和离散空间积累的问题理顺了，这股乘上用户规模的力量恐怕才算真正上了牌桌。
 
-等哪天社区真正造出了高分辨率的新尺子，解决了怎么筛、怎么在离散空间里无损积累的问题，这股乘上用户规模的力量才算真正上了牌桌。
+当然，话说回来，我自己也远谈不上看清了终局。怎么在离散空间里做出无损积累，高分辨率的过程尺子具体该怎么造，下一轮范式又会以哪种形态落地，我们手里现在同样没有现成答案。这半年吃瘪攒下来的账本，顶多是帮自己划掉了几条看起来热闹、实则容易原地打转的岔路。真要说眼下有什么踏实事可干，大概还是先把尺子磨准、把基线测干净，老老实实把每一步的真进步和噪声分清楚；至于更远的事，走一步再看一步吧。
 
 ---
 
@@ -110,7 +110,7 @@ related_posts: true
 - **项目主页、交互式数据浏览器与 30 秒互动小游戏**：[/resolution-hypothesis/](/resolution-hypothesis/)
 - **完整实验三部曲**：
   1. [Agent 自进化为什么总在“原地踏步”？](/blog/2026/resolution-hypothesis-part-1/)
-  2. [高噪声是个高通滤波器：那些暴涨 30 分的 Agent 到底学到了什么？](/blog/2026/resolution-hypothesis-part-2/)
+  2. [高噪声是个高通滤波器：那些涨了 30 分的 Agent 到底学到了什么？](/blog/2026/resolution-hypothesis-part-2/)
   3. [LLM 写出了好 Skill，我们却挑不出来](/blog/2026/resolution-hypothesis-part-3/)
 
 </div>
@@ -119,86 +119,86 @@ related_posts: true
 
 <div class="zine-tldr" markdown="1">
 
-**TL;DR:** We started out trying to build an agent evolution algorithm that actually worked, hit a wall on real software-engineering tasks, and ended up throwing away the selector to blindly sample 100 candidate skills—only to find genuine +11.4 pp gems already sitting in the pool while every selector was effectively flipping a coin. Auditing 12 benchmarks with massive reported gains then uncovered a trail of evaluation shortcuts (a single sentence recovered 90% of the gain; repairing the graders dropped the median from 17.6 pp to 0.8 pp), convincing us to skip the ICLR deadline, rebuild the infrastructure, and re-run 2.1M trajectories from scratch as _The Resolution Hypothesis_. At the end, I lay out three blunter personal takes: discrete text lacks the memory geometry of continuous weights, blind gating blurs sharp prompts into bland mush, and the real long-term bet is high-resolution process diagnostics paired with in-context adaptation.
+**TL;DR:** We set out to build an agent evolution algorithm that actually worked, only to get tripped up by the comforting illusion of monotonically rising in-loop curves and headline benchmark jumps. Setting the selector aside to blindly sample 100 candidates—and auditing 12 high-gain benchmarks line by line—exposed the underlying measurement mechanism: genuine +11.4 pp skills were already sitting in the pool, while low-resolution selection turned real gains into coin flips and acted as a high-pass filter for evaluation shortcuts (a single sentence recovered 90% of the gain; repairing the graders dropped the median from 17.6 pp to 0.8 pp). We skipped the ICLR deadline, rebuilt our cluster infrastructure, and re-ran 2.1 million trajectories from scratch as _The Resolution Hypothesis_. The closing takes—on discrete-space memory, "Gaussian blur" gating, and where to place long-term bets—aren't offered as settled forecasts, only as what six months of bruised knuckles made hard to unsee.
 
 </div>
 
 > **Paper**: _The Resolution Hypothesis: Agent Evolution's Key Is Identifying Improvements_
 > **arXiv**: [2611.23068](https://arxiv.org/abs/2611.23068) · **PDF**: [arXiv PDF](https://arxiv.org/pdf/2611.23068) · **Project Page (with 30s interactive game)**: [Resolution Hypothesis Project Page](/resolution-hypothesis/)
-> **Three-Part Series**: [(1) Running in Place & the Variance Ledger](/blog/2026/resolution-hypothesis-part-1/) · [(2) The High-Pass Filter & Shortcut Audit](/blog/2026/resolution-hypothesis-part-2/) · [(3) Good Skills & Blind Selectors](/blog/2026/resolution-hypothesis-part-3/)
+> **Three-Part Series**: [(1) Running in Place & the Variance Ledger](/blog/2026/resolution-hypothesis-part-1/) · [(2) The High-Pass Filter & Shortcut Audit](/blog/2026/resolution-hypothesis-part-2/) · [(3) Good Skills & Selectors That Miss Them](/blog/2026/resolution-hypothesis-part-3/)
 
-When we kicked off this project six months ago, the last thing on our minds was writing a paper that pours cold water on an entire subfield. Our goal was dead simple: build an agent evolution algorithm that actually works.
+When we started this project six months ago, the last thing we planned to write was a paper that sounded like pouring cold water on an entire subfield. Our goal was plain enough: build an agent evolution algorithm that actually works.
 
-At the time, papers on Self-Evolving Agents—now dressed up under the flashier label "RSI," recursive self-improvement—were coming out in droves. Reading through the hottest entry, SkillOpt, and everything around it, a nagging doubt kept creeping in: with model weights frozen, using natural-language reflection to edit a few paragraphs of a prompt or skill file—how is this "optimization in text space" fundamentally different from just asking the model to think harder and reflect more carefully? The more papers we read, the stronger the déjà vu became. It felt a lot like taking the 2024 wave of TextGrad papers, swapping out the packaging, and reheating the same dish.
+At the time, papers on Self-Evolving Agents—lately rebranded under the grander label "RSI," recursive self-improvement—were showing up every week. Reading through the hottest entry, SkillOpt, and the cluster of work around it, I kept running into the same nagging question: with model weights frozen, using natural-language reflection to rewrite a few paragraphs of a prompt or skill file—how is this "optimization in text space" substantively different from just asking the model to think more carefully and reflect a bit harder? The more papers we read, the harder it was to shake a familiar sense of déjà vu. It felt a lot like taking the 2024 wave of TextGrad papers, swapping out the packaging, and reheating the same dish.
 
-Because none of us were particularly fond of pure storytelling, we first tried to take a more principled machine-learning route: structuring multi-round updates in an EM-like loop, or finding some clean way to parameterize text edits so we could actually train them. Every single attempt ran straight into a brick wall. Credit assignment across multi-turn environment trajectories is razor-thin, parameterizing discrete text is deeply awkward, and training data was nowhere near enough.
+None of us were especially drawn to pure storytelling, so we first tried taking a more principled machine-learning route: structuring multi-round updates like an EM loop, or finding some clean way to parameterize text edits so we could train them properly. Every attempt stalled for fairly mundane reasons. Credit assignment across multi-turn environment trajectories is thin, parameterizing discrete text is awkward at every seam, and we had nowhere near enough training data.
 
-Once the principled routes hit dead ends, we took a step back. Since AutoResearch-style loops seemed to be the only thing producing plausible numbers, we figured we would build a sharper "meta-evolving" algorithm on top of them. Early plots looked intoxicating: round after round, as long as you took the running max of candidate scores, you got a crisp line marching steadily up and to the right. That early promise got us smoothly through milestone reviews and earned us the compute budget to scale up.
+Once those principled detours ran dry, we stepped back. Since AutoResearch-style loops seemed to be the only setup producing plausible numbers, we decided to build a tighter "meta-evolving" algorithm on top of them. Early plots were easy to fall for: round after round, as long as you plotted the running max of candidate scores, you got a tidy line marching up and to the right. That early trajectory got us smoothly through milestone reviews and earned us the compute budget to scale up.
 
-Then the real trouble showed up.
+The real trouble only arrived once we actually scaled up.
 
-The moment we scaled up and moved our strategy onto more mature, battle-tested benchmarks and hard containerized engineering suites like Terminal-Bench, everything fell apart—not just our own method, but every celebrated framework from the literature too. Inside the loop, the best-so-far curve kept climbing; on held-out evaluation, the evolved skills just wobbled two or three points around the baseline, with zero perceptible difference in practice. With deadlines closing in and nothing standing up on hard tasks, everyone in the room started getting restless.
+As soon as we moved the loop onto more mature, battle-tested benchmarks and containerized engineering suites like Terminal-Bench, everything stalled together—not just our own method, but the widely cited frameworks from the literature too. Inside the loop, the best-so-far curve kept nudging upward; on held-out evaluation, the evolved skills just hovered two or three points around the baseline, with no noticeable difference in practice. With deadlines getting closer and nothing holding up on hard tasks, the mood in the room turned noticeably uneasy.
 
-### I. From "Overfit First" to the Blind-Sampling Experiment
+---
 
-Cornered, we fell back on an old debugging maxim Andrej Karpathy wrote years ago: **when you suspect a machine learning system is broken, forget generalization and try to overfit first; if you can't even overfit a single example, the pipeline itself is broken.**
+Out of ideas, we fell back on an old debugging rule Andrej Karpathy wrote years ago: **when you suspect a machine learning system is broken, stop worrying about generalization and try to overfit first; if you cannot even overfit a single example, the pipeline itself is broken.**
 
-Taking a cue from our early sanity checks, we swallowed our pride and hand-wrote brutally explicit hints for specific failed tasks, force-feeding them straight into the model. What came back was bizarre. With the hand-written hint, those tasks started passing reliably—yet when we dug back through logs of ordinary auto-evolved skills, the exact right action triggered by our hint had already shown up in some of their rollouts too!
+Borrowing from our early sanity checks, we swallowed our pride and hand-wrote plain, specific hints for individual failed tasks, feeding them straight into the model. What came back was an odd contrast. With the hand-written hint, those tasks started passing reliably—yet when we dug back through the logs of ordinary auto-evolved skills, the exact right action triggered by our hint had already shown up in some of their rollouts too.
 
-Why did the same winning action produce rock-solid scores with a hand-written hint, while ordinary evolved skills went nowhere?
+Why did the same correct action produce steady scores behind a hand-written hint while ordinary evolved skills went nowhere?
 
-The moment it clicked was genuinely frustrating: **the hand-written hint reliably shifted the model's behavior, whereas an ordinary skill only stumbled into that behavior occasionally, buried under huge variance.** At the time, the shared dogma across both text-evolution methods and the heavily hyped harness-editing RSI frameworks was simple: run one pass on a validation set and use the score as an acceptance gate. Under that much noise, crossing the gate only means one of two things—either you actually improved the behavior, or you got lucky on a rollout. Failing the gate might mean bad luck, or it might mean you fixed two out of three necessary steps and tripped on the last one. Plotting a monotonically non-decreasing in-loop curve proves nothing at all.
+Once it clicked, the answer felt almost embarrassingly simple: **the hand-written hint reliably shifted the model's behavior, whereas an ordinary skill only stumbled into that behavior occasionally, buried under high sampling variance.** At the time, the default recipe across both text-evolution methods and the much-discussed harness-editing RSI frameworks was the same: run a single pass on a validation set and use that score as an acceptance gate. Under that much noise, crossing the gate only tells you one of two things—either you genuinely improved the behavior, or you got lucky on that rollout. Failing the gate might mean bad luck, or it might mean you fixed two of three necessary steps and tripped on the last one. A monotonically non-decreasing in-loop curve proves very little on its own.
 
-As luck would have it, we had a few spare days before group meeting, no obvious next idea, and a pile of idle API credits sitting around. So we ran a slightly absurd, performance-art kind of experiment: **throw the selector in the trash, let the model blindly propose 100 candidate skills on Terminal-Bench, throw heavy compute at evaluating every single one a dozen-plus times, and use an Empirical-Bayes model to wash out the noise and see what was really in the pool.**
+As it happened, we had a few spare days before group meeting, no obvious next idea, and a pile of idle API credits sitting in the account. So we ran a slightly absurd, performance-art kind of experiment: **set the selector aside altogether, let the model blindly propose 100 candidate skills on Terminal-Bench, spend the compute to evaluate every single one a dozen-plus times, and use an Empirical-Bayes model to wash out the noise and see what was actually in the pool.**
 
-Going in, we had no idea what would come out—if the selector was blind, maybe the proposer was useless too. (Obviously, if you ask a model to blindly propose proofs for Millennium Prize Problems, 10,000 draws will still yield zero; fortunately, day-to-day software engineering is well within frontier models' reach.) When the numbers landed, the whole group went quiet: **even with the most bare-bones proposer imaginable, the pool already contained genuine skills that beat the baseline by an average of +11.4 percentage points across 11 coding tasks!** (The top skill, `seed-027`, nailed concrete contract violations—stopping the model from creatively renaming an exported `Server` class to `Servicer` under automated tests, or hand-joining strings with spaces in ways that silently broke BPE newline tokenization counts.)
+Going in, we genuinely did not know what to expect—if the selector was blind, maybe the proposer was just as weak. (Obviously, if you ask a model to blindly propose proofs for Millennium Prize Problems, 10,000 draws will still yield zero; fortunately, routine software engineering is well within frontier models' reach.) When the numbers finally settled, the picture turned out to be surprisingly plain: **even with the most bare-bones proposer imaginable, the pool already contained genuine skills that beat the baseline by an average of +11.4 percentage points across 11 coding tasks.** The top skill, `seed-027`, targeted concrete contract violations—stopping the model from creatively renaming an exported `Server` class to `Servicer` under automated tests, or hand-joining strings with spaces in ways that silently broke BPE newline tokenization counts.
 
-The gold was already sitting in the pan. So we turned around and tested the field's selectors on that exact pool: a single-rollout execution gate picked the better skill **49.7%** of the time (a coin flip is 50.0%), and **62.1%** of the edits it accepted were actually worse than the baseline. Even when we handed tens of thousands of words of full execution trajectories to an LLM judge, three standard judging templates scored just **45.4%–49.0%**—the judge's own reading noise stacked on top of environment randomness, making it even blinder than before.
+Good skills were already being written. When we turned around and tested the field's selectors on that exact same pool, however, the numbers were hard to defend: a single-rollout execution gate picked the better candidate **49.7%** of the time (a coin flip is 50.0%), and **62.1%** of the edits it accepted were actually worse than the baseline. Even when we handed tens of thousands of words of full execution trajectories to an LLM judge, three standard judging templates scored only **45.4%–49.0%**—the judge's own reading noise stacked right on top of environment randomness, leaving it even less reliable than the raw score.
 
-Right then we knew: this was a paper we had to write for the community.
+Once that ledger was on the table, it was pretty clear we needed to write this up for the community.
 
-### II. The "Evolving Law" We Couldn't Fit—and the Decision to Re-Run Everything
+---
 
-Once we scaled up properly—7 mainstream methods, 6 models, over a dozen public benchmarks—a result showed up that nearly blew up our entire thesis: **everyone stalled on hard coding benchmarks, yet on SpreadsheetBench, LiveMathematicianBench, and AIME, evolution methods genuinely surged by +20 to +40 points!**
+Once we expanded to full paper scale—7 mainstream methods, 6 models, and more than a dozen public benchmarks—a result turned up that nearly upended our entire thesis: **everyone stalled on hard coding benchmarks, yet on SpreadsheetBench, LiveMathematicianBench, and AIME, evolution methods genuinely climbed by +20 to +40 points.**
 
-At first we guessed that SWE tasks simply had higher variance while those surging benchmarks had lower variance. A teammate ran the numbers and shook his head—their single-run variance wasn't small at all. Trying to make the ICLR deadline, we even spent a week trying to fit a Scaling-Law-style **"Evolving Law"** from base accuracy and variance to predict evolutionary gains. The scatter plot stayed an indecipherable cloud.
+Our first guess was that software engineering tasks simply had higher variance while those high-gain benchmarks had lower variance. A teammate checked the numbers and shook his head—their single-run variance was not small at all. Trying to make the ICLR deadline, we even spent a week trying to fit a Scaling-Law-style **"Evolving Law"** from base accuracy and variance to predict evolutionary gains. The scatter plot remained an unreadable cloud.
 
-Once again, the most basic instinct in machine learning bailed us out: **you cannot fit a clean law to a contaminated mixture whose underlying distribution you haven't inspected.**
+Once again, the most basic instinct in machine learning saved us: **you cannot fit a clean law to a contaminated mixture whose underlying distribution you have not inspected.**
 
-That teammate stopped plotting, dove straight into the grader source code and evolved artifacts of all 12 benchmarks line by line, and came back with a gallery of absurd discoveries:
+That teammate stopped plotting, went straight into the grader source code and evolved artifacts of all 12 benchmarks line by line, and came back with a set of findings that were, at the very least, mildly ironic:
 
-- **SpreadsheetBench** jumped 30–40 points because the open-source evaluation script shipped with a method read `.xlsx` files without triggering formula recalculation, grading every valid Excel formula as 0. Evolution simply learned one rule: "compute the numbers in Python and write raw values, never formulas." The punchline came after we repaired the grader with LibreOffice recalculation: because a handful of newer Excel functions still aren't supported by LibreOffice, that exact rule kept a real **+6.7 pp** advantage. Yet across 39 validation tasks, 6 points is just two or three tasks—right back inside the sampling noise floor. Under the broken grader (worth 30 pp), **8 out of 8** independent runs discovered and kept the rule; under the repaired grader (worth 6 pp), only **2 out of 12** runs managed to hold onto it!
-- **LiveMathematicianBench** had 85 questions containing an option phrased as "one of the other options is correct, but a stronger result can be proved"—and whenever it appeared, it was **100% the answer key**. When we bluntly appended a one-sentence command telling the base model to always pick it, the models' "mathematical pride" kicked in, with compliance dropping as low as **4%**. Multi-round evolution automatically refined a piece of academic persuasion—telling the model that concrete options were almost always deliberately understated by the problem authors, then flipping the burden of proof—coaxing compliance all the way up to **92%**.
-- **SearchQA**: when we deleted 100% of the retrieved search snippets and forced the models to take the test closed-book, both DeepSeek-V4-Flash and GPT-5.6 Luna actually scored _higher_. **ALFWorld**: code evolution jumped 29 points in a single step purely by removing a bizarre hardcoded cap in the starter agent that threw away all interaction history beyond the last 2 turns.
+- **SpreadsheetBench** climbed 30 to 40 points because the open-source evaluation script shipped with one method read `.xlsx` files without triggering formula recalculation, grading every valid Excel formula as 0. Evolution simply learned one habit: "compute the numbers in Python and write raw values, never formulas." The better twist came after we repaired the grader with LibreOffice recalculation: because a handful of newer Excel functions still aren't supported by LibreOffice, that exact rule retained a real **+6.7 pp** advantage. Yet across 39 validation tasks, 6 points is only two or three tasks—right back inside the sampling noise band. Under the broken grader (worth 30 pp), **8 out of 8** independent runs discovered and kept the rule; under the repaired grader (worth 6 pp), only **2 out of 12** managed to hold onto it.
+- **LiveMathematicianBench** had 85 questions containing an option phrased as "one of the other options is correct, but a stronger result can be proved"—and whenever it appeared, it was **100% the answer key**. When we bluntly appended a one-sentence command telling the base model to always pick it, the models' "mathematical pride" kicked in, with compliance dropping as low as **4%**. Multi-round evolution automatically refined a bit of academic persuasion—telling the model that concrete options were almost always deliberately understated by the problem authors, then inverting the burden of proof—coaxing compliance all the way up to **92%**.
+- **SearchQA**: when we deleted 100% of the retrieved search snippets and forced the models to take the test closed-book, both DeepSeek-V4-Flash and GPT-5.6 Luna actually scored _higher_. **ALFWorld**: code evolution jumped 29 points in a single step purely by removing a hardcoded cap in the starter agent that threw away all interaction history beyond the last 2 turns.
 
-Across all 27 high-gain model–benchmark pairs, appending **one single sentence** to the unevolved baseline recovered a median **90%** of the full evolutionary gain. Once the graders were repaired, the median gain across all 12 benchmarks collapsed from **17.6 pp to 0.8 pp**.
+Across all 27 high-gain model–benchmark pairs, appending **one single sentence** to the unevolved baseline recovered a median **90%** of the full evolutionary gain. Once the graders were repaired, the median gain across all 12 benchmarks dropped from **17.6 pp to 0.8 pp**.
 
-That snapped the two halves of the puzzle together: **the resolution of the evaluation system dictates what evolution can keep.** Measured with a ruler whose single-comparison standard deviation is 2–4 points (the median SOTA margin across 171 reported leaderboard entries in 9 papers is just 3.4 pp, with 0 reporting error bars, and single-run top-1 identification among 4 methods on Terminal-Bench is only 33%), steady, genuine improvements get washed out, and only benchmark-wide loopholes can punch through the noise floor.
+That brought both halves of the ledger into the same frame: **the resolution of the evaluation system dictates what evolution can keep.** Measured with a ruler whose single-comparison standard deviation is 2 to 4 points (across 171 leaderboard entries in 9 papers, the median SOTA margin is just 3.4 pp, with 0 reporting error bars, and single-run top-1 identification among 4 methods on Terminal-Bench is only 33%), steady, genuine improvements get washed out, and only benchmark-wide loopholes reliably punch through the noise floor.
 
-Staring at how deep the rabbit hole went, we made a clean call: **drop the ICLR deadline and target ARR instead.** At the same time, to completely rule out proxy timeouts and cache contention from our early days of cramming 64 concurrent Docker containers onto a single 64-core, 256 GB dev box, the whole team bit the bullet, migrated the pipeline onto a multi-hundred-core, multi-terabyte cluster with generous per-container resources and clean network whitelists, and spent the holiday re-running almost every experiment from scratch. (Simply fixing the infrastructure bumped overall pass rates noticeably—I now strongly suspect a non-trivial share of the suspiciously low baselines in published papers are really measuring campus NAT timeout rates.) That ledger—1,030 independent evolution runs and 2.1 million trajectories—became **_The Resolution Hypothesis_**.
+Seeing how deep the measurement issue ran, we made a clean call: **drop the ICLR deadline and target ARR instead.** At the same time, to rule out proxy timeouts and cache contention from our early setup—cramming 64 concurrent Docker containers onto a single 64-core, 256 GB dev box—we moved the pipeline onto a multi-hundred-core, multi-terabyte cluster with generous per-container resources and proper network whitelists, and spent the holiday re-running almost every experiment from scratch. Simply cleaning up the infrastructure lifted overall pass rates noticeably; I now strongly suspect a fair share of the suspiciously low baselines in published papers are mostly measuring campus NAT timeout rates. That ledger—1,030 independent evolution runs and 2.1 million trajectories—became **_The Resolution Hypothesis_**.
 
 > **If you only have 1 minute: how does this differ from earlier papers saying "evaluation is noisy"?**
 >
-> 1. **It is a measurement resolution floor, not a gating-rule tweak**: greedy gates drift via false acceptance (+6.9 to +9.0 pp in-loop vs. +0.4 to −3.2 pp on 8× re-eval), LLM judges add independent reading noise (45.4%–49.0% accuracy), and making gates more conservative simply freezes evolution at initialization (47/71 HarnessLens runs returned to the initial artifact under repaired eval).
+> 1. **It is a measurement resolution floor, not a gating-rule tweak**: greedy gates drift via false acceptance (+6.9 to +9.0 pp in-loop vs. +0.4 to −3.2 pp on 8× re-eval); LLM judges add independent reading noise (45.4%–49.0% accuracy); and making gates more conservative simply stalls evolution at initialization (47/71 HarnessLens runs returned to the initial artifact under repaired eval).
 > 2. **One high-pass filter explains three mysteries at once**: low resolution turns real +1 to +3 pp improvements into coin flips (causing stagnation and unstable rankings across runs) while selectively passing +10 to +40 pp global shortcuts (90% recovered by one sentence; 17.6 pp → 0.8 pp after repair).
-> 3. **Proposals already work, and the causal test holds**: 100 blind draws already contain +11.4 pp cross-task skills, and raising validation resolution directly to 16× rollouts lifts the best run from 64.8% to 72.7%. The bottleneck to invest in isn't fancier proposers, but low-variance process diagnostics (13×–57× lower noise) and decoupled proposer/selector evaluation.
+> 3. **Proposals already work, and the causal test holds**: 100 blind draws already contain +11.4 pp cross-task skills, and raising validation resolution directly to 16× rollouts lifts the best run from 64.8% to 72.7%. The better investment is not fancier proposers, but low-variance process diagnostics (13×–57× lower noise) and decoupled proposer/selector evaluation.
 
-### III. Beyond the Ledger: Three More Subjective Takes
+---
 
-All the numbers are in the paper. To wrap up, let me put three frankly opinionated takeaways from the past six months on the table:
+All the experimental numbers are laid out in the paper. Before wrapping up, I want to put three more subjective takeaways from the past six months on the table—not as settled truths, just as things that six months of bruised knuckles made hard to unsee.
 
-**First, stop invoking _The Bitter Lesson_ to flatter today's text-space RSI—discrete text has none of the memory geometry of parameter space.**
-Reverse-engineering edits from terminal scores is reinforcement learning, which is notoriously sample-inefficient. The reason standard RL can still slowly accumulate capabilities in continuous weight space is that updates in tens-of-billions-dimensional vectors are nearly orthogonal—stacking a new direction doesn't easily erase old ones. **Weights have built-in memory.** Discrete text and code do not; two rounds of rewriting overwrite whatever came before. Expecting compounding returns from memoryless overwrites under tiny sample budgets and massive noise runs straight against basic intuition.
+**First, stop borrowing _The Bitter Lesson_ to flatter today's text-space RSI—discrete text has none of the memory geometry of parameter space.**
+Reverse-engineering edits from terminal scores is reinforcement learning, which is already sample-inefficient by nature. The reason standard RL can still gradually accumulate capabilities in continuous weight space is that updates in tens-of-billions-dimensional vectors are nearly orthogonal: stacking a new direction does not easily erase old ones. **Weights have built-in memory.** Discrete text and code do not; two or three rounds of rewriting overwrite whatever came before. Expecting compounding returns from memoryless overwrites under tiny sample budgets and heavy noise runs against the basic mechanics of the problem.
 
-**Second, great prompts have to take risks, while blind gates grind everything into a "Gaussian blur."**
-Sharp engineers write effective prompts because they understand the machinery underneath: they dare to issue razor-specific, opinionated directives while bearing the judgment call not to break everything else. An automated loop receiving a single 0/1 bit of environment feedback per task cannot price that risk—sharp edits get killed off by two unlucky rollouts, and what survives the gate is safe, inoffensive boilerplate, smoothed over like a layer of Gaussian blur.
+**Second, good prompts have to take risks, while blind gates grind everything into a "Gaussian blur."**
+Experienced engineers write effective prompts because they understand the machinery underneath: they dare to give specific, opinionated directives while knowing where the boundaries are so they do not break everything else. An automated loop receiving a single 0 or 1 bit of environment feedback per task cannot price that risk. Sharp edits get filtered out after two unlucky rollouts, and what safely clears the gate is cautious, inoffensive boilerplate—smoothed over like a layer of Gaussian blur.
 
-**Third, in the short term I'd tell newcomers to steer clear of the old paradigm—but long term, I still believe in text and task specialization.**
-If a new student joined the lab today asking whether to open a project on the classic "propose–score–replace" loop, my honest answer is **don't touch it**. The margin left there is razor-thin (even brute-forcing 16× validation rollouts rescues accuracy only to introduce conservatism that rejects multi-step exploration), and whatever two or three points you scrape out will get swallowed whole by the next frontier base model release.
+**Third, in the short term I would steer newcomers away from the old paradigm—yet long term, I still believe in text and task specialization.**
+If a new student joined the lab today asking whether to start a project on the classic "propose–score–replace" loop, my honest advice would be to stay clear of it. The headroom left there is too narrow—even brute-forcing 16× validation rollouts rescues accuracy only by introducing conservatism that rejects multi-step exploration—and whatever two or three points you squeeze out will likely be absorbed by the next base model release anyway.
 
-Looking further out, though, two genuinely promising paths are emerging. First, across our 7 methods, the reason harness-editing slightly edged out pure text editing is that it forced tools and checks to **specialize** to the task at hand—carry that same logic down into evaluation with task-specific, deterministic process metrics (such as checking whether the agent ran an unmasked test command right after editing code), and evaluation noise variance drops by **13× to 57×** on the spot. Second, **the one-shot sample efficiency and crowdsourcing potential of context**. Feeding mountains of tokens into weight updates buys tiny marginal gains, whereas a single paragraph dropped into context takes effect immediately—and millions of everyday LLM users around the world are already generating textual know-how for free every day.
+Looking further out, though, two quieter paths look genuinely worth watching. First, across our 7 methods, the reason harness-editing slightly edged out pure text editing is that it forced tools and checks to **specialize** to the task at hand; carry that same logic down into evaluation with task-specific, deterministic process metrics (such as checking whether the agent immediately ran an unmasked test command after editing code), and evaluation noise variance drops by **13× to 57×** on the spot. Second, **the one-shot sample efficiency and crowdsourcing potential of context**. Feeding mountains of tokens into weight updates buys fairly modest marginal gains, whereas a single well-aimed paragraph dropped into context takes effect right away—and millions of everyday LLM users around the world are already generating textual know-how for free every day. If the community eventually figures out how to filter signal from noise and accumulate knowledge in discrete space, that force, multiplied by user scale, could become very real.
 
-The day the community builds high-resolution rulers—solving how to filter signal from noise and accumulate knowledge without loss in discrete space—that force, multiplied by user scale, will finally take its seat at the table.
+Even so, stepping back, I would not pretend to know how the endgame plays out. How to achieve lossless accumulation in discrete space, what high-resolution process rulers will look like in practice, or what shape the next paradigm will actually take—we do not have ready-made answers to any of those yet. At best, the past six months of bruised knuckles crossed a few busy-looking dead ends off our map. In the meantime, sharpening the ruler, keeping baselines honest, and separating real gains from sampling noise one step at a time is probably enough to keep us busy.
 
 ---
 
