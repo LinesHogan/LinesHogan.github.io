@@ -263,7 +263,7 @@ class PromptLoRA(pllm.Workload):
   <div class="pllm-tab-panel is-hidden" data-pllm-panel="serve" markdown="1">
 
 <div class="pllm-step-pills">
-  <span class="pllm-step-pill" data-i18n-zh="安装：兼容已有 vLLM 0.27–0.34" data-i18n-en="Install: Drop into vLLM 0.27–0.34">Install: Drop into vLLM 0.27–0.34</span>
+  <span class="pllm-step-pill" data-i18n-zh="安装：uv 虚拟环境 + vLLM 0.27–0.34" data-i18n-en="Install: uv venv + vLLM 0.27–0.34">Install: uv venv + vLLM 0.27–0.34</span>
   <span class="pllm-step-arrow">→</span>
   <span class="pllm-step-pill" data-i18n-zh="服务：OpenAI 流式 SSE + 会话级状态路由" data-i18n-en="Serve: OpenAI SSE + Session State Routing">Serve: OpenAI SSE + Session State Routing</span>
   <span class="pllm-step-arrow">→</span>
@@ -271,8 +271,9 @@ class PromptLoRA(pllm.Workload):
 </div>
 
 ```bash
-# 1. Install into an existing vLLM 0.27–0.34 environment (or pip install -e ".[vllm032,test]")
-python -m pip install -e . --no-deps
+# 1. Recommended: create a virtual environment with uv (or install into an existing vLLM 0.27–0.34 env via `uv pip install -e . --no-deps`)
+uv venv --python 3.12 .venv && source .venv/bin/activate
+uv pip install -e ".[vllm032,test]"
 
 # 2. Start OpenAI-compatible HTTP server (callers pass extra_body={"vllm_xargs": {"pllm_route": "session-42"}})
 pllm serve --model Qwen/Qwen2.5-0.5B-Instruct --workload pllm.workloads:DoLaWorkload --port 8000
