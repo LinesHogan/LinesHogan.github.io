@@ -8,7 +8,7 @@ nav: false
 
 <link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
 
-<div class="zine-dispatch" data-title-zh="06 读模型内部：残差流、逐层 logits 与 DoLa" data-title-en="06 Reading Inside the Model: Residual Streams, Per-Layer Logits, and DoLa">
+<div class="zine-dispatch" data-title-zh="06 读模型内部：残差流、逐层 logits 与 DoLa" data-title-en="06 Reading Inside the Model: Residual Streams, Per-Layer Logits, and DoLa" data-desc-zh="pLLM 文档 · 算法族示例与实测 (06–13)" data-desc-en="pLLM Documentation · Algorithm Family Examples (06–13)">
   <div class="zine-dispatch-links">
     <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
     <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>

@@ -14,12 +14,8 @@ pllm_badge_en: "Deep Dive · Bandwidth & Quotas"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="为什么 32 个线程块跑赢 9,600 个，跳过 23% 的词却省不下 1 毫秒？连续批处理的带宽配额分析" data-title-en="Why 32 Thread Blocks Beat 9,600—and Skipping 23% of Tokens Saves Zero Time: Bandwidth and SM Quotas in Continuous Batching">
+<div class="zine-dispatch" data-title-zh="为什么 32 个线程块跑赢 9,600 个，跳过 23% 的词却省不下 1 毫秒？连续批处理的带宽配额分析" data-title-en="Why 32 Thread Blocks Beat 9,600—and Skipping 23% of Tokens Saves Zero Time: Bandwidth and SM Quotas in Continuous Batching" data-desc-zh="建立“外部慢速 PCIe vs 片内 466 MB/层权重流”的双瓶颈模型：推导非抢占式 SM 槽位为何会被 9,600 个查表块塞满饿死矩阵乘，以及部分动态跳层为何省不下时间且暗藏概率分布漂移（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Two habits learned from single-request scripts—&quot;launch thousands of thread blocks to hide memory latency&quot; and &quot;let easy tokens exit early to save proportional runtime&quot;—both backfire inside... (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
-  <div class="zine-lang-switch" role="group" aria-label="Language">
-    <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
-    <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
-  </div>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">

@@ -14,12 +14,8 @@ pllm_badge_en: "Deep Dive · Compiled Fast Weights"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="从 `assert bs == 1` 到编译态多卡并发：在 `torch.compile` 图里改残差与训快权重" data-title-en="From `assert bs == 1` to Multi-GPU Compiled Serving: Editing Residuals and Training Fast Weights Inside `torch.compile`">
+<div class="zine-dispatch" data-title-zh="从 `assert bs == 1` 到编译态多卡并发：在 `torch.compile` 图里改残差与训快权重" data-title-en="From `assert bs == 1` to Multi-GPU Compiled Serving: Editing Residuals and Training Fast Weights Inside `torch.compile`" data-desc-zh="一条完整链路打通图内干预与在线快权重训练：借 fused_add_rms_norm 接缝与 data_ptr() 进图、10 行 make_fx 剪掉 61,440 个多余内核、grad → vmap(chunk_size=1) → compile 配 float32 增量破解 99.99% 精度吞没、以及双假图对比自动证明 TP &gt; 1 零通信更新（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Open-source repositories for test-time training (such as In-Place TTT) and activation steering routinely open with assert len(input_ids) == 1—because dropping single-request research hooks... (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
-  <div class="zine-lang-switch" role="group" aria-label="Language">
-    <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
-    <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
-  </div>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">

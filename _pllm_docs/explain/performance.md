@@ -8,7 +8,7 @@ nav: false
 
 <link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
 
-<div class="zine-dispatch" data-title-zh="性能与显存：代价从哪里来" data-title-en="Performance &amp; Memory: Where Costs Come From">
+<div class="zine-dispatch" data-title-zh="性能与显存：代价从哪里来" data-title-en="Performance &amp; Memory: Where Costs Come From" data-desc-zh="pLLM 文档 · 架构与机制解析" data-desc-en="pLLM Documentation · Architecture &amp; Design Explanations">
   <div class="zine-dispatch-links">
     <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
     <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>

@@ -570,6 +570,11 @@ def summarize_first_sentence(tldr_text: str, max_chars: int = 160) -> str:
 
 
 def extract_doc_summary(raw_md: str, is_english: bool) -> str:
+    # First check if there is an explicit `> **本文解决**：...` or `> **What this solves**: ...` callout
+    m_solves = re.search(r">\s*\*\*(?:本文解决|What this solves|场景|Scenario)\*\*\s*[:：]\s*([^\n]+)", raw_md)
+    if m_solves:
+        return summarize_first_sentence(m_solves.group(1), 145 if is_english else 95)
+
     para_lines: List[str] = []
     in_code = False
     for line in raw_md.splitlines():
@@ -581,7 +586,7 @@ def extract_doc_summary(raw_md: str, is_english: bool) -> str:
             continue
         if in_code:
             continue
-        if not s:
+        if not s or s in ("---", "***", "___"):
             if para_lines:
                 break
             continue
@@ -691,14 +696,13 @@ def sync_blogs(
             "related_posts: true",
             "---",
             "",
-            '<div class="zine-dispatch" data-title-zh="{}" data-title-en="{}">'.format(
-                html_attr_escape(title_zh), html_attr_escape(title_en)
+            '<div class="zine-dispatch" data-title-zh="{}" data-title-en="{}" data-desc-zh="{}" data-desc-en="{}">'.format(
+                html_attr_escape(title_zh),
+                html_attr_escape(title_en),
+                html_attr_escape(desc_zh),
+                html_attr_escape(desc_en),
             ),
             '  <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>',
-            '  <div class="zine-lang-switch" role="group" aria-label="Language">',
-            '    <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>',
-            '    <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>',
-            "  </div>",
             "</div>",
             "",
             '<div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">',
@@ -866,8 +870,11 @@ def sync_docs(
             "",
             '<link rel="stylesheet" href="{{ \'/assets/css/pllm-hub.css\' | relative_url | bust_file_cache }}">',
             "",
-            '<div class="zine-dispatch" data-title-zh="{}" data-title-en="{}">'.format(
-                html_attr_escape(title_zh), html_attr_escape(title_en)
+            '<div class="zine-dispatch" data-title-zh="{}" data-title-en="{}" data-desc-zh="{}" data-desc-en="{}">'.format(
+                html_attr_escape(title_zh),
+                html_attr_escape(title_en),
+                html_attr_escape("pLLM 文档 · {}".format(cat_zh)),
+                html_attr_escape("pLLM Documentation · {}".format(cat_en)),
             ),
             '  <div class="zine-dispatch-links">',
             '    <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>',

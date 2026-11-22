@@ -8,7 +8,7 @@ nav: false
 
 <link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
 
-<div class="zine-dispatch" data-title-zh="10 自定义 attention：监控、只读 top-K、改 KV 布局" data-title-en="10 Custom Attention: Monitoring, Read-Only Top-K, and KV Layouts">
+<div class="zine-dispatch" data-title-zh="10 自定义 attention：监控、只读 top-K、改 KV 布局" data-title-en="10 Custom Attention: Monitoring, Read-Only Top-K, and KV Layouts" data-desc-zh="pLLM 文档 · 算法族示例与实测 (06–13)" data-desc-en="pLLM Documentation · Algorithm Family Examples (06–13)">
   <div class="zine-dispatch-links">
     <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
     <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>

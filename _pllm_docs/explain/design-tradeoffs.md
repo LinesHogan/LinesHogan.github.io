@@ -8,7 +8,7 @@ nav: false
 
 <link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
 
-<div class="zine-dispatch" data-title-zh="设计取舍：为什么有些算法今天写不了" data-title-en="Design Tradeoffs: Why Some Algorithms Cannot Be Written Today">
+<div class="zine-dispatch" data-title-zh="设计取舍：为什么有些算法今天写不了" data-title-en="Design Tradeoffs: Why Some Algorithms Cannot Be Written Today" data-desc-zh="pLLM 文档 · 架构与机制解析" data-desc-en="pLLM Documentation · Architecture &amp; Design Explanations">
   <div class="zine-dispatch-links">
     <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
     <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>

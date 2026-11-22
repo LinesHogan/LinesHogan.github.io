@@ -8,7 +8,7 @@ nav: false
 
 <link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
 
-<div class="zine-dispatch" data-title-zh="05 反馈循环：TTRL" data-title-en="05 Feedback Loop: TTRL">
+<div class="zine-dispatch" data-title-zh="05 反馈循环：TTRL" data-title-en="05 Feedback Loop: TTRL" data-desc-zh="pLLM 文档 · 交互式入门教程 (00–05)" data-desc-en="pLLM Documentation · Step-by-Step Tutorials (00–05)">
   <div class="zine-dispatch-links">
     <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
     <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>

@@ -14,12 +14,8 @@ pllm_badge_en: "Deep Dive · Bit Tricks & Tail Bandwidth"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="解码尾声的带宽账，与 5 行 IEEE 754 保序位变换" data-title-en="Bandwidth Accounting at the Decode Tail—and a 5-Line IEEE 754 Order-Preserving Bit Trick">
+<div class="zine-dispatch" data-title-zh="解码尾声的带宽账，与 5 行 IEEE 754 保序位变换" data-title-en="Bandwidth Accounting at the Decode Tail—and a 5-Line IEEE 754 Order-Preserving Bit Trick" data-desc-zh="从 top-p 过滤后平均仅剩 4.83 个幸存词出发降维词表计算；对照 IEEE 754 位图推导单条 uint64 整数比较实现“浮点降序 + 同分下标升序”，并提炼“锁种子逐词对账”与“盯批次最大耗时行”两把排障尺子（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Autoregressive decode ends in a memory-bandwidth bottleneck over the vocabulary matrix, where a few innocent lines of logit rescoring can run slower than lm_head itself (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
-  <div class="zine-lang-switch" role="group" aria-label="Language">
-    <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
-    <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
-  </div>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">

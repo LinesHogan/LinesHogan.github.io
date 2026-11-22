@@ -14,12 +14,8 @@ pllm_badge_en: "Postmortem"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="复盘一次过度设计：删掉 45 万行多面体编译器，换成 40 行最长路" data-title-en="Deleting 450,000 Lines of Polyhedral C for 40 Lines of Longest-Path: An Over-Engineering Postmortem">
+<div class="zine-dispatch" data-title-zh="复盘一次过度设计：删掉 45 万行多面体编译器，换成 40 行最长路" data-title-en="Deleting 450,000 Lines of Polyhedral C for 40 Lines of Longest-Path: An Over-Engineering Postmortem" data-desc-zh="复盘引进 45.7 万行 ISL 多面体库却只用来算 lag &gt;= 1 的弯路；展示如何将跨步时间线折叠为 8 刻度一致依赖图，以及如何用剖析器定位双卡 All-Reduce 优先级抢占与可分页内存假异步（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Systems programmers have an occupational habit of judging technical depth by the weight of their dependencies (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
-  <div class="zine-lang-switch" role="group" aria-label="Language">
-    <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
-    <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
-  </div>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">

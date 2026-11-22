@@ -14,12 +14,8 @@ pllm_badge_en: "Deep Dive · Attention Layouts"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="少读 98% 的历史反而慢 5 倍，换上 DeepSeek 又罢工：从显存布局重看自定义注意力" data-title-en="Why Reading 98% Less History Ran 5x Slower—and Broke on DeepSeek: Rethinking Custom Attention from Memory Layouts">
+<div class="zine-dispatch" data-title-zh="少读 98% 的历史反而慢 5 倍，换上 DeepSeek 又罢工：从显存布局重看自定义注意力" data-title-en="Why Reading 98% Less History Ran 5x Slower—and Broke on DeepSeek: Rethinking Custom Attention from Memory Layouts" data-desc-zh="示范如何用一页纸 Roofline 除法锁定 7:1 GQA 头部打包失效（附 FullAttentionSpec 吞并 RSWASpec 子类的继承排查），再顺着维度复杂度用矩阵乘法结合律推导出零解压的 DeepSeek MLA 潜空间流式注意力（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Custom attention code written around unfolded [batch, heads, seq, dim] Key and Value tensors hits two walls inside a production serving engine: passing window_size to FlashAttention-2 on... (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
-  <div class="zine-lang-switch" role="group" aria-label="Language">
-    <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
-    <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
-  </div>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">

@@ -14,12 +14,8 @@ pllm_badge_en: "Deep Dive · Multi-Tenant Verification"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="`h - h.mean(dim=0)` 一行错都不报，却会让多租户推理串味：把连续批处理调度变成可测数据" data-title-en="`h - h.mean(dim=0)` Throws Zero Errors While Leaking Prompts Across Tenants: Turning Batch Schedules into Testable Data">
+<div class="zine-dispatch" data-title-zh="`h - h.mean(dim=0)` 一行错都不报，却会让多租户推理串味：把连续批处理调度变成可测数据" data-title-en="`h - h.mean(dim=0)` Throws Zero Errors While Leaking Prompts Across Tenants: Turning Batch Schedules into Testable Data" data-desc-zh="用零字节 meta 追踪拦截隐式同步，将连续批处理压缩为静态整数三元组（Schedule-as-Data）；配合分块/抢占不变性、百万加盐蜕变测试与单行 return None 抢占注入，两秒内在笔记本 CPU 上抓出跨租户泄密（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Ask a coding agent to center hidden states inside an inference hook, and h - h.mean(dim=0, keepdim=True) will sail past strict type checks, single-request unit tests, and CUDA Graph... (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
-  <div class="zine-lang-switch" role="group" aria-label="Language">
-    <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
-    <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
-  </div>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">

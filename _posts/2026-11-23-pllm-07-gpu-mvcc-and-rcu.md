@@ -14,12 +14,8 @@ pllm_badge_en: "Deep Dive · GPU MVCC & RCU"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="当上百个在线请求各自边跑边改权重：在 GPU 显存里手搓无锁 MVCC 与异步 RCU" data-title-en="When a Hundred Live Requests Mutate Weights Concurrently: Building Lock-Free MVCC and Async RCU in GPU Memory">
+<div class="zine-dispatch" data-title-zh="当上百个在线请求各自边跑边改权重：在 GPU 显存里手搓无锁 MVCC 与异步 RCU" data-title-en="When a Hundred Live Requests Mutate Weights Concurrently: Building Lock-Free MVCC and Async RCU in GPU Memory" data-desc-zh="深入落地显存多版本状态的五道硬关卡：融合“写时重定向”省掉 AdamW 预拷贝并砍掉 30% 动量显存、用无锁代次账本抓出 ABA 悬空槽、靠两级非阻塞 wait_event 与 abort() 栅栏实现零冗余页回收、跨进程 CUDA IPC 远端凭证隔离、以及五行集合交集划定抢占回滚边界（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Carrying param.add_() in-place weight updates from a single-stream script into a concurrent serving engine triggers four simultaneous failures: frozen CUDA Graph pointers, two-stream torn... (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
-  <div class="zine-lang-switch" role="group" aria-label="Language">
-    <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
-    <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
-  </div>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">

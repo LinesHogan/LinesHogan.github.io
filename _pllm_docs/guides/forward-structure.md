@@ -8,7 +8,7 @@ nav: false
 
 <link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
 
-<div class="zine-dispatch" data-title-zh="改 forward 结构：残差、attention 与层的执行顺序" data-title-en="Editing Forward Structure: Residuals, Attention, and Layer Execution Order">
+<div class="zine-dispatch" data-title-zh="改 forward 结构：残差、attention 与层的执行顺序" data-title-en="Editing Forward Structure: Residuals, Attention, and Layer Execution Order" data-desc-zh="pLLM 文档 · 用户指南" data-desc-en="pLLM Documentation · User Guides">
   <div class="zine-dispatch-links">
     <a class="zine-pill-link primary" data-i18n-zh="← 返回 pLLM 文档中心" data-i18n-en="← pLLM Docs Hub" href="/pllm/#docs">← pLLM Docs Hub</a>
     <a class="zine-pill-link" data-i18n-zh="文档导航地图" data-i18n-en="Docs Roadmap" href="/pllm/docs/">Docs Roadmap</a>

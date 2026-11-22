@@ -14,12 +14,8 @@ pllm_badge_en: "Position"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="《苦涩的教训》还有后半句：当商业推理退回“脏先验”，真正卡脖子的是引擎试错税" data-title-en="The Second Half of the Bitter Lesson: Why Commercial Inference Is Returning to Dirty Priors, and Why Engine Forks Break the Economics of Search">
+<div class="zine-dispatch" data-title-zh="《苦涩的教训》还有后半句：当商业推理退回“脏先验”，真正卡脖子的是引擎试错税" data-title-en="The Second Half of the Bitter Lesson: Why Commercial Inference Is Returning to Dirty Priors, and Why Engine Forks Break the Economics of Search" data-desc-zh="单晶体管造价企稳与 800:1 算存比把训练与推理拉向相反的经济轨道，促成多元语法查表、跨层索引复用与在线快权重回潮；当编码智能体让局部先验变成可规模化搜索时，无状态引擎征收的“三周拉分支税”成了新瓶颈（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Richard Sutton's Bitter Lesson rests on the premise that hardware cost per unit of computation falls exponentially (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
-  <div class="zine-lang-switch" role="group" aria-label="Language">
-    <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
-    <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
-  </div>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">

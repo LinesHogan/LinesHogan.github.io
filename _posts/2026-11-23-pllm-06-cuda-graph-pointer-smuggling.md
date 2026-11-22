@@ -14,12 +14,8 @@ pllm_badge_en: "Deep Dive · Frozen Graphs"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="图是死的，表是活的：怎么在冻结的 CUDA Graph 里偷渡动态指针？" data-title-en="Dead Graphs, Live Tables: Smuggling Dynamic Pointers and Autograd Inside Frozen CUDA Graphs">
+<div class="zine-dispatch" data-title-zh="图是死的，表是活的：怎么在冻结的 CUDA Graph 里偷渡动态指针？" data-title-en="Dead Graphs, Live Tables: Smuggling Dynamic Pointers and Autograd Inside Frozen CUDA Graphs" data-desc-zh="借用无绑定描述符表（Bindless Descriptor Table）与空位吸收槽建模静态图动态寻址，展示如何把外部搬家张量的裸指针当成 int64 填表并在 Triton 内还原，以及从“流事件记录器”视角预判预热污染、跨流 GC 与纯函数编译器克隆冲突（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Production serving engines capture decode steps into static CUDA Graphs to eliminate Python/driver launch overhead, freezing every kernel's tensor shapes and raw device addresses at warmup (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
-  <div class="zine-lang-switch" role="group" aria-label="Language">
-    <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
-    <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
-  </div>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">

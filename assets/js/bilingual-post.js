@@ -44,6 +44,7 @@
 
     var buttons = document.querySelectorAll("[data-lang-target]");
     var heading = document.querySelector(".post-header h1.post-title");
+    var postDesc = document.querySelector(".post-header p.post-description");
     var titleSep = document.title.indexOf(" | ");
     var titleSuffix = titleSep !== -1 ? document.title.slice(titleSep) : "";
 
@@ -93,6 +94,10 @@
         if (nextTitle) {
           if (heading) heading.textContent = nextTitle;
           document.title = nextTitle + titleSuffix;
+        }
+        var nextDesc = dispatch.getAttribute(target === "en" ? "data-desc-en" : "data-desc-zh");
+        if (nextDesc && postDesc) {
+          postDesc.textContent = nextDesc;
         }
       }
       i18nNodes.forEach(function (el) {

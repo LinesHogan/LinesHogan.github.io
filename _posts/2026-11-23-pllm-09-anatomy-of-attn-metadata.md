@@ -14,12 +14,8 @@ pllm_badge_en: "Deep Dive · Unpacking Jagged Batches"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="连续批处理的行坐标还原：探针实测 vLLM `attn_metadata` 与图内无同步反解" data-title-en="Reconstructing Token Coordinates in Flattened Batches: Probing vLLM's `attn_metadata` and Sync-Free On-GPU Parsing">
+<div class="zine-dispatch" data-title-zh="连续批处理的行坐标还原：探针实测 vLLM `attn_metadata` 与图内无同步反解" data-title-en="Reconstructing Token Coordinates in Flattened Batches: Probing vLLM's `attn_metadata` and Sync-Free On-GPU Parsing" data-desc-zh="示范如何用 5 步最小混批探针与单请求 MSE 对账测清 attn_metadata 的真实语义；从 CSR 行偏移出发推导图内零同步 searchsorted 坐标还原、边界夹紧抽页与 slot_mapping = -1 读写控制，并划分与上游三整数路由的职责边界（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Continuous batching and chunked prefill pack variable-length request slices end to end into a 2D [num_tokens, hidden] tensor—trailed by silent padding rows under static CUDA Graphs (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
-  <div class="zine-lang-switch" role="group" aria-label="Language">
-    <button type="button" class="zine-lang-btn" data-lang-target="en" aria-pressed="false">EN</button>
-    <button type="button" class="zine-lang-btn is-active" data-lang-target="zh" lang="zh-CN" aria-pressed="true">中文</button>
-  </div>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">
