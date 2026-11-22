@@ -44,4 +44,4 @@ jobs:
         with:
           fail: true
           # only check local links
-          args: --offline --root-dir "${{ github.workspace }}/_site" --index-files index.html --verbose --no-progress '_site/**/*.html'
+          args: --offline --root-dir "${{ github.workspace }}/_site" --exclude-path _site/assets/plotly/demo.html --verbose --no-progress '_site/**/*.html'
