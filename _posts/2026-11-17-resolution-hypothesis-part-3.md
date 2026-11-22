@@ -52,15 +52,15 @@ related_posts: true
 
 下表的结果直接揭示了病灶所在（也可以见图 4b 右侧子图）：
 
-| 选择机制 (Selection Mechanism) | 成对比较准确率 (Pairwise Acc. %) | 错误接受率 (False Accept. %) |
-| --- | --- | --- |
-| **Random（纯随机盲选）** | $$50.0 \pm 0.0$$ | $$30.5 \pm 14.0$$ |
-| **Execution (1 rollout，单次执行得分)** | $$49.7 \pm 1.9$$ | $$62.1 \pm 42.9$$ |
-| **SkillOpt-Lite 原生选择算子** (2 rollouts) | $$48.6 \pm 2.6$$ | $$59.4 \pm 46.2$$ |
-| **GEPA 原生选择算子** (2 rollouts) | $$48.6 \pm 2.6$$ | $$31.6 \pm 14.5$$ |
-| **LLM Judge (Pointwise 单点轨迹打分)** | $$45.4 \pm 4.5$$ | $$39.9 \pm 17.5$$ |
-| **LLM Judge (Pairwise 成对轨迹比较)** | $$49.0 \pm 2.2$$ | $$57.6 \pm 23.3$$ |
-| **LLM Judge (ACE 无真值反思模板)** | $$46.9 \pm 3.5$$ | $$39.0 \pm 15.6$$ |
+| 选择机制 (Selection Mechanism)              | 成对比较准确率 (Pairwise Acc. %) | 错误接受率 (False Accept. %) |
+| ------------------------------------------- | -------------------------------- | ---------------------------- |
+| **Random（纯随机盲选）**                    | $$50.0 \pm 0.0$$                 | $$30.5 \pm 14.0$$            |
+| **Execution (1 rollout，单次执行得分)**     | $$49.7 \pm 1.9$$                 | $$62.1 \pm 42.9$$            |
+| **SkillOpt-Lite 原生选择算子** (2 rollouts) | $$48.6 \pm 2.6$$                 | $$59.4 \pm 46.2$$            |
+| **GEPA 原生选择算子** (2 rollouts)          | $$48.6 \pm 2.6$$                 | $$31.6 \pm 14.5$$            |
+| **LLM Judge (Pointwise 单点轨迹打分)**      | $$45.4 \pm 4.5$$                 | $$39.9 \pm 17.5$$            |
+| **LLM Judge (Pairwise 成对轨迹比较)**       | $$49.0 \pm 2.2$$                 | $$57.6 \pm 23.3$$            |
+| **LLM Judge (ACE 无真值反思模板)**          | $$46.9 \pm 3.5$$                 | $$39.0 \pm 15.6$$            |
 
 从表中可以看出两件非常关键的事：
 
@@ -79,7 +79,7 @@ related_posts: true
 
 ![运行间方差随轮次单调膨胀](/resolution-hypothesis/assets/variance_diffusion.png){: style="display: block; max-width: 100%; width: auto; height: auto; max-height: 620px; margin: 1.5rem auto; object-fit: contain; border-radius: 8px;" }
 
-*（上图展示循环内验证分虚高与重评估持平；下图展示运行间方差随轮次膨胀）*
+_（上图展示循环内验证分虚高与重评估持平；下图展示运行间方差随轮次膨胀）_
 
 一是**循环内的噪声套利（Noise Exploitation）**：由于接受准则总是用候选的带噪高分去替换当前产物，相当于每一轮都在采集噪声分布右尾的幸运极值（$$\max_{t} \epsilon_t$$）。这导致图 5 中算法自己记录的验证集分数（蓝线）一路上涨了 $$+6.9\sim 9.0\text{ pp}$$，而独立 8 倍重测的真实能力（橙线）却停留在 $$+0.35\sim -3.21\text{ pp}$$ 纹丝不动。
 
