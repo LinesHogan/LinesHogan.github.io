@@ -2,6 +2,67 @@
    pLLM Project & Bilingual Documentation Hub (Pudding Zine Visual System)
    ========================================================================== */
 
+/* 3-column executive pitch / story strip */
+.pllm-story-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin: 0 0 1.65rem;
+}
+
+@media (max-width: 860px) {
+  .pllm-story-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pllm-story-card {
+  background-color: var(--zine-paper);
+  border: 2px solid var(--zine-ink);
+  border-top: 5px solid var(--zine-ink);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--zine-shadow);
+  padding: 1rem 1.15rem;
+}
+
+.pllm-story-card.pain {
+  border-top-color: var(--zine-red);
+}
+
+.pllm-story-card.declare {
+  border-top-color: var(--zine-mustard);
+}
+
+.pllm-story-card.compile {
+  border-top-color: #059669;
+}
+
+.pllm-story-step {
+  font-family: var(--zine-font-mono);
+  font-size: 0.69rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--zine-muted);
+  margin-bottom: 0.3rem;
+}
+
+.pllm-story-title {
+  font-family: var(--zine-font-display);
+  font-weight: 800;
+  font-size: 1.04rem;
+  line-height: 1.3;
+  color: var(--zine-ink);
+  margin: 0 0 0.42rem !important;
+}
+
+.pllm-story-body {
+  font-size: 0.85rem !important;
+  line-height: 1.56 !important;
+  color: var(--zine-ink-2) !important;
+  margin: 0 !important;
+}
+
 .pllm-hero-figure {
   margin: 1.5rem 0 1.85rem;
   background-color: var(--zine-paper);

@@ -20,19 +20,19 @@ pagination:
 <div class="post">
 
 <header class="zine-masthead">
-  <div class="zine-kicker" data-i18n-zh="研究专题、推理系统与随笔 · 分类目录" data-i18n-en="Research, Inference Systems &amp; Essays &middot; Curated Index">Research, Inference Systems &amp; Essays &middot; Curated Index</div>
-  <h1 class="post-title" data-i18n-zh="博客与技术专栏" data-i18n-en="Blog &amp; Technical Anthology">Blog &amp; Technical Anthology</h1>
-  <p class="zine-deck" data-i18n-zh="收录 {{ all_posts.size }} 篇双语文章，按“观点随笔”、“Agent 与评估研究”、“推理架构与状态层”、“引擎底层机制”及“编译与排障手记”五大专题归档索引。" data-i18n-en="{{ all_posts.size }} bilingual essays, research dispatches, systems deep dives, and compiler/GPU debugging postmortems—organized by topic for fast navigation.">{{ all_posts.size }} bilingual essays, research dispatches, systems deep dives, and compiler/GPU debugging postmortems—organized by topic for fast navigation.</p>
+  <div class="zine-kicker" data-i18n-zh="随笔、研究与推理系统 · 分类导览" data-i18n-en="Essays, Research &amp; Inference Systems &middot; Curated Index">Essays, Research &amp; Inference Systems &middot; Curated Index</div>
+  <h1 class="post-title" data-i18n-zh="博客与技术文章" data-i18n-en="Blog &amp; Writing">Blog &amp; Writing</h1>
+  <p class="zine-deck" data-i18n-zh="共 {{ all_posts.size }} 篇中英双语文章——从行业随笔、Agent 进化实证研究，到现代 LLM 推理引擎原理拆解与真实踩坑实录，支持按专题快速检索。" data-i18n-en="{{ all_posts.size }} bilingual articles spanning personal essays, empirical agent research, LLM serving internals, and real-world GPU debugging stories."> {{ all_posts.size }} bilingual articles spanning personal essays, empirical agent research, LLM serving internals, and real-world GPU debugging stories.</p>
 </header>
 
 <div class="zine-blog-toolbar">
   <div class="pllm-filter-bar" style="margin: 0;" role="group" aria-label="Filter blog categories">
-    <button type="button" class="pllm-filter-btn is-active" data-blog-cat-btn="all" aria-pressed="true" data-i18n-zh="全部文章 ({{ all_posts.size }})" data-i18n-en="All Posts ({{ all_posts.size }})">All Posts ({{ all_posts.size }})</button>
+    <button type="button" class="pllm-filter-btn is-active" data-blog-cat-btn="all" aria-pressed="true" data-i18n-zh="全部文章 ({{ all_posts.size }})" data-i18n-en="All ({{ all_posts.size }})">All ({{ all_posts.size }})</button>
     <button type="button" class="pllm-filter-btn" data-blog-cat-btn="essays" aria-pressed="false" data-i18n-zh="观点与随笔 ({{ essay_posts.size }})" data-i18n-en="Essays ({{ essay_posts.size }})">Essays ({{ essay_posts.size }})</button>
-    <button type="button" class="pllm-filter-btn" data-blog-cat-btn="agent-research" aria-pressed="false" data-i18n-zh="Agent 与评估研究 ({{ agent_posts.size }})" data-i18n-en="Agent Research ({{ agent_posts.size }})">Agent Research ({{ agent_posts.size }})</button>
-    <button type="button" class="pllm-filter-btn" data-blog-cat-btn="systems-architecture" aria-pressed="false" data-i18n-zh="推理架构与思辨 ({{ arch_posts.size }})" data-i18n-en="Systems Architecture ({{ arch_posts.size }})">Systems Architecture ({{ arch_posts.size }})</button>
-    <button type="button" class="pllm-filter-btn" data-blog-cat-btn="engine-internals" aria-pressed="false" data-i18n-zh="引擎底层机制 ({{ intern_posts.size }})" data-i18n-en="Engine Internals ({{ intern_posts.size }})">Engine Internals ({{ intern_posts.size }})</button>
-    <button type="button" class="pllm-filter-btn" data-blog-cat-btn="debugging-notes" aria-pressed="false" data-i18n-zh="编译与排障手记 ({{ debug_posts.size }})" data-i18n-en="Debugging Notes ({{ debug_posts.size }})">Debugging Notes ({{ debug_posts.size }})</button>
+    <button type="button" class="pllm-filter-btn" data-blog-cat-btn="agent-research" aria-pressed="false" data-i18n-zh="Agent 进化研究 ({{ agent_posts.size }})" data-i18n-en="Agent Research ({{ agent_posts.size }})">Agent Research ({{ agent_posts.size }})</button>
+    <button type="button" class="pllm-filter-btn" data-blog-cat-btn="systems-architecture" aria-pressed="false" data-i18n-zh="行业思考与架构 ({{ arch_posts.size }})" data-i18n-en="Why &amp; Architecture ({{ arch_posts.size }})">Why &amp; Architecture ({{ arch_posts.size }})</button>
+    <button type="button" class="pllm-filter-btn" data-blog-cat-btn="engine-internals" aria-pressed="false" data-i18n-zh="推理引擎底层拆解 ({{ intern_posts.size }})" data-i18n-en="Engine Internals ({{ intern_posts.size }})">Engine Internals ({{ intern_posts.size }})</button>
+    <button type="button" class="pllm-filter-btn" data-blog-cat-btn="debugging-notes" aria-pressed="false" data-i18n-zh="真实排障实录 ({{ debug_posts.size }})" data-i18n-en="Debugging Stories ({{ debug_posts.size }})">Debugging Stories ({{ debug_posts.size }})</button>
   </div>
 
   <div class="zine-blog-controls-row">
@@ -126,8 +126,8 @@ pagination:
 
   <section class="zine-blog-section" data-blog-sec="systems-architecture">
     <div class="zine-blog-sec-header">
-      <h2 class="zine-blog-sec-title" data-i18n-zh="推理系统架构、趋势思辨与复盘（pLLM 专栏）" data-i18n-en="Inference Economics, PTTS Architecture &amp; Postmortems (pLLM)">Inference Economics, PTTS Architecture &amp; Postmortems (pLLM)</h2>
-      <p class="zine-blog-sec-desc" data-i18n-zh="推理经济账、统一分页张量状态层（PTTS）与编译器架构取舍" data-i18n-en="Post-Bitter-Lesson inference economics, unified tensor state layer (PTTS), and scheduler postmortems">Post-Bitter-Lesson inference economics, unified tensor state layer (PTTS), and scheduler postmortems</p>
+      <h2 class="zine-blog-sec-title" data-i18n-zh="行业思考与架构设计（pLLM 背后的故事）" data-i18n-en="Why We Built It: Inference Economics &amp; System Design">Why We Built It: Inference Economics &amp; System Design</h2>
+      <p class="zine-blog-sec-desc" data-i18n-zh="为什么推理期创新不该靠拉分支，以及如何用一套极简抽象统一各类有状态算法" data-i18n-en="Why inference innovation shouldn't require engine forks, and how one clean abstraction unifies stateful algorithms">Why inference innovation shouldn't require engine forks, and how one clean abstraction unifies stateful algorithms</p>
     </div>
     <ul class="post-list">
       {% for post in arch_posts %}
@@ -154,8 +154,8 @@ pagination:
 
   <section class="zine-blog-section" data-blog-sec="engine-internals">
     <div class="zine-blog-sec-header">
-      <h2 class="zine-blog-sec-title" data-i18n-zh="连续批处理推理引擎底层机制拆解（pLLM 专栏）" data-i18n-en="Continuous-Batching Engine Internals Deep Dives (pLLM)">Continuous-Batching Engine Internals Deep Dives (pLLM)</h2>
-      <p class="zine-blog-sec-desc" data-i18n-zh="带宽配额、IEEE 754 位变换、编译态快权重、静态图指针寻址、GPU MVCC、GQA/MLA 与多租户核验" data-i18n-en="Bandwidth quotas, IEEE 754 bit tricks, compiled fast weights, frozen CUDA Graph pointers, GPU MVCC, GQA/MLA, and verification">Bandwidth quotas, IEEE 754 bit tricks, compiled fast weights, frozen CUDA Graph pointers, GPU MVCC, GQA/MLA, and verification</p>
+      <h2 class="zine-blog-sec-title" data-i18n-zh="把现代推理引擎拆开看（连续批处理底层机制）" data-i18n-en="How Modern LLM Serving Engines Actually Work Inside">How Modern LLM Serving Engines Actually Work Inside</h2>
+      <p class="zine-blog-sec-desc" data-i18n-zh="从显存带宽账、冻结的静态图到百并发权重热更新与跨请求隔离测试" data-i18n-en="From memory bandwidth math and frozen CUDA Graphs to concurrent weight updates and cross-tenant safety">From memory bandwidth math and frozen CUDA Graphs to concurrent weight updates and cross-tenant safety</p>
     </div>
     <ul class="post-list">
       {% for post in intern_posts %}
@@ -182,8 +182,8 @@ pagination:
 
   <section class="zine-blog-section" data-blog-sec="debugging-notes">
     <div class="zine-blog-sec-header">
-      <h2 class="zine-blog-sec-title" data-i18n-zh="编译器、融合算子与多版本状态排障手记（LayerRoute）" data-i18n-en="Compiler, Triton Kernel &amp; MVCC Debugging Postmortems (LayerRoute)">Compiler, Triton Kernel &amp; MVCC Debugging Postmortems (LayerRoute)</h2>
-      <p class="zine-blog-sec-desc" data-i18n-zh="记录 torch.compile 函数化回写覆盖、L2 早退内核、IEEE 754 半精度吸收与连续批处理生命周期排障" data-i18n-en="Real-world postmortems on PyTorch AOT functionalization, L2 early-exit Triton, FP16/BF16 rounding traps, and PTTS state pins">Real-world postmortems on PyTorch AOT functionalization, L2 early-exit Triton, FP16/BF16 rounding traps, and PTTS state pins</p>
+      <h2 class="zine-blog-sec-title" data-i18n-zh="真实踩坑与排障实录（编译器、浮点与并发状态）" data-i18n-en="Real-World Debugging Stories: Compilers, Floats &amp; Live State">Real-World Debugging Stories: Compilers, Floats &amp; Live State</h2>
+      <p class="zine-blog-sec-desc" data-i18n-zh="四个单步测试全过、上了并发或编译就出事的诡异 Bug 是怎么揪出来的" data-i18n-en="How we tracked down four subtle bugs that passed unit tests yet broke under compilation or concurrency">How we tracked down four subtle bugs that passed unit tests yet broke under compilation or concurrency</p>
     </div>
     <ul class="post-list">
       {% for post in debug_posts %}

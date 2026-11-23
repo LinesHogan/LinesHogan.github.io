@@ -2,7 +2,7 @@
 layout: default
 permalink: /pllm/
 title: pLLM Project
-description: "pLLM (Programmable LLM) v0.5.1: Declarative programmability layer for stateful and adaptive inference-time algorithms in vLLM — visual architecture, steering/TPOT benchmarks, bilingual docs, and categorized engineering essays."
+description: "pLLM (Programmable LLM): Stop forking vLLM to test a new idea. Read hidden states, attach per-request fast weights, or run online decode-time training—compiled directly into unmodified vLLM’s continuous batching and CUDA graphs."
 nav: true
 nav_order: 3
 ---
@@ -18,17 +18,17 @@ nav_order: 3
 <div class="post">
 
 <header class="zine-masthead">
-  <div class="zine-kicker" data-i18n-zh="开源推理系统 · Programmable LLM · Release v0.5.1 · vLLM 0.27–0.34" data-i18n-en="Open-Source Inference System &middot; Programmable LLM &middot; Release v0.5.1 &middot; vLLM 0.27–0.34">Open-Source Inference System &middot; Programmable LLM &middot; Release v0.5.1 &middot; vLLM 0.27–0.34</div>
-  <h1 class="post-title" data-i18n-zh="pLLM：可编程大语言模型推理层" data-i18n-en="pLLM: Programmable LLM">pLLM: Programmable LLM</h1>
-  <p class="zine-deck" data-i18n-zh="面向未修改 vLLM 的类 eBPF 声明式可编程层——无需拉私有分支，即可将激活引导、免重录动态切层（LayerRoute）、每请求快权重与解码期在线训练直接编译进连续批处理与静态 CUDA Graph。" data-i18n-en="An eBPF-like declarative programmability layer for unmodified vLLM—compiling activation steering, zero-recapture dynamic LayerRoute, per-request fast weights, and online decode-time training into continuous batching and CUDA graphs with zero engine forks.">An eBPF-like declarative programmability layer for unmodified vLLM—compiling activation steering, zero-recapture dynamic LayerRoute, per-request fast weights, and online decode-time training into continuous batching and CUDA graphs with zero engine forks.</p>
+  <div class="zine-kicker" data-i18n-zh="pLLM (Programmable LLM) · 开源推理编程层 v0.5.1 · 兼容 vLLM 0.27–0.34" data-i18n-en="pLLM (Programmable LLM) &middot; Open-Source Release v0.5.1 &middot; vLLM 0.27–0.34">pLLM (Programmable LLM) &middot; Open-Source Release v0.5.1 &middot; vLLM 0.27–0.34</div>
+  <h1 class="post-title" data-i18n-zh="别再为了试个新算法，去改 vLLM 源码了。" data-i18n-en="Stop forking vLLM to test a new idea.">Stop forking vLLM to test a new idea.</h1>
+  <p class="zine-deck" data-i18n-zh="读取内部隐藏状态、按请求挂载私有快权重，或在解码时运行在线训练——直接编译进未修改原版 vLLM 的连续批处理与静态 CUDA Graph。" data-i18n-en="Read hidden states, attach per-request fast weights, or run online decode-time training—compiled directly into unmodified vLLM’s continuous batching and CUDA graphs.">Read hidden states, attach per-request fast weights, or run online decode-time training—compiled directly into unmodified vLLM’s continuous batching and CUDA graphs.</p>
 </header>
 
-<div class="zine-dispatch" data-title-zh="pLLM：可编程大语言模型推理层" data-title-en="pLLM: Programmable LLM">
+<div class="zine-dispatch" data-title-zh="pLLM：别再为了试新算法去改 vLLM 源码了" data-title-en="pLLM: Stop forking vLLM to test a new idea.">
   <div class="zine-dispatch-links">
     <a class="zine-pill-link primary" href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">GitHub &middot; LinesHogan/pLLM ↗</a>
     <a class="zine-pill-link" href="https://github.com/LinesHogan/pLLM/releases/tag/v0.5.1" target="_blank" rel="noopener">Release v0.5.1 ↗</a>
-    <a class="zine-pill-link accent" data-i18n-zh="双语文档中心 ↓" data-i18n-en="Documentation ↓" href="#docs">Documentation ↓</a>
-    <a class="zine-pill-link" data-i18n-zh="分类专栏 ({{ pllm_posts.size }}) ↓" data-i18n-en="Essays &amp; Notes ({{ pllm_posts.size }}) ↓" href="#blog">Essays &amp; Notes ({{ pllm_posts.size }}) ↓</a>
+    <a class="zine-pill-link accent" data-i18n-zh="上手教程与文档 ↓" data-i18n-en="Tutorials &amp; Docs ↓" href="#docs">Tutorials &amp; Docs ↓</a>
+    <a class="zine-pill-link" data-i18n-zh="背后的故事与拆解 ({{ pllm_posts.size }}) ↓" data-i18n-en="Essays &amp; Stories ({{ pllm_posts.size }}) ↓" href="#blog">Essays &amp; Stories ({{ pllm_posts.size }}) ↓</a>
     <a class="zine-pill-link" data-i18n-zh="ICML 2026 论文 (ESamp) ↗" data-i18n-en="ICML 2026 Paper (ESamp) ↗" href="https://proceedings.mlr.press/v306/zeng26m.html" target="_blank" rel="noopener">ICML 2026 Paper (ESamp) ↗</a>
     {% if sync.commit_sha %}
     <a class="zine-pill-link" href="{{ sync.commit_url }}" target="_blank" rel="noopener" title="Auto-synced from LinesHogan/pLLM">Sync @ {{ sync.commit_sha }} ↗</a>
@@ -36,58 +36,78 @@ nav_order: 3
   </div>
 </div>
 
+<div class="pllm-story-grid">
+  <div class="pllm-story-card pain">
+    <div class="pllm-story-step" data-i18n-zh="01 · 令人头疼的断层" data-i18n-en="01 &middot; The Painful Gap">01 &middot; The Painful Gap</div>
+    <h2 class="pllm-story-title" data-i18n-zh="HF 写半天慢得跑不动，改 vLLM 又得死磕几周" data-i18n-en="Half a day in HF—or weeks fighting a vLLM fork">Half a day in HF—or weeks fighting a vLLM fork</h2>
+    <p class="pllm-story-body" data-i18n-zh="做跨层对比解码、动态快权重或边解码边训练（如 TTT、ESamp）时：在 Hugging Face 里写 bs=1 循环只要半天，但慢得没法做大规模评测；想上 vLLM 跑满吞吐，就得 fork 源码跟分页 KV、抢占调度和静态图死磕数周，vLLM 一升级代码就全废了。" data-i18n-en="Writing a bs=1 Hugging Face loop for contrastive decoding, fast weights, or online training (TTT, ESamp) takes half a day—yet runs too slowly for real benchmarks. Porting it to vLLM means wrestling for weeks with paged KV, preemption, and CUDA graphs, until the next vLLM upgrade breaks it all.">Writing a bs=1 Hugging Face loop for contrastive decoding, fast weights, or online training (TTT, ESamp) takes half a day—yet runs too slowly for real benchmarks. Porting it to vLLM means wrestling for weeks with paged KV, preemption, and CUDA graphs, until the next vLLM upgrade breaks it all.</p>
+  </div>
+
+  <div class="pllm-story-card declare">
+    <div class="pllm-story-step" data-i18n-zh="02 · 你只需要写什么" data-i18n-en="02 &middot; What You Write">02 &middot; What You Write</div>
+    <h2 class="pllm-story-title" data-i18n-zh="几十行纯 Python，只声明算法关心的三件事" data-i18n-en="A few dozen lines of Python. Declare three things.">A few dozen lines of Python. Declare three things.</h2>
+    <p class="pllm-story-body" data-i18n-zh="完全不改 vLLM 源码。在 pLLM 里只写标准 PyTorch 张量数学，声明三件事：① 读哪一层的内部状态；② 每个请求维护什么私有状态或优化器；③ 在哪里干预前向计算或词表采样。" data-i18n-en="Leave upstream vLLM untouched. Using standard PyTorch tensor math, you simply declare: (1) which layer's internal state to read, (2) what private state or optimizer each request carries, and (3) where to intervene in the forward pass or sampler.">Leave upstream vLLM untouched. Using standard PyTorch tensor math, you simply declare: (1) which layer's internal state to read, (2) what private state or optimizer each request carries, and (3) where to intervene in the forward pass or sampler.</p>
+  </div>
+
+  <div class="pllm-story-card compile">
+    <div class="pllm-story-step" data-i18n-zh="03 · 底层如何跑满速度" data-i18n-en="03 &middot; How It Runs Fast">03 &middot; How It Runs Fast</div>
+    <h2 class="pllm-story-title" data-i18n-zh="CPU 两秒验完隔离安全，自动编译进原版静态图" data-i18n-en="Checked on CPU in 2s. Compiled into stock vLLM.">Checked on CPU in 2s. Compiled into stock vLLM.</h2>
+    <p class="pllm-story-body" data-i18n-zh="底层就像 vLLM 上的 eBPF：运行前先在 CPU 上花不到 2 秒做静态契约校验，确保多租户隔离与抢占安全；随后自动把逻辑内联编译进原版 vLLM 的 CUDA Graph，独立的在线训练任务还会自动放到旁路 Stream 并行重叠。" data-i18n-en="Under the hood, it works like eBPF for vLLM: checking multi-tenant isolation and preemption safety on CPU in under 2 seconds before touching a GPU, then compiling your logic inline into unmodified vLLM's CUDA graphs—overlapping independent training work on a side stream automatically.">Under the hood, it works like eBPF for vLLM: checking multi-tenant isolation and preemption safety on CPU in under 2 seconds before touching a GPU, then compiling your logic inline into unmodified vLLM's CUDA graphs—overlapping independent training work on a side stream automatically.</p>
+  </div>
+</div>
+
 <div class="zine-lang-panel" data-lang-panel="en" lang="en">
   <figure class="pllm-hero-figure">
-    <img src="{{ '/assets/img/pllm/doc/assets/pllm-architecture-en.svg' | relative_url | bust_file_cache }}" alt="pLLM Architecture: Declarative Workload, CPU Pre-Flight Verifier, and Unmodified vLLM Execution">
-    <figcaption class="pllm-fig-caption">Architecture Overview &middot; Declare what internal representations to read, what state to own, and where interventions apply; pLLM verifies multi-tenant contracts on CPU and compiles into unmodified vLLM—fusing inline into CUDA graphs by default and overlapping independent work on demand.</figcaption>
+    <img src="{{ '/assets/img/pllm/doc/assets/pllm-architecture-en.svg' | relative_url | bust_file_cache }}" alt="pLLM Overview: From Plain Python Workload to Production vLLM Execution">
+    <figcaption class="pllm-fig-caption">From Idea to Serving &middot; Write a plain-Python Workload (left); pLLM checks multi-tenant safety on CPU in &lt; 2s (center) and compiles it directly into stock vLLM (right).</figcaption>
   </figure>
 </div>
 
 <div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN">
   <figure class="pllm-hero-figure">
-    <img src="{{ '/assets/img/pllm/doc/assets/pllm-architecture-zh.svg' | relative_url | bust_file_cache }}" alt="pLLM 架构总览：声明式负载、CPU 静态契约核验与未修改 vLLM 执行流水线">
-    <figcaption class="pllm-fig-caption">架构总览 · 声明读取位置、状态归属与前向/采样干预；pLLM 在 CPU 上完成多租户契约核验，编译进原版 vLLM 执行流水线（默认内联融合进静态 CUDA Graph，仅在存在独立异步任务时按需重叠）。</figcaption>
+    <img src="{{ '/assets/img/pllm/doc/assets/pllm-architecture-zh.svg' | relative_url | bust_file_cache }}" alt="pLLM 工作流程总览：从几十行纯 Python 到未修改 vLLM 满血并发">
+    <figcaption class="pllm-fig-caption">从研究代码到满血并发 · 左侧用纯 Python 声明你的算法逻辑；中间在 CPU 上不到 2 秒完成多租户安全校验；右侧自动编译进未修改的原版 vLLM。</figcaption>
   </figure>
 </div>
 
 <div class="pllm-bento-grid">
   <div class="pllm-bento-card">
-    <div class="pllm-card-kicker" data-i18n-zh="实测吞吐与 TPOT 延迟开销 · RTX 4090 · CUDA Graphs 开启" data-i18n-en="Measured Throughput &amp; TPOT Impact &middot; RTX 4090 &middot; CUDA Graphs ON">Measured Throughput &amp; TPOT Impact &middot; RTX 4090 &middot; CUDA Graphs ON</div>
-    <h2 class="pllm-card-heading" data-i18n-zh="微秒级引导 TPOT 开销，3.13× 并发快权重加速" data-i18n-en="Sub-0.05 ms Steering TPOT &amp; 3.13&times; Fast-Weight Speedup">Sub-0.05 ms Steering TPOT &amp; 3.13&times; Fast-Weight Speedup</h2>
+    <div class="pllm-card-kicker" data-i18n-zh="真实评测与线上吞吐 · 单张 RTX 4090 · 原版 vLLM 开启静态图" data-i18n-en="Real-World Speed &middot; Single RTX 4090 &middot; Stock vLLM + CUDA Graphs">Real-World Speed &middot; Single RTX 4090 &middot; Stock vLLM + CUDA Graphs</div>
+    <h2 class="pllm-card-heading" data-i18n-zh="写研究代码的轻松，跑生产级引擎的速度" data-i18n-en="Prototype in Python. Keep Native vLLM Speed.">Prototype in Python. Keep Native vLLM Speed.</h2>
 
     <div class="pllm-bench-group">
-      <div class="pllm-bench-subtitle" data-i18n-zh="1 · 激活引导 (ActivationPatch) 与异步 CPU 导出 · Qwen2.5-7B · 0 丢行" data-i18n-en="1 &middot; Activation Steering &amp; Async CPU Export &middot; Qwen2.5-7B &middot; 0 Drops">1 &middot; Activation Steering &amp; Async CPU Export &middot; Qwen2.5-7B &middot; 0 Drops</div>
+      <div class="pllm-bench-subtitle" data-i18n-zh="1 · 激活引导（Steering）与实时特征导出 · Qwen2.5-7B · 几乎零延迟损耗" data-i18n-en="1 &middot; Activation Steering &amp; Live Hidden Readout &middot; Qwen2.5-7B &middot; Near-Zero Tax">1 &middot; Activation Steering &amp; Live Hidden Readout &middot; Qwen2.5-7B &middot; Near-Zero Tax</div>
       <div class="pllm-tpot-strip">
         <div class="pllm-tpot-pill">
           <div class="pllm-tpot-val">16.52 ms <span class="delta">(+0.02 ms)</span></div>
-          <div class="pllm-tpot-lbl" data-i18n-zh="单请求引导 TPOT (99.7% 吞吐)" data-i18n-en="bs=1 Steer TPOT (99.7% tok/s)">bs=1 Steer TPOT (99.7% tok/s)</div>
+          <div class="pllm-tpot-lbl" data-i18n-zh="单请求流式引导每词延迟 (99.7% 吞吐)" data-i18n-en="bs=1 steering TPOT (99.7% speed)">bs=1 steering TPOT (99.7% speed)</div>
         </div>
         <div class="pllm-tpot-pill">
           <div class="pllm-tpot-val">22.02 ms <span class="delta">(+0.05 ms)</span></div>
-          <div class="pllm-tpot-lbl" data-i18n-zh="128 并发纯引导 TPOT (98.3%)" data-i18n-en="128-Seq Steer TPOT (98.3%)">128-Seq Steer TPOT (98.3%)</div>
+          <div class="pllm-tpot-lbl" data-i18n-zh="128 并发激活引导延迟 (98.3% 吞吐)" data-i18n-en="128-seq steering TPOT (98.3% speed)">128-seq steering TPOT (98.3% speed)</div>
         </div>
         <div class="pllm-tpot-pill">
           <div class="pllm-tpot-val">22.17 ms <span class="delta">(+0.20 ms)</span></div>
-          <div class="pllm-tpot-lbl" data-i18n-zh="引导 + 3584 维全宽导出 (98.0%)" data-i18n-en="Steer + 3584d CPU Export (98%)">Steer + 3584d CPU Export (98%)</div>
+          <div class="pllm-tpot-lbl" data-i18n-zh="引导 + 全维特征实时回传 CPU (98.0%)" data-i18n-en="Steer + full 3584-d CPU export (98%)">Steer + full 3584-d CPU export (98%)</div>
         </div>
       </div>
       <div class="pllm-bar-row">
         <div class="pllm-bar-meta">
-          <span class="pllm-bar-name" data-i18n-zh="原生 vLLM 基线 (128 并发)" data-i18n-en="Native vLLM Baseline (128 seqs)">Native vLLM Baseline (128 seqs)</span>
+          <span class="pllm-bar-name" data-i18n-zh="原版 vLLM 基线 (128 并发)" data-i18n-en="Stock vLLM Baseline (128 concurrent)">Stock vLLM Baseline (128 concurrent)</span>
           <span class="pllm-bar-val">5,719 tok/s &middot; 21.97 ms (100%)</span>
         </div>
         <div class="pllm-bar-track"><div class="pllm-bar-fill" style="width: 100%"></div></div>
       </div>
       <div class="pllm-bar-row">
         <div class="pllm-bar-meta">
-          <span class="pllm-bar-name" data-i18n-zh="第 14 层激活引导 (ActivationPatch)" data-i18n-en="Layer-14 Activation Steering">Layer-14 Activation Steering</span>
+          <span class="pllm-bar-name" data-i18n-zh="开启第 14 层激活引导 (Steering)" data-i18n-en="With Layer-14 Activation Steering">With Layer-14 Activation Steering</span>
           <span class="pllm-bar-val">5,623 tok/s &middot; 22.02 ms (98.3%)</span>
         </div>
         <div class="pllm-bar-track"><div class="pllm-bar-fill emerald" style="width: 98.3%"></div></div>
       </div>
       <div class="pllm-bar-row">
         <div class="pllm-bar-meta">
-          <span class="pllm-bar-name" data-i18n-zh="激活引导 + 3584 维残差异步导出至 CPU" data-i18n-en="Steering + Full 3584-d CPU Export">Steering + Full 3584-d CPU Export</span>
+          <span class="pllm-bar-name" data-i18n-zh="激活引导 + 整层特征逐词回传 CPU (零丢行)" data-i18n-en="Steering + Full Residual Streamed to CPU">Steering + Full Residual Streamed to CPU</span>
           <span class="pllm-bar-val">5,604 tok/s &middot; 22.17 ms (98.0%)</span>
         </div>
         <div class="pllm-bar-track"><div class="pllm-bar-fill blue" style="width: 98.0%"></div></div>
@@ -95,17 +115,17 @@ nav_order: 3
     </div>
 
     <div class="pllm-bench-group">
-      <div class="pllm-bench-subtitle" data-i18n-zh="2 · 解码期在线训练 (ESamp) · Qwen2.5-7B · 128 并发独立 AdamW" data-i18n-en="2 &middot; Online Training (ESamp) &middot; Qwen2.5-7B &middot; 128 Concurrent AdamW MLPs">2 &middot; Online Training (ESamp) &middot; Qwen2.5-7B &middot; 128 Concurrent AdamW MLPs</div>
+      <div class="pllm-bench-subtitle" data-i18n-zh="2 · 128 并发边解码边跑独立在线训练 (ESamp · 每个请求挂独立 MLP + AdamW)" data-i18n-en="2 &middot; 128-Request Online Training During Decode (ESamp &middot; Private MLP + AdamW Each)">2 &middot; 128-Request Online Training During Decode (ESamp &middot; Private MLP + AdamW Each)</div>
       <div class="pllm-bar-row">
         <div class="pllm-bar-meta">
-          <span class="pllm-bar-name" data-i18n-zh="pLLM 在线训练 (@pllm.train / 原生 5,894)" data-i18n-en="pLLM Online Training (@pllm.train / native 5,894)">pLLM Online Training (@pllm.train / native 5,894)</span>
+          <span class="pllm-bar-name" data-i18n-zh="逐词跑 AdamW 在线训练 (原版基线 5,894 tok/s)" data-i18n-en="Per-token AdamW training (vs. 5,894 native)">Per-token AdamW training (vs. 5,894 native)</span>
           <span class="pllm-bar-val">5,738 tok/s (97.4%)</span>
         </div>
         <div class="pllm-bar-track"><div class="pllm-bar-fill emerald" style="width: 97.4%"></div></div>
       </div>
       <div class="pllm-bar-row">
         <div class="pllm-bar-meta">
-          <span class="pllm-bar-name" data-i18n-zh="pLLM 在线训练 + 幸存词采样引导 (ESamp)" data-i18n-en="pLLM Train + Survivor Guidance (ESamp)">pLLM Train + Survivor Guidance (ESamp)</span>
+          <span class="pllm-bar-name" data-i18n-zh="在线训练 + 采样分布实时引导同时开启 (ESamp)" data-i18n-en="Online training + live guided sampling (ESamp)">Online training + live guided sampling (ESamp)</span>
           <span class="pllm-bar-val">5,678 tok/s (96.3%)</span>
         </div>
         <div class="pllm-bar-track"><div class="pllm-bar-fill red" style="width: 96.3%"></div></div>
@@ -113,24 +133,24 @@ nav_order: 3
     </div>
 
     <div class="pllm-bench-group">
-      <div class="pllm-bench-subtitle" data-i18n-zh="3 · 4B In-Place TTT 检查点 · 4096 Prompt · 零拷贝流式快权重 (v0.5.1)" data-i18n-en="3 &middot; 4B In-Place TTT Checkpoint &middot; 4096 Prompt &middot; Streaming Fast Weights (v0.5.1)">3 &middot; 4B In-Place TTT Checkpoint &middot; 4096 Prompt &middot; Streaming Fast Weights (v0.5.1)</div>
+      <div class="pllm-bench-subtitle" data-i18n-zh="3 · 为 4B Test-Time Training 直接解锁并发批处理 (对比官方仅 bs=1 实现)" data-i18n-en="3 &middot; Unlocking Batch Concurrency for 4B Test-Time Training (vs. Official bs=1)">3 &middot; Unlocking Batch Concurrency for 4B Test-Time Training (vs. Official bs=1)</div>
       <div class="pllm-bar-row">
         <div class="pllm-bar-meta">
-          <span class="pllm-bar-name" data-i18n-zh="官方 Hugging Face 实现 (仅支持 bs=1)" data-i18n-en="Official Hugging Face Loop (bs=1 only)">Official Hugging Face Loop (bs=1 only)</span>
+          <span class="pllm-bar-name" data-i18n-zh="官方 Hugging Face 实现 (仅支持单请求 bs=1)" data-i18n-en="Official Hugging Face Code (bs=1 only)">Official Hugging Face Code (bs=1 only)</span>
           <span class="pllm-bar-val">54.8 tok/s (1.00&times;)</span>
         </div>
         <div class="pllm-bar-track"><div class="pllm-bar-fill" style="width: 31.9%"></div></div>
       </div>
       <div class="pllm-bar-row">
         <div class="pllm-bar-meta">
-          <span class="pllm-bar-name" data-i18n-zh="pLLM 单请求 (bs=1)" data-i18n-en="pLLM Single Request (bs=1)">pLLM Single Request (bs=1)</span>
+          <span class="pllm-bar-name" data-i18n-zh="pLLM 单请求 (~25 行 Python 声明)" data-i18n-en="pLLM Single Request (~25 lines of Python)">pLLM Single Request (~25 lines of Python)</span>
           <span class="pllm-bar-val">73.0 tok/s (1.33&times;)</span>
         </div>
         <div class="pllm-bar-track"><div class="pllm-bar-fill blue" style="width: 42.6%"></div></div>
       </div>
       <div class="pllm-bar-row">
         <div class="pllm-bar-meta">
-          <span class="pllm-bar-name" data-i18n-zh="pLLM 4 并发请求 (bs=4)" data-i18n-en="pLLM 4 Concurrent Requests (bs=4)">pLLM 4 Concurrent Requests (bs=4)</span>
+          <span class="pllm-bar-name" data-i18n-zh="pLLM 4 请求并发批处理 (直接解锁 3 倍+ 吞吐)" data-i18n-en="pLLM 4 Concurrent Requests (Batching Unlocked)">pLLM 4 Concurrent Requests (Batching Unlocked)</span>
           <span class="pllm-bar-val">171.6 tok/s (3.13&times;)</span>
         </div>
         <div class="pllm-bar-track"><div class="pllm-bar-fill mustard" style="width: 100%"></div></div>
@@ -140,49 +160,48 @@ nav_order: 3
   </div>
 
   <div class="pllm-bento-card blue">
-    <div class="pllm-card-kicker" data-i18n-zh="系统边界与模型生态" data-i18n-en="Runtime Scope &amp; Model Matrix">Runtime Scope &amp; Model Matrix</div>
-    <h2 class="pllm-card-heading" data-i18n-zh="零侵入兼容 15 类架构与在线动态切层" data-i18n-en="Zero-Fork Support Across 15 Families">Zero-Fork Support Across 15 Families</h2>
+    <div class="pllm-card-kicker" data-i18n-zh="告别分支维护税 · 从实验一路通往线上服务" data-i18n-en="Zero Maintenance Tax &middot; From Idea to Production">Zero Maintenance Tax &middot; From Idea to Production</div>
+    <h2 class="pllm-card-heading" data-i18n-zh="vLLM 升级代码不废，上 GPU 前先抓出并发隐患" data-i18n-en="Upgrade vLLM Anytime. Catch Bugs Before Renting a GPU.">Upgrade vLLM Anytime. Catch Bugs Before Renting a GPU.</h2>
 
     <div class="pllm-kpi-grid">
       <div class="pllm-kpi-tile">
-        <div class="pllm-kpi-num">0 Forks</div>
-        <div class="pllm-kpi-caption" data-i18n-zh="不改上游 vLLM 源码，不注册全局插件" data-i18n-en="Unmodified upstream vLLM, zero global plugins">Unmodified upstream vLLM, zero global plugins</div>
+        <div class="pllm-kpi-num" data-i18n-zh="0 行改引擎" data-i18n-en="0 Engine Edits">0 Engine Edits</div>
+        <div class="pllm-kpi-caption" data-i18n-zh="直接装在原版 vLLM 上，彻底告别维护私有分支" data-i18n-en="Runs on pip-installed vLLM; never rebase a fork again">Runs on pip-installed vLLM; never rebase a fork again</div>
       </div>
       <div class="pllm-kpi-tile">
-        <div class="pllm-kpi-num">0.27–0.34</div>
-        <div class="pllm-kpi-caption" data-i18n-zh="跨 8 个大版本兼容 vLLM 执行引擎" data-i18n-en="Verified across vLLM 0.27 through 0.34">Verified across vLLM 0.27 through 0.34</div>
+        <div class="pllm-kpi-num">15 Families</div>
+        <div class="pllm-kpi-caption" data-i18n-zh="兼容 vLLM 0.27–0.34、主流架构、量化与多卡并行" data-i18n-en="Works across vLLM 0.27–0.34, quantization &amp; multi-GPU TP">Works across vLLM 0.27–0.34, quantization &amp; multi-GPU TP</div>
       </div>
       <div class="pllm-kpi-tile">
-        <div class="pllm-kpi-num">0 Recapture</div>
-        <div class="pllm-kpi-caption" data-i18n-zh="LayerRoute L2 早退内核在线动态切层" data-i18n-en="Live LayerRoute switching inside CUDA Graphs">Live LayerRoute switching inside CUDA Graphs</div>
+        <div class="pllm-kpi-num" data-i18n-zh="CPU 2 秒验错" data-i18n-en="&lt; 2s CPU Check">&lt; 2s CPU Check</div>
+        <div class="pllm-kpi-caption" data-i18n-zh="不用租 GPU，在笔记本上提前查出多请求串味与抢占漏洞" data-i18n-en="Catches cross-request leaks on your laptop without a GPU">Catches cross-request leaks on your laptop without a GPU</div>
       </div>
       <div class="pllm-kpi-tile">
-        <div class="pllm-kpi-num">&lt; 2s CPU</div>
-        <div class="pllm-kpi-caption" data-i18n-zh="无 GPU 静态核验多租户串味与抢占回滚" data-i18n-en="Pre-flight isolation &amp; preemption check on CPU">Pre-flight isolation &amp; preemption check on CPU</div>
+        <div class="pllm-kpi-num" data-i18n-zh="在线秒级切层" data-i18n-en="Live Layer Switch">Live Layer Switch</div>
+        <div class="pllm-kpi-caption" data-i18n-zh="服务运行中随时切换观测层或引导层，无需停机重录图" data-i18n-en="Switch probe, steering, or LoRA layers with zero downtime">Switch probe, steering, or LoRA layers with zero downtime</div>
       </div>
       <div class="pllm-kpi-tile">
         <div class="pllm-kpi-num">+0.05 ms</div>
-        <div class="pllm-kpi-caption" data-i18n-zh="128 并发激活引导 TPOT 增量 (bs=1 +0.02 ms)" data-i18n-en="128-seq steering TPOT delta (bs=1 +0.02 ms)">128-seq steering TPOT delta (bs=1 +0.02 ms)</div>
+        <div class="pllm-kpi-caption" data-i18n-zh="128 并发开启激活引导增加的每词延迟（单请求 +0.02 ms）" data-i18n-en="Per-token latency added by steering at 128 concurrency">Per-token latency added by steering at 128 concurrency</div>
       </div>
       <div class="pllm-kpi-tile">
-        <div class="pllm-kpi-num">3 Modes</div>
-        <div class="pllm-kpi-caption" data-i18n-zh="批处理 make_llm · 异步 · OpenAI SSE 服务" data-i18n-en="make_llm &middot; make_async_llm &middot; pllm serve">make_llm &middot; make_async_llm &middot; pllm serve</div>
+        <div class="pllm-kpi-num" data-i18n-zh="一套代码上线" data-i18n-en="Eval to Serving">Eval to Serving</div>
+        <div class="pllm-kpi-caption" data-i18n-zh="同一个 Python 类无缝跑批量评测、异步调用与 OpenAI 接口" data-i18n-en="Same Python class runs batch evals, async &amp; OpenAI SSE">Same Python class runs batch evals, async &amp; OpenAI SSE</div>
       </div>
     </div>
 
     <div class="pllm-chip-cloud">
-      <span class="pllm-chip hi">LayerRoute (v0.5.1)</span>
-      <span class="pllm-chip hi">DeepSeek V2 / V3 (Latent MLA)</span>
-      <span class="pllm-chip hi">Qwen3 &amp; Qwen3.5 (MoE)</span>
-      <span class="pllm-chip">Qwen2 / 2.5 / MoE</span>
-      <span class="pllm-chip">Llama 3</span>
+      <span class="pllm-chip hi">Qwen2 / Qwen3 / Qwen3.5</span>
+      <span class="pllm-chip hi">DeepSeek V2 / V3 (MLA)</span>
+      <span class="pllm-chip hi">Llama 3</span>
       <span class="pllm-chip">Mistral &amp; Mixtral</span>
       <span class="pllm-chip">Gemma 2 / 3</span>
       <span class="pllm-chip">Phi-3</span>
       <span class="pllm-chip">GLM-4</span>
       <span class="pllm-chip">gpt-oss</span>
       <span class="pllm-chip hi">GPTQ / AWQ / FP8</span>
-      <span class="pllm-chip hi">Tensor Parallelism</span>
+      <span class="pllm-chip hi">Multi-GPU TP</span>
+      <span class="pllm-chip hi">Claude / Codex / Cursor Skill</span>
     </div>
 
   </div>
@@ -190,23 +209,31 @@ nav_order: 3
 
 <div id="markdown-content">
 
+<section class="zine-hub-section" style="margin-bottom: 2.2rem;">
+  <div class="zine-section-head" style="margin-bottom: 0.9rem;">
+    <div>
+      <h2 data-i18n-zh="代码长什么样？二十行标准 PyTorch 搞定" data-i18n-en="See It in Code: ~20 Lines of Plain PyTorch">See It in Code: ~20 Lines of Plain PyTorch</h2>
+      <p class="zine-section-sub" data-i18n-zh="不用碰调度器、不用手写分页块表、不用管 CUDA Graph 怎么录制——只写你的算法逻辑本身。" data-i18n-en="No scheduler surgery, no manual block tables, no CUDA graph boilerplate—just write the algorithm itself.">No scheduler surgery, no manual block tables, no CUDA graph boilerplate—just write the algorithm itself.</p>
+    </div>
+  </div>
+
 <div class="pllm-showcase">
   <div class="pllm-tab-bar" role="tablist" aria-label="pLLM Capability Examples">
-    <button type="button" class="pllm-tab-btn is-active" data-pllm-tab="esamp" role="tab" aria-selected="true" data-i18n-zh="1 · 解码期在线训练 (ESamp)" data-i18n-en="1 &middot; Decode-Time Training (ESamp)">1 &middot; Decode-Time Training (ESamp)</button>
-    <button type="button" class="pllm-tab-btn" data-pllm-tab="route" role="tab" aria-selected="false" data-i18n-zh="2 · 免重录动态切层 (LayerRoute)" data-i18n-en="2 &middot; Live LayerRoute &amp; Steering">2 &middot; Live LayerRoute &amp; Steering</button>
-    <button type="button" class="pllm-tab-btn" data-pllm-tab="dola" role="tab" aria-selected="false" data-i18n-zh="3 · 观测内部与对比解码 (DoLa)" data-i18n-en="3 &middot; Layer Logit Contrast (DoLa)">3 &middot; Layer Logit Contrast (DoLa)</button>
-    <button type="button" class="pllm-tab-btn" data-pllm-tab="adapter" role="tab" aria-selected="false" data-i18n-zh="4 · 每请求动态 LoRA" data-i18n-en="4 &middot; Per-Request Dynamic LoRA">4 &middot; Per-Request Dynamic LoRA</button>
-    <button type="button" class="pllm-tab-btn" data-pllm-tab="serve" role="tab" aria-selected="false" data-i18n-zh="5 · 在线服务与 Agent Skill" data-i18n-en="5 &middot; OpenAI SSE Server &amp; Skill">5 &middot; OpenAI SSE Server &amp; Skill</button>
+    <button type="button" class="pllm-tab-btn is-active" data-pllm-tab="esamp" role="tab" aria-selected="true" data-i18n-zh="1 · 边解码边在线训练 (ESamp)" data-i18n-en="1 &middot; Online Training During Decode">1 &middot; Online Training During Decode</button>
+    <button type="button" class="pllm-tab-btn" data-pllm-tab="route" role="tab" aria-selected="false" data-i18n-zh="2 · 在线秒级切层与激活引导" data-i18n-en="2 &middot; Switch Steering Layers Live">2 &middot; Switch Steering Layers Live</button>
+    <button type="button" class="pllm-tab-btn" data-pllm-tab="dola" role="tab" aria-selected="false" data-i18n-zh="3 · 跨层对比解码 (DoLa)" data-i18n-en="3 &middot; Cross-Layer Contrast (DoLa)">3 &middot; Cross-Layer Contrast (DoLa)</button>
+    <button type="button" class="pllm-tab-btn" data-pllm-tab="adapter" role="tab" aria-selected="false" data-i18n-zh="4 · 按请求实时生成独立 LoRA" data-i18n-en="4 &middot; Per-Request Dynamic LoRA">4 &middot; Per-Request Dynamic LoRA</button>
+    <button type="button" class="pllm-tab-btn" data-pllm-tab="serve" role="tab" aria-selected="false" data-i18n-zh="5 · 一行命令启动 OpenAI 服务" data-i18n-en="5 &middot; Serve as OpenAI Endpoint">5 &middot; Serve as OpenAI Endpoint</button>
   </div>
 
   <div class="pllm-tab-panel" data-pllm-panel="esamp" markdown="1">
 
 <div class="pllm-step-pills">
-  <span class="pllm-step-pill" data-i18n-zh="读：pllm.hidden(0), pllm.hidden(-1)" data-i18n-en="Read: pllm.hidden(0), pllm.hidden(-1)">Read: pllm.hidden(0), pllm.hidden(-1)</span>
+  <span class="pllm-step-pill" data-i18n-zh="读哪层：第 0 层与末层隐藏状态" data-i18n-en="Read: Layer 0 &amp; final hidden states">Read: Layer 0 &amp; final hidden states</span>
   <span class="pllm-step-arrow">→</span>
-  <span class="pllm-step-pill" data-i18n-zh="存：每请求独立 RequestState + AdamW" data-i18n-en="State: Per-Request MLP + AdamW">State: Per-Request MLP + AdamW</span>
+  <span class="pllm-step-pill" data-i18n-zh="存什么：每个请求独立小网络 + AdamW" data-i18n-en="State: Private MLP + AdamW per request">State: Private MLP + AdamW per request</span>
   <span class="pllm-step-arrow">→</span>
-  <span class="pllm-step-pill" data-i18n-zh="效：异步重叠 @train + @guide_sampling" data-i18n-en="Effect: Overlapped @train + @guide_sampling">Effect: Overlapped @train + @guide_sampling</span>
+  <span class="pllm-step-pill" data-i18n-zh="怎么干预：边训边引导词表采样" data-i18n-en="Intervene: Train online &amp; guide sampling">Intervene: Train online &amp; guide sampling</span>
 </div>
 
 ```python
@@ -247,11 +274,11 @@ print(testing.check(ESampLite(), cfg))
   <div class="pllm-tab-panel is-hidden" data-pllm-panel="route" markdown="1">
 
 <div class="pllm-step-pills">
-  <span class="pllm-step-pill" data-i18n-zh="存：int64 层号 + 引导向量 (支持在线 import_state)" data-i18n-en="State: int64 layer selector + steering vector">State: int64 layer selector + steering vector</span>
+  <span class="pllm-step-pill" data-i18n-zh="存什么：当前目标层号 + 引导向量" data-i18n-en="State: Target layer ID + steering vector">State: Target layer ID + steering vector</span>
   <span class="pllm-step-arrow">→</span>
-  <span class="pllm-step-pill" data-i18n-zh="路：LayerRoute over=(4, 12, 20) (L2 早退免重录)" data-i18n-en="Route: LayerRoute over=(4, 12, 20) (L2 early-exit)">Route: LayerRoute over=(4, 12, 20) (L2 early-exit)</span>
+  <span class="pllm-step-pill" data-i18n-zh="随时切换：第 4 / 12 / 20 层在线秒切（免重录图）" data-i18n-en="Switch live: Jump across layers 4 / 12 / 20">Switch live: Jump across layers 4 / 12 / 20</span>
   <span class="pllm-step-arrow">→</span>
-  <span class="pllm-step-pill" data-i18n-zh="效：在线切层引导与异步 CPU 探针导出" data-i18n-en="Effect: Live layer-switched patch + @export">Effect: Live layer-switched patch + @export</span>
+  <span class="pllm-step-pill" data-i18n-zh="怎么干预：叠加引导向量并实时回传特征" data-i18n-en="Intervene: Steer activations &amp; stream probes">Intervene: Steer activations &amp; stream probes</span>
 </div>
 
 ```python
@@ -282,11 +309,11 @@ print(testing.check(DynamicSteering(), cfg))
   <div class="pllm-tab-panel is-hidden" data-pllm-panel="dola" markdown="1">
 
 <div class="pllm-step-pills">
-  <span class="pllm-step-pill" data-i18n-zh="读：pllm.layer_logits((12, -1))" data-i18n-en="Read: pllm.layer_logits((12, -1))">Read: pllm.layer_logits((12, -1))</span>
+  <span class="pllm-step-pill" data-i18n-zh="读哪层：同时取出第 12 层与末层词表分布" data-i18n-en="Read: Layer 12 &amp; final-layer logits">Read: Layer 12 &amp; final-layer logits</span>
   <span class="pllm-step-arrow">→</span>
-  <span class="pllm-step-pill" data-i18n-zh="存：无状态（全程驻留静态 CUDA Graph）" data-i18n-en="State: Stateless (stays inside CUDA Graph)">State: Stateless (stays inside CUDA Graph)</span>
+  <span class="pllm-step-pill" data-i18n-zh="存什么：完全无状态（零额外显存开销）" data-i18n-en="State: Stateless (zero extra memory)">State: Stateless (zero extra memory)</span>
   <span class="pllm-step-arrow">→</span>
-  <span class="pllm-step-pill" data-i18n-zh="效：@pllm.add_logits 逐行修正" data-i18n-en="Effect: @pllm.add_logits contrast">Effect: @pllm.add_logits contrast</span>
+  <span class="pllm-step-pill" data-i18n-zh="怎么干预：跨层对比修正输出分布" data-i18n-en="Intervene: Contrastive logit adjustment">Intervene: Contrastive logit adjustment</span>
 </div>
 
 ```python
@@ -310,11 +337,11 @@ print(testing.check(LayerContrast(), config))
   <div class="pllm-tab-panel is-hidden" data-pllm-panel="adapter" markdown="1">
 
 <div class="pllm-step-pills">
-  <span class="pllm-step-pill" data-i18n-zh="读：Prompt 表示生成每请求低秩因子" data-i18n-en="Read: Prompt hidden -> Hypernetwork factors">Read: Prompt hidden -> Hypernetwork factors</span>
+  <span class="pllm-step-pill" data-i18n-zh="读哪层：从输入提示词提取特征" data-i18n-en="Read: Extract features from prompt">Read: Extract features from prompt</span>
   <span class="pllm-step-arrow">→</span>
-  <span class="pllm-step-pill" data-i18n-zh="存：分页 RequestState 低秩权重 a, b" data-i18n-en="State: Paged RequestState factors (a, b)">State: Paged RequestState factors (a, b)</span>
+  <span class="pllm-step-pill" data-i18n-zh="存什么：每个请求一份专属低秩权重" data-i18n-en="State: Dedicated LoRA weights per request">State: Dedicated LoRA weights per request</span>
   <span class="pllm-step-arrow">→</span>
-  <span class="pllm-step-pill" data-i18n-zh="效：pllm.model.Adapter 叠加至量化/稠密投影" data-i18n-en="Effect: pllm.model.Adapter overlay in-graph">Effect: pllm.model.Adapter overlay in-graph</span>
+  <span class="pllm-step-pill" data-i18n-zh="怎么干预：自动挂载至模型投影层" data-i18n-en="Intervene: Attach to model projections">Intervene: Attach to model projections</span>
 </div>
 
 ```python
@@ -346,11 +373,11 @@ class PromptLoRA(pllm.Workload):
   <div class="pllm-tab-panel is-hidden" data-pllm-panel="serve" markdown="1">
 
 <div class="pllm-step-pills">
-  <span class="pllm-step-pill" data-i18n-zh="安装：uv 虚拟环境 + vLLM 0.27–0.34" data-i18n-en="Install: uv venv + vLLM 0.27–0.34">Install: uv venv + vLLM 0.27–0.34</span>
+  <span class="pllm-step-pill" data-i18n-zh="第一步：用 uv 装入原版 vLLM 环境" data-i18n-en="1. Install with uv alongside stock vLLM">1. Install with uv alongside stock vLLM</span>
   <span class="pllm-step-arrow">→</span>
-  <span class="pllm-step-pill" data-i18n-zh="服务：OpenAI 流式 SSE + 会话级状态路由" data-i18n-en="Serve: OpenAI SSE + Session State Routing">Serve: OpenAI SSE + Session State Routing</span>
+  <span class="pllm-step-pill" data-i18n-zh="第二步：一行命令暴露标准 OpenAI 接口" data-i18n-en="2. Launch standard OpenAI HTTP server">2. Launch standard OpenAI HTTP server</span>
   <span class="pllm-step-arrow">→</span>
-  <span class="pllm-step-pill" data-i18n-zh="协作：一键导出 Claude / Codex / Cursor Skill" data-i18n-en="Agent: Built-in Claude / Codex / Cursor Skill">Agent: Built-in Claude / Codex / Cursor Skill</span>
+  <span class="pllm-step-pill" data-i18n-zh="第三步：让 Claude / Cursor 自动帮你迁移旧代码" data-i18n-en="3. Let Claude / Cursor port your HF code">3. Let Claude / Cursor port your HF code</span>
 </div>
 
 ```bash
@@ -367,14 +394,15 @@ pllm skill --install claude   # or: codex | cursor
 
   </div>
 </div>
+</section>
 
 <section id="docs" class="zine-hub-section">
   <div class="zine-section-head">
     <div>
-      <h2 data-i18n-zh="pLLM 双语文档中心（面向开发者与研究者）" data-i18n-en="pLLM Bilingual Documentation Hub">pLLM Bilingual Documentation Hub</h2>
-      <p class="zine-section-sub" data-i18n-zh="收录全部面向人类开发者的教程、指南、架构解析、API 手册与算法示例（均提供完整中英双语，随 pLLM 仓库自动同步更新）。" data-i18n-en="All human-facing tutorials, user guides, serving how-tos, design explanations, references, and algorithm examples—fully bilingual (EN / 中文) and auto-synced from pLLM.">All human-facing tutorials, user guides, serving how-tos, design explanations, references, and algorithm examples—fully bilingual (EN / 中文) and auto-synced from pLLM.</p>
+      <h2 data-i18n-zh="上手教程与双语文档" data-i18n-en="Runnable Tutorials &amp; Bilingual Docs">Runnable Tutorials &amp; Bilingual Docs</h2>
+      <p class="zine-section-sub" data-i18n-zh="从 5 分钟快速入门、可交互运行的算法 Notebook，到上线部署与完整 API 查询（全部支持中英切换，随仓库自动同步）。" data-i18n-en="From a 5-minute quickstart and runnable algorithm notebooks to serving guides and API references—all in English &amp; Chinese, auto-synced from GitHub.">From a 5-minute quickstart and runnable algorithm notebooks to serving guides and API references—all in English &amp; Chinese, auto-synced from GitHub.</p>
     </div>
-    <a class="zine-pill-link primary" data-i18n-zh="文档导航地图 →" data-i18n-en="Docs Roadmap →" href="{{ '/pllm/docs/' | relative_url }}">Docs Roadmap →</a>
+    <a class="zine-pill-link primary" data-i18n-zh="打开文档总导航 →" data-i18n-en="Docs Roadmap →" href="{{ '/pllm/docs/' | relative_url }}">Docs Roadmap →</a>
   </div>
 
   <div class="pllm-filter-bar" role="group" aria-label="Filter documentation categories">
@@ -409,31 +437,31 @@ pllm skill --install claude   # or: codex | cursor
 <section id="blog" class="zine-hub-section">
   <div class="zine-section-head">
     <div>
-      <h2 data-i18n-zh="pLLM 技术专栏与底层排障手记（分类索引 · 中英双语）" data-i18n-en="pLLM Engineering Essays &amp; Debugging Postmortems (Bilingual)">pLLM Engineering Essays &amp; Debugging Postmortems (Bilingual)</h2>
-      <p class="zine-section-sub" data-i18n-zh="共 {{ pllm_posts.size }} 篇双语长文，按“趋势与架构抽象”、“引擎底层机制拆解”与“编译/算子/状态排障手记”三大专题分类索引，随 pLLM 仓库自动同步更新。" data-i18n-en="{{ pllm_posts.size }} bilingual articles organized into Architecture &amp; Postmortems, Engine Internals Deep Dives, and Compiler/Kernel/MVCC Debugging Notes—auto-synced from pLLM.">{{ pllm_posts.size }} bilingual articles organized into Architecture &amp; Postmortems, Engine Internals Deep Dives, and Compiler/Kernel/MVCC Debugging Notes—auto-synced from pLLM.</p>
+      <h2 data-i18n-zh="为什么要做 pLLM，以及底层是怎么跑通的" data-i18n-en="Why &amp; How We Built It: Essays and Engineering Stories">Why &amp; How We Built It: Essays and Engineering Stories</h2>
+      <p class="zine-section-sub" data-i18n-zh="共 {{ pllm_posts.size }} 篇双语文章：既有“为什么推理创新不该靠拉分支”的行业与架构思考，也有把连续批处理掰开揉碎讲清楚的机制拆解与真实踩坑复盘。" data-i18n-en="{{ pllm_posts.size }} standalone bilingual reads—covering why inference research hits an engine wall, how continuous batching works inside, and real compiler/GPU debugging stories.">{{ pllm_posts.size }} standalone bilingual reads—covering why inference research hits an engine wall, how continuous batching works inside, and real compiler/GPU debugging stories.</p>
     </div>
     <a class="zine-pill-link" data-i18n-zh="全站博客分类目录 →" data-i18n-en="All Blog Categories →" href="{{ '/blog/' | relative_url }}">All Blog Categories →</a>
   </div>
 
   <div class="pllm-filter-bar" role="group" aria-label="Filter blog tracks">
     <button type="button" class="pllm-filter-btn is-active" data-pllm-blog-filter="all" aria-pressed="true" data-i18n-zh="全部文章 ({{ pllm_posts.size }})" data-i18n-en="All Articles ({{ pllm_posts.size }})">All Articles ({{ pllm_posts.size }})</button>
-    <button type="button" class="pllm-filter-btn" data-pllm-blog-filter="systems-architecture" aria-pressed="false" data-i18n-zh="趋势、架构与复盘 ({{ arch_posts.size }})" data-i18n-en="Architecture &amp; Postmortems ({{ arch_posts.size }})">Architecture &amp; Postmortems ({{ arch_posts.size }})</button>
-    <button type="button" class="pllm-filter-btn" data-pllm-blog-filter="engine-internals" aria-pressed="false" data-i18n-zh="引擎底层机制拆解 ({{ intern_posts.size }})" data-i18n-en="Engine Internals ({{ intern_posts.size }})">Engine Internals ({{ intern_posts.size }})</button>
-    <button type="button" class="pllm-filter-btn" data-pllm-blog-filter="debugging-notes" aria-pressed="false" data-i18n-zh="编译与排障手记 ({{ debug_posts.size }})" data-i18n-en="Debugging Postmortems ({{ debug_posts.size }})">Debugging Postmortems ({{ debug_posts.size }})</button>
+    <button type="button" class="pllm-filter-btn" data-pllm-blog-filter="systems-architecture" aria-pressed="false" data-i18n-zh="行业思考与架构设计 ({{ arch_posts.size }})" data-i18n-en="Why &amp; Architecture ({{ arch_posts.size }})">Why &amp; Architecture ({{ arch_posts.size }})</button>
+    <button type="button" class="pllm-filter-btn" data-pllm-blog-filter="engine-internals" aria-pressed="false" data-i18n-zh="推理引擎底层拆解 ({{ intern_posts.size }})" data-i18n-en="How Engines Work Inside ({{ intern_posts.size }})">How Engines Work Inside ({{ intern_posts.size }})</button>
+    <button type="button" class="pllm-filter-btn" data-pllm-blog-filter="debugging-notes" aria-pressed="false" data-i18n-zh="真实编译与 GPU 踩坑记 ({{ debug_posts.size }})" data-i18n-en="Real Debugging Stories ({{ debug_posts.size }})">Real Debugging Stories ({{ debug_posts.size }})</button>
   </div>
 
   <div class="pllm-blog-cat-block" data-pllm-blog-block="systems-architecture">
-    <h3 class="zine-cat-heading" data-i18n-zh="专题一 · 趋势思辨、统一状态底座（PTTS）与系统复盘" data-i18n-en="Track 1 &middot; Inference Economics, PTTS Architecture &amp; Postmortems">Track 1 &middot; Inference Economics, PTTS Architecture &amp; Postmortems</h3>
+    <h3 class="zine-cat-heading" data-i18n-zh="一 · 为什么要做这件事：行业趋势、状态层设计与弯路复盘" data-i18n-en="Part 1 &middot; Why We Built It: Inference Economics, State Design &amp; Lessons Learned">Part 1 &middot; Why We Built It: Inference Economics, State Design &amp; Lessons Learned</h3>
     <div class="zine-lang-panel" data-lang-panel="en" lang="en">
       <figure class="pllm-hero-figure">
-        <img src="{{ '/assets/img/pllm/blog/assets/system-anatomy-en.svg' | relative_url | bust_file_cache }}" alt="Inference Engine Anatomy Map for the 11-Part Deep-Dive Series">
-        <figcaption class="pllm-fig-caption">System Anatomy Map &middot; Each standalone article dissects one concrete subsystem of a modern continuous-batching inference engine.</figcaption>
+        <img src="{{ '/assets/img/pllm/blog/assets/system-anatomy-en.svg' | relative_url | bust_file_cache }}" alt="Visual Guide to the 11-Part Inference Engine Series">
+        <figcaption class="pllm-fig-caption">Visual Reading Map &middot; Where each standalone article sits inside a modern LLM serving engine.</figcaption>
       </figure>
     </div>
     <div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN">
       <figure class="pllm-hero-figure">
-        <img src="{{ '/assets/img/pllm/blog/assets/system-anatomy-zh.svg' | relative_url | bust_file_cache }}" alt="现代连续批处理推理引擎解剖路标（十一篇系列文章对应位置）">
-        <figcaption class="pllm-fig-caption">推理引擎解剖路标 · 每篇独立文章对应现代连续批处理推理引擎上的一个具体硬件或状态层部位。</figcaption>
+        <img src="{{ '/assets/img/pllm/blog/assets/system-anatomy-zh.svg' | relative_url | bust_file_cache }}" alt="十一篇推理系统文章在引擎中的对应位置">
+        <figcaption class="pllm-fig-caption">阅读路标 · 每篇独立文章对应现代推理引擎里的一个真实痛点与核心模块。</figcaption>
       </figure>
     </div>
     <div class="pllm-blog-grid">
@@ -460,14 +488,14 @@ pllm skill --install claude   # or: codex | cursor
   </div>
 
   <div class="pllm-blog-cat-block" data-pllm-blog-block="engine-internals">
-    <h3 class="zine-cat-heading" data-i18n-zh="专题二 · 连续批处理、注意力布局与静态图底层拆解" data-i18n-en="Track 2 &middot; Engine Internals, Memory Layouts &amp; Verification">Track 2 &middot; Engine Internals, Memory Layouts &amp; Verification</h3>
+    <h3 class="zine-cat-heading" data-i18n-zh="二 · 把现代推理引擎拆开看：带宽账、静态图与并发隔离" data-i18n-en="Part 2 &middot; How Modern Serving Engines Actually Work Under the Hood">Part 2 &middot; How Modern Serving Engines Actually Work Under the Hood</h3>
     <div class="pllm-blog-grid">
       {% for post in intern_posts %}
       {% assign title_zh = post.title_zh | default: post.title %}
       {% assign title_en = post.title_en | default: post.title %}
       {% assign desc_zh = post.description_zh | default: post.description %}
       {% assign desc_en = post.description_en | default: post.description %}
-      {% assign badge_zh = post.pllm_badge_zh | default: "技术拆解" %}
+      {% assign badge_zh = post.pllm_badge_zh | default: "机制拆解" %}
       {% assign badge_en = post.pllm_badge_en | default: "Deep Dive" %}
       {% assign code_lbl = post.pllm_code | default: "#03" %}
       {% assign read_time = post.content | number_of_words | divided_by: 360 | plus: 1 %}
@@ -485,17 +513,17 @@ pllm skill --install claude   # or: codex | cursor
   </div>
 
   <div class="pllm-blog-cat-block" data-pllm-blog-block="debugging-notes">
-    <h3 class="zine-cat-heading" data-i18n-zh="专题三 · 动态切层（LayerRoute）开发与底层排障手记" data-i18n-en="Track 3 &middot; LayerRoute Compiler, Triton &amp; MVCC Debugging Postmortems">Track 3 &middot; LayerRoute Compiler, Triton &amp; MVCC Debugging Postmortems</h3>
+    <h3 class="zine-cat-heading" data-i18n-zh="三 · 真实踩坑与排障实录：当编译器、半精度浮点遇上并发状态" data-i18n-en="Part 3 &middot; Real Debugging Stories: Compilers, Floating-Point Traps &amp; Live State">Part 3 &middot; Real Debugging Stories: Compilers, Floating-Point Traps &amp; Live State</h3>
     <div class="zine-lang-panel" data-lang-panel="en" lang="en">
       <figure class="pllm-hero-figure">
-        <img src="{{ '/assets/img/pllm/blog/assets/personal-roadmap-en.svg' | relative_url | bust_file_cache }}" alt="LayerRoute Debugging Postmortems Pipeline Map">
-        <figcaption class="pllm-fig-caption">Debugging Pipeline Map &middot; Four subtle systems bugs uncovered across admission scheduling, CUDA Graphs, IEEE 754 fused kernels, and torch.compile.</figcaption>
+        <img src="{{ '/assets/img/pllm/blog/assets/personal-roadmap-en.svg' | relative_url | bust_file_cache }}" alt="Debugging Stories Overview Map">
+        <figcaption class="pllm-fig-caption">Four Real Bugs, Four Layers of the Stack &middot; From scheduler timing and CUDA Graph memory to FP16 rounding and torch.compile.</figcaption>
       </figure>
     </div>
     <div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN">
       <figure class="pllm-hero-figure">
-        <img src="{{ '/assets/img/pllm/blog/assets/personal-roadmap-zh.svg' | relative_url | bust_file_cache }}" alt="动态切层四类底层排障落点示意图">
-        <figcaption class="pllm-fig-caption">排障落点概览 · 四篇手记对应请求准入调度、CUDA Graph 静态图、融合算子半精度舍入与 torch.compile 函数化四个环节。</figcaption>
+        <img src="{{ '/assets/img/pllm/blog/assets/personal-roadmap-zh.svg' | relative_url | bust_file_cache }}" alt="四篇真实排障手记在技术栈中的对应位置">
+        <figcaption class="pllm-fig-caption">四个真实诡异 Bug · 分别发生在多步请求调度、CUDA Graph 显存、半精度浮点舍入与 torch.compile 编译阶段。</figcaption>
       </figure>
     </div>
     <div class="pllm-blog-grid">
@@ -504,8 +532,8 @@ pllm skill --install claude   # or: codex | cursor
       {% assign title_en = post.title_en | default: post.title %}
       {% assign desc_zh = post.description_zh | default: post.description %}
       {% assign desc_en = post.description_en | default: post.description %}
-      {% assign badge_zh = post.pllm_badge_zh | default: "排障手记" %}
-      {% assign badge_en = post.pllm_badge_en | default: "Postmortem" %}
+      {% assign badge_zh = post.pllm_badge_zh | default: "排障实录" %}
+      {% assign badge_en = post.pllm_badge_en | default: "Debugging" %}
       {% assign code_lbl = post.pllm_code | default: "N01" %}
       {% assign read_time = post.content | number_of_words | divided_by: 360 | plus: 1 %}
       <a class="pllm-blog-card" href="{{ post.url | relative_url }}">
@@ -524,9 +552,9 @@ pllm skill --install claude   # or: codex | cursor
 
 <div id="citation" class="zine-hub-section" markdown="1">
 
-<h2 data-i18n-zh="引用（Citation）" data-i18n-en="Citation">Citation</h2>
+<h2 data-i18n-zh="论文引用（Citation）" data-i18n-en="Citation">Citation</h2>
 
-<p data-i18n-zh="如果 pLLM 对你的研究或推理系统工作有帮助，欢迎引用我们的 ICML 2026 论文（ESamp）：" data-i18n-en="If you find pLLM useful in your research or inference systems work, please cite our ICML 2026 paper on Exploratory Sampling (ESamp):">If you find pLLM useful in your research or inference systems work, please cite our ICML 2026 paper on Exploratory Sampling (ESamp):</p>
+<p data-i18n-zh="如果 pLLM 帮你在研究中省去了改引擎的苦力活，欢迎引用我们的 ICML 2026 论文（ESamp）：" data-i18n-en="If pLLM saves you from maintaining a vLLM fork in your research or systems work, please cite our ICML 2026 paper (ESamp):">If pLLM saves you from maintaining a vLLM fork in your research or systems work, please cite our ICML 2026 paper (ESamp):</p>
 
 ```bibtex
 @InProceedings{pmlr-v306-zeng26m,

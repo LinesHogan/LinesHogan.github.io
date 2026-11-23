@@ -30,7 +30,7 @@ I am Zeng Yuanhao (曾缘浩), a 1st-year PhD student at <a href="https://www.sh
 
 My research focuses on algorithm-system codesign for large language model agents — I design efficient algorithms that solve real-world challenges and build systems that make them practical. I enjoy (very) smart ideas in theory, algorithms, and systems, and will share some cool insights in my blogs.
 
-I develop <a href="{{ '/pllm/' | relative_url }}">pLLM</a> (<a href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">Programmable LLM</a>), an eBPF-like declarative programmability layer for vLLM that runs stateful and adaptive inference-time algorithms under continuous batching and CUDA graphs.
+I develop <a href="{{ '/pllm/' | relative_url }}">pLLM</a> (<a href="https://github.com/LinesHogan/pLLM" target="_blank" rel="noopener">Programmable LLM</a>)—built so researchers can stop forking vLLM just to test a new inference-time idea. With a few dozen lines of Python, pLLM compiles hidden-state interventions, per-request fast weights, and online decode-time training directly into unmodified vLLM's continuous batching and CUDA graphs.
 
 Our latest study introduces **[The Resolution Hypothesis](https://arxiv.org/abs/2611.23068)** ([project page](/resolution-hypothesis/) · [blog](/blog/2026/resolution-hypothesis-behind-the-scenes/)), a large-scale audit (>10M LLM calls, 400K CPU hours) showing that frozen-weight agent evolution stalls not from failing to propose better skills, but because low-resolution evaluations cannot tell real improvements apart from noise.
 
