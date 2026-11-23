@@ -223,6 +223,22 @@ A custom attention method has signature `f(self, q: torch.Tensor, kv: pllm.model
   - `topk`: logical token position tensor of shape `[rows, k]` or `[rows, heads, k]` (padded with `-1`).
 - **Optional `aux` return value**: the method may return `(out, aux)`. Downstream layers or export methods can read this tensor via `pllm.attention(layer, "aux")`, while `"lse"` reads the float32 log-sum-exp from the first `kv.attend` call.
 
+### Why Can Such a Minimal `kv.attend` Signature Express Rich Custom Attention? {#en-why-can-such-a-minimal-kvattend-signature-express-rich-custom-attention}
+
+At first glance, `@pllm.custom_attention` exposes neither a `[rows, heads, seq_len]` attention-weight matrix nor an arbitrary 2D `attn_mask`, nor in-place mutation of cached K/V—its core primitive is just `kv.attend(q, *, window=0, topk=None) -> (out, lse)`. That minimalism is deliberate: it preserves three hardware and serving invariants simultaneously:
+1. **Keeping online softmax fused in on-chip SRAM**: FlashAttention is fast precisely because it tiles $$Q K^\top$$, softmax, and $$\times V$$ inside SRAM without ever materializing `[rows, heads, seq_len]` matrices in HBM; exposing dense weight or mask tensors would immediately degrade long-context bandwidth and memory back to quadratic.
+2. **Keeping continuous batching inside static-shape CUDA graphs**: requests in the same batch have different `seq_len` values, so any intermediate tensor carrying a `seq_len` axis introduces dynamic shapes or host syncs that break full-model graph capture.
+3. **Portability across physical cache architectures (GQA and DeepSeek MLA)**: in DeepSeek V2/V3 Multi-head Latent Attention (MLA), the paged cache stores compressed latent vectors (`kv_lora_rank`) plus shared RoPE keys rather than expanded multi-head K/V. Abstracting reads behind `kv.attend` lets the exact same workload code run FlashAttention on GQA models and matrix-absorbed latent attention directly over compressed MLA pages without decompressing the cache.
+
+Within those invariants, four orthogonal mechanisms compose to express nearly every hardware-friendly custom attention variant:
+- **`(out, lse)` forms an online-softmax monoid (sufficient statistics for subset mass & disjoint union)**: the returned `float32` `lse` always has fixed shape `[rows, heads]` ($$\log \sum_{j \in S} e^{s_j}$$), independent of sequence length, yet retains the exact normalizer:
+  - **Subset probability mass** (e.g., recent-window mass, Lookback Lens, sink ratio): call `kv.attend` on subset $$S$$ to obtain `lse_s`, then compute `(lse_s - lse_full).exp()` in two lines with zero `[seq_len]` allocations.
+  - **Exact union of disjoint regions** (e.g., anchor/sink positions `topk` $$\sqcup$$ local `window`, or multi-tier sparse windows): for any two disjoint index sets $$A$$ and $$B$$, calling `kv.attend` for `(out_a, lse_a)` and `(out_b, lse_b)` reconstructs exact attention over $$A \sqcup B$$ via `m = torch.logaddexp(lse_a, lse_b)` and `out = (lse_a - m).exp()[..., None] * out_a + (lse_b - m).exp()[..., None] * out_b` (ensure $$A$$ and $$B$$ do not overlap, or shared positions would be double-counted).
+  - **Query-space transforms and head-wise composition** (e.g., Differential Attention $$\text{Attn}(q_1) - \lambda \text{Attn}(q_2)$$, mixing retrieval heads and streaming heads via `torch.where`, per-head gating): transform fixed-shape `q` and `out` directly around `kv.attend`.
+- **Fixed-width `-1`-padded `topk` expresses per-head dynamic budgets inside static graphs**: when different layers or heads select different numbers of positions, allocate `[rows, heads, K_max]` at the maximum budget and mask unused slots to `-1` on GPU (`masked_fill(..., -1)`). The kernel treats `-1` as $$-\infty$$ (returning zero output and `-inf` LSE when all entries are `-1`), enabling adaptive sparsity without dynamic shapes.
+- **`aux` and `pllm.attention(...)` enable cross-layer index reuse**: index-sharing schemes (such as IndexCache) can score pages once in an earlier layer, return `(out, chosen)`, and accept `chosen: torch.Tensor = pllm.attention(earlier_layer, "aux")` in deeper layers to call `kv.attend(q, topk=chosen)` without re-scoring.
+- **Orthogonal separation of pre-cache value rewrites, physical block reclamation, and read selection**: modifying values before cache write (e.g., Value Residual or LoRA) belongs to `@pllm.custom_residual(site="value")` or `pllm.model.Adapter`; freeing physical blocks outside a window belongs to `keep=` / `window=` / `sink=` / `source=` on the decorator; and `@pllm.custom_attention` focuses purely on reading the committed cache, preserving native KV writes and block reclamation.
+
 ### Static KV Layout Declarations {#en-static-kv-layout-declarations}
 `@pllm.custom_attention` lets you declare physical KV cache retention directly on the decorator:
 - `keep="window", window=N`: retains only the most recent $$N$$ tokens of KV; older physical blocks are reclaimed into the pool by vLLM's `SlidingWindowSpec`.
@@ -600,20 +616,36 @@ print(testing.check(RecentMass(), CONFIG).passed)
   - `topk`：逻辑 token 位置张量，形状为 `[rows, k]` 或 `[rows, heads, k]`（不足处用 -1 补齐）。
 - **可选返回值 `aux`**：方法可返回 `(out, aux)`。后续层或导出方法可通过 `pllm.attention(layer, "aux")` 读取该张量；`"lse"` 则读取第一次调用 `kv.attend` 返回的 float32 log-sum-exp。
 
-### 静态 KV 布局声明 {#zh-sec-13}
+### 为什么极简的 `kv.attend` 签名能表达丰富的自定义注意力？ {#zh-sec-13}
+
+初看之下，`@pllm.custom_attention` 既不暴露形状为 `[rows, heads, seq_len]` 的注意力权重矩阵，也不接收任意二维 `attn_mask`，更不允许原地改写缓存里的 K/V——核心原语只有 `kv.attend(q, *, window=0, topk=None) -> (out, lse)`。这并非功能缺失，而是为了同时守住三条硬件与系统红线：
+1. **保住在线 Softmax 片上融合**：FlashAttention 之所以快，正是因为它在片上 SRAM 内分块完成 $$Q K^\top$$、Softmax 与乘 $$V$$，从不把随序列长度增长的 `[rows, heads, seq_len]` 矩阵写回显存；一旦暴露整行权重或稠密掩码，长上下文的显存带宽和容量就会退回二次方。
+2. **保住连续批处理与静态形状 CUDA graph**：同一批请求的 `seq_len` 各不相同，任何带 `seq_len` 维度的中间张量都会引入动态形状或主机同步，直接打碎整模型图捕获。
+3. **跨物理缓存架构通用（GQA 与 DeepSeek MLA）**：在 DeepSeek V2/V3 的多头潜在注意力（MLA）中，分页缓存里存放的是压缩潜变量 `kv_lora_rank` 与共享旋转位置向量，根本没有展开的多头 K/V。把读取抽象为 `kv.attend` 后，同一份负载代码既能在普通 GQA 模型上运行 FlashAttention，也能在 MLA 模型上自动通过矩阵吸收直接在压缩潜变量上完成注意力计算，无需解压缓存。
+
+在这个约束下，四项正交设计组合起来覆盖了绝大多数对硬件友好的自定义注意力变体：
+- **`(out, lse)` 构成在线 Softmax 的完备统计量（精确合并与子集归约）**：返回的 `float32` `lse` 形状恒为 `[rows, heads]`（即 $$\log \sum_{j \in S} e^{s_j}$$），与序列长度无关，却保留了完整的归一化分母信息：
+  - **注意力分布统计**（如局部窗口占比、Lookback Lens、开头位置占比）：对子集 $$S$$ 调一次 `kv.attend` 拿到 `lse_s`，用 `(lse_s - lse_full).exp()` 两行即可算出精确概率质量，零 `[seq_len]` 张量分配。
+  - **不相交区域的精确拼接**（如“固定锚点位置 `topk` $$\sqcup$$ 最近局部窗口 `window`”，或多级稀疏窗口）：只要两个位置集合 $$A$$ 与 $$B$$ 互不重叠，分别调用 `kv.attend` 得到 `(out_a, lse_a)` 与 `(out_b, lse_b)` 后，可按在线 Softmax 结合律精确合并为 $$A \sqcup B$$ 上的注意力：`m = torch.logaddexp(lse_a, lse_b)`，`out = (lse_a - m).exp()[..., None] * out_a + (lse_b - m).exp()[..., None] * out_b`（注意两段集合不能有交集，否则重叠位置会被重复计入分母）。
+  - **查询侧变换与头间组合**（如 Differential Attention 的双路查询差分 $$\text{Attn}(q_1) - \lambda \text{Attn}(q_2)$$、检索头与局部流式头按头掩码 `torch.where` 混合、逐头门控缩放）：在调用 `kv.attend` 前后对固定形状的 `q` 和 `out` 直接做张量运算即可。
+- **定宽 `-1` 填充的 `topk` 在静态图内表达逐头可变预算**：当不同层、不同头需要根据打分保留不同数量的位置时，只需按最大预算 `K_max` 分配 `[rows, heads, K_max]`，在 GPU 上将超出各头预算的槽位用 `masked_fill(..., -1)` 填为 `-1`。内核会自动把 `-1` 屏蔽为 $$-\infty$$（某头全为 `-1` 时安全返回零输出与 `-inf` LSE），无需动态张量形状即可实现自适应稀疏度。
+- **`aux` 与 `pllm.attention(...)` 实现跨层索引复用**：像跨层共享稀疏选择器（IndexCache 一类）只需在浅层打分选出一次 `chosen` 索引并返回 `(out, chosen)`，深层通过参数默认值 `chosen: torch.Tensor = pllm.attention(earlier_layer, "aux")` 接收后直接调用 `kv.attend(q, topk=chosen)`，省去逐层重复扫页打分。
+- **把“写前改值”、“物理块回收”与“注意力读取”拆成三个正交原语**：需要在写入缓存前修改 value（如 Value Residual 或 LoRA）交给 `@pllm.custom_residual(site="value")` 或 `pllm.model.Adapter`；需要真正释放滑出窗口的物理块交给装饰器上的 `keep=` / `window=` / `sink=` / `source=`；`@pllm.custom_attention` 方法体只专注在已写入的缓存上组织读取，从而完整保留原生缓存写入路径与物理块回收机制。
+
+### 静态 KV 布局声明 {#zh-sec-14}
 `@pllm.custom_attention` 允许在装饰器中直接声明底层 KV 缓存的物理留存策略：
 - `keep="window", window=N`：仅保留最近 $$N$$ 个 token 的 KV，更早的物理块由 vLLM 的 `SlidingWindowSpec` 自动回收至显存池。
 - `sink=True`（需配合 `keep="window", window=N`）：保留整个 prompt 加上最近 $$N$$ 个生成的 token（对应 vLLM 的 `RSWASpec`）。
 - `keep="none", source=k`（$$k \ge 1$$）：本层完全不分配独立的 KV 显存，直接读取下方第 $$k$$ 层的 KV 缓存（源层必须是更早的层；若需读取更深层的 KV，请改用 `@pllm.custom_forward` 的 `kv="peek"`）。
 
-### Top-K 选择只省读取不省显存，以及按分数驱逐不支持 {#zh-sec-14}
+### Top-K 选择只省读取不省显存，以及按分数驱逐不支持 {#zh-sec-15}
 - **Top-K 为什么只省读不省显存**：
   在 `kv.attend(q, topk=...)` 中传入选中的位置索引，FlashAttention 内核在执行 softmax 和 GEMM 时只加载这部分 key 和 value，因而节省了计算 FLOPs 与显存读取带宽。然而，所有历史 token 的 KV 仍然必须完整存留在物理显存页中，供后续新生成的 token 重新计算打分并挑选。因此，Top-K 选择无法释放物理显存容量。
 - **为什么不支持按分数真正驱逐（Score-based Eviction）**：
   像 H2O、SnapKV 这类按注意力分数在序列中间剔除物理块的算法，在当前架构下不支持（详见[设计取舍](/pllm/docs/explain/design-tradeoffs/)）。
   **原因**：vLLM 的物理块管理器基于强假设构建——每个请求的逻辑 KV 序列是从位置 0 开始连续递增的一维数组，其块表只增不减。如果在中间任意“挖洞”释放显存块，会导致块表寻址、位置编码计算与连续批处理调度逻辑彻底失效。
 
-### 运行开销与限制 {#zh-sec-15}
+### 运行开销与限制 {#zh-sec-16}
 - **开销**：
   - 静态布局能实质减少物理显存占用。在 Qwen2.5-7B（上下文 2048 token）上，`explain` 算出的单请求 KV 显存上限从全量的 **112.0 MiB** 降至偶数层窗口 256 的 **70.4 MiB**，跨层共享则降至 **56.0 MiB**，并发容量翻倍。
   - 同一个示例在 RTX 4090、7B、128 并发下测得：原样读取的 `NativeRead`、偶数层窗口 `LocalGlobal`、跨层共享 `CrossLayerShared` 吞吐都为原生 vLLM 的 **99%**（窗口层走 vLLM 的 FlashInfer 窗口内核，见[性能与显存](/pllm/docs/explain/performance/)）。纯 PyTorch 实现的 Top-K 动态打分（如未写成专用内核的 Quest）吞吐仅为原生的 **13%**，生产环境加速需使用融合算子（详见[自写算子](/pllm/docs/guides/custom-ops/)与 [09 自写 Triton 算子](/pllm/docs/examples/09_custom_kernels/)）。
@@ -628,9 +660,9 @@ print(testing.check(RecentMass(), CONFIG).passed)
 
 ---
 
-## 3. 改写层的执行顺序：`@pllm.custom_forward` {#zh-sec-16}
+## 3. 改写层的执行顺序：`@pllm.custom_forward` {#zh-sec-17}
 
-### 适用场景与动机 {#zh-sec-17}
+### 适用场景与动机 {#zh-sec-18}
 当算法需要完全重排甚至动态改变层的前向执行轨迹时，使用 `@pllm.custom_forward`。典型场景包括：
 - **循环深度（Looped / Recurrent Depth）**：如 Huginn、Ouro 等模型，在 decode 阶段将一段层重复执行多遍，用额外的推理时间换取更强的推理能力。
 - **逐 token 提前退出 / 自适应深度（Early Exit / Adaptive Depth）**：如 CALM、LayerSkip，在生成过程中让简单的 token 提前跳过深层。
@@ -639,7 +671,7 @@ print(testing.check(RecentMass(), CONFIG).passed)
 
 在标准推理中，模型前向按固定拓扑从第 0 层顺序跑至最后一层。如果要在外部写循环或跳层，不仅需要处理极其复杂的 KV 缓存状态维护，还会带来密集的 host-device 阻塞同步。`@pllm.custom_forward` 将整个前向过程封装为可分段调用的 `layers(...)` 对象，由用户在 Python 中编排计算逻辑，框架在底层自动切分并捕获分段 CUDA graph。
 
-### 最小可运行示例（CPU） {#zh-sec-18}
+### 最小可运行示例（CPU） {#zh-sec-19}
 下面的示例实现 Ouro 风格的循环深度与逐 token 提前退出：在 decode 阶段将第 20 到 23 层重复执行最多 2 遍；若某行残差变化量小于阈值，则提前收敛停止循环。
 
 ```python
@@ -668,7 +700,7 @@ print(testing.check(LatentLoop(), CONFIG).passed)
 ('tensor_parallel_size=1: admission', 'compile', ...)
 ```
 
-### `layers(...)` 调用、`LayerOutputs` 索引与 KV 机制 {#zh-sec-19}
+### `layers(...)` 调用、`LayerOutputs` 索引与 KV 机制 {#zh-sec-20}
 `layers` 参数是 `pllm.model.Layers` 实例，提供以下调用契约：
 - **调用形式**：`layers(start=0, stop=None, hidden=None, *, kv="commit", active=None) -> LayerOutputs`
   - 运行第 `start` 到 `stop - 1` 层。若不传 `stop`，默认运行至最后一层；若不传 `hidden`，默认以 token embedding 作为起始输入（仅在 `start=0` 时合法）。
@@ -684,14 +716,14 @@ print(testing.check(LatentLoop(), CONFIG).passed)
     - 只留第一遍的 KV（第一遍 commit，后续循环改用 `kv="peek"`）：准确率暴跌至 **18.73**。
     这是因为如果后续 token 只能读到浅层第一遍产出的粗糙 K/V，整个基于深层特征训练的模型会彻底崩塌。因此循环中默认使用 `kv="commit"` 覆盖写回。
 
-### 逐 Token 跳层（`active=`）为什么仅限 `tokens="decode"` {#zh-sec-20}
+### 逐 Token 跳层（`active=`）为什么仅限 `tokens="decode"` {#zh-sec-21}
 当向 `layers(..., active=mask)` 传入布尔掩码（形状 `[rows, 1]`）时，掩码为 `False` 的行不参与该分段的矩阵计算，其 `hidden` 原样穿透传递。
 对于被跳过的行，框架会在其第一次跳过某层时，用该行停下的隐藏状态经过该层的输入 norm、QKV 投影与 RoPE 补写对应的 K/V（状态传播），之后再跳过该层时保留该值。
 
 **为什么 `active=` 严格限制在 `tokens="decode"` 中？**
 跳层补写的 K/V 是近似值。decode 时被跳过的只是一个新位置；prompt 的每个 token 都是之后所有生成 token 要读的上下文，在 prefill 时跳层会把整段上下文在高层的 K/V 换成近似值，误差影响此后生成的每一步。因此 prompt 默认跑完整模型，`active=` 只用于 decode。
 
-### 跨步状态：`pllm.PositionState` 与 `load` / `save` {#zh-sec-21}
+### 跨步状态：`pllm.PositionState` 与 `load` / `save` {#zh-sec-22}
 对于类似 Coconut 的“连续思维”算法，模型需要把上一个 token 产生的 hidden 向量直接带给下一个 token。这可以通过声明 `pllm.PositionState` 实现：
 
 ```python
@@ -720,12 +752,12 @@ print(testing.check(StepLoopWorkload(), CONFIG).passed)
 - **整段 Prompt 跨度（`over="span"`）**：
   默认 `over="token"` 模式按因果顺序逐位置推进。设 `@pllm.custom_forward(over="span")` 时，一个请求的一整段连续 prompt 被打包为 `[M, H]` 张量统一送入，适用于 Jacobi 式全 prompt 并行迭代。注意 span 模式下没有串行前驱 token，不能调用 `layers.load`。
 
-### 控制流规范：有界循环、禁止张量分支、`pllm.scan` {#zh-sec-22}
+### 控制流规范：有界循环、禁止张量分支、`pllm.scan` {#zh-sec-23}
 1. **有界 Python 循环自动展开**：基于负载字段的 Python `for` 循环（如 `for _ in range(self.loops):`）会在追踪期直接展开录入分段 CUDA graph。
 2. **禁止基于张量值的控制流**：方法体内部绝对**不能**出现 `if tensor.norm() > 1:`、`while` 或 `break`。前向图的拓扑结构必须确定，否则追踪时报错 `methods run inside CUDA graphs, so Python cannot branch on tensor values (if, while or break on a tensor); ...`。循环固定次数，条件用 `torch.where` 或 `active=` 掩码表达（`active=` 需 `tokens="decode"`，见 [12 自适应深度](/pllm/docs/examples/12_adaptive_depth/)）。
 3. **线性扫描（`pllm.scan`）**：若在自定义前向中需要实现长序列线性递推（形如 $$S_t = A_t S_{t-1} + B_t$$），应调用 `pllm.scan(step, carry=..., over=..., chunk=...)`。pLLM 会识别仿射递推，在条件允许时改用 GPU 上的**并行前缀扫描**，比逐块串行的循环快得多（见[性能与显存](/pllm/docs/explain/performance/)）。详见 [04 改写 forward](/pllm/docs/tutorials/04_custom_forward/)。
 
-### 运行开销、限制与组合 {#zh-sec-23}
+### 运行开销、限制与组合 {#zh-sec-24}
 - **运行开销**：
   使用 `@pllm.custom_forward` 时，vLLM 原生的大模型整图不再生效，`eager_reason` 会明确标明 `@pllm.custom_forward`。**但这绝不意味着模型退回了逐算子 eager 运行**：pLLM 为每次调用的层分段分别捕获了独立的分段 CUDA graph。
   在 [12 自适应深度](/pllm/docs/examples/12_adaptive_depth/) 的实测中（RTX 4090，Qwen2.5-7B，32 个并发请求，256 token，vLLM 0.32.0），一个无跳层、分段调用的 `custom_forward` 吞吐为原生 vLLM CUDA graph 的 **99%**。这个设置下原生 eager 也有 99%（7B 一步约 19 ms，发射开销藏得住）；步长只有几毫秒的小模型上，分段图和 eager 的差别才明显。
@@ -742,13 +774,13 @@ print(testing.check(StepLoopWorkload(), CONFIG).passed)
 
 ---
 
-## 常见报错与排查 {#zh-sec-24}
+## 常见报错与排查 {#zh-sec-25}
 
 这一页的写法被拒绝时的报错原文、原因和改法，见报错目录的[改模型与 forward 结构](/pllm/docs/reference/errors/#zh-sec-8)、[显存预算](/pllm/docs/reference/errors/#zh-sec-11)几节。
 
 ---
 
-## 自测 {#zh-sec-25}
+## 自测 {#zh-sec-26}
 
 1. 为什么 `@pllm.custom_residual` 的恒等改写（返回 `x + y` 或 `v`）与 eager 模式的原生 vLLM 逐位相同，却与默认图模式的原生 vLLM 存在微小 bf16 舍入差异？
 <details>
