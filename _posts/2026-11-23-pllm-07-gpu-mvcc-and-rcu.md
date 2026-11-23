@@ -2,13 +2,16 @@
 layout: post
 title: "当上百个在线请求各自边跑边改权重：在 GPU 显存里手搓无锁 MVCC 与异步 RCU"
 title_en: "When a Hundred Live Requests Mutate Weights Concurrently: Building Lock-Free MVCC and Async RCU in GPU Memory"
-date: 2026-11-23 03:04:00 +0800
+date: 2026-11-23 03:23:00 +0800
 description: "深入落地显存多版本状态的五道硬关卡：融合“写时重定向”省掉 AdamW 预拷贝并砍掉 30% 动量显存、用无锁代次账本抓出 ABA 悬空槽、靠两级非阻塞 wait_event 与 abort() 栅栏实现零冗余页回收、跨进程 CUDA IPC 远端凭证隔离、以及五行集合交集划定抢占回滚边界（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
 description_en: "Carrying param.add_() in-place weight updates from a single-stream script into a concurrent serving engine triggers four simultaneous failures: frozen CUDA Graph pointers, two-stream torn... (pLLM Engineering Series · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
-categories: systems
+categories: engine-internals
+blog_track: engine-internals
 pllm_synced: true
+pllm_track: engine-internals
 pllm_order: 7
+pllm_code: "#07"
 pllm_badge_zh: "极客拆解 · 显存并发状态"
 pllm_badge_en: "Deep Dive · GPU MVCC & RCU"
 related_posts: true
@@ -16,6 +19,7 @@ related_posts: true
 
 <div class="zine-dispatch" data-title-zh="当上百个在线请求各自边跑边改权重：在 GPU 显存里手搓无锁 MVCC 与异步 RCU" data-title-en="When a Hundred Live Requests Mutate Weights Concurrently: Building Lock-Free MVCC and Async RCU in GPU Memory" data-desc-zh="深入落地显存多版本状态的五道硬关卡：融合“写时重定向”省掉 AdamW 预拷贝并砍掉 30% 动量显存、用无锁代次账本抓出 ABA 悬空槽、靠两级非阻塞 wait_event 与 abort() 栅栏实现零冗余页回收、跨进程 CUDA IPC 远端凭证隔离、以及五行集合交集划定抢占回滚边界（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Carrying param.add_() in-place weight updates from a single-stream script into a concurrent serving engine triggers four simultaneous failures: frozen CUDA Graph pointers, two-stream torn... (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
+  <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">
@@ -26,7 +30,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（7/10 · 极客拆解 · 显存并发状态）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/07-gpu-mvcc-and-rcu.md)
+> **pLLM 技术随笔与机制拆解（7/11 · 极客拆解 · 显存并发状态）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/07-gpu-mvcc-and-rcu.md)
 
 在单请求研究脚本里，在线更新参数根本算不上一个系统问题：建一个字典 `states[req_id]`，每步算完梯度调一句 `param.add_(delta)` 原地覆盖，请求结束 `del` 掉就完事了。
 
@@ -151,7 +155,7 @@ return "reset" if (applied & _rewritten(graph)) or custom or probe.custom_attent
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (7/10 · Deep Dive · GPU MVCC & RCU)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/07-gpu-mvcc-and-rcu.md)
+> **pLLM Engineering Essays & Deep Dives (7/11 · Deep Dive · GPU MVCC & RCU)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/07-gpu-mvcc-and-rcu.md)
 
 In a single-request research script, mutating online state barely registers as a design problem: keep a Python dict `states[req_id]`, call `param.add_(delta)` in place after each step, and `del` it when generation finishes.
 

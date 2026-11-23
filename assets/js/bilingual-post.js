@@ -3,7 +3,8 @@
     var dispatch = document.querySelector(".zine-dispatch");
     var panels = document.querySelectorAll("[data-lang-panel]");
     var i18nNodes = document.querySelectorAll("[data-i18n-zh][data-i18n-en]");
-    if (!panels.length && !i18nNodes.length) return;
+    var placeholderNodes = document.querySelectorAll("[data-placeholder-zh][data-placeholder-en]");
+    if (!panels.length && !i18nNodes.length && !placeholderNodes.length) return;
 
     var menuList = document.querySelector("#navbar .navbar-menu-list");
     if (menuList && !menuList.querySelector(".zine-nav-lang")) {
@@ -102,6 +103,9 @@
       }
       i18nNodes.forEach(function (el) {
         el.textContent = el.getAttribute(target === "en" ? "data-i18n-en" : "data-i18n-zh");
+      });
+      placeholderNodes.forEach(function (el) {
+        el.setAttribute("placeholder", el.getAttribute(target === "en" ? "data-placeholder-en" : "data-placeholder-zh") || "");
       });
       document.documentElement.lang = target === "en" ? "en" : "zh-CN";
       document.documentElement.classList.toggle("lang-zh", target === "zh");

@@ -279,12 +279,16 @@ def resolve_relative_url(
 
     if rel_target in ("README.md", "README.zh.md", "README.en.md"):
         return "/pllm/"
-    if rel_target == "blog/README.md":
+    if rel_target in ("blog/README.md", "blog/personal/README.md"):
         return "/pllm/#blog"
     if rel_target.startswith(("blog/zh/", "blog/en/")) and rel_target.endswith(".md"):
         stem = pathlib.PurePosixPath(rel_target).stem
         if stem in blog_url_by_stem:
             return blog_url_by_stem[stem]
+    if rel_target.startswith("blog/personal/") and rel_target.endswith(".md"):
+        p_stem = "personal-" + pathlib.PurePosixPath(rel_target).stem
+        if p_stem in blog_url_by_stem:
+            return blog_url_by_stem[p_stem]
 
     doc_url = doc_url_for_rel(rel_target)
     if doc_url is not None:
@@ -601,6 +605,32 @@ def extract_doc_summary(raw_md: str, is_english: bool) -> str:
     return summarize_first_sentence(merged, 145 if is_english else 95)
 
 
+def parse_personal_readme_metadata(personal_readme_path: pathlib.Path) -> Dict[str, Dict[str, str]]:
+    meta_by_stem: Dict[str, Dict[str, str]] = {}
+    if not personal_readme_path.exists():
+        return meta_by_stem
+    text = personal_readme_path.read_text(encoding="utf-8")
+
+    zh_pat = re.compile(r"\*\*\[`\[([^\]]+)\]`[^\n]*?\]\(([0-9a-zA-Z_-]+)\.md\)\*\*")
+    for m in zh_pat.finditer(text):
+        badge_zh, stem = m.group(1).strip(), m.group(2).strip()
+        key = "personal-" + stem
+        meta_by_stem.setdefault(key, {})["badge_zh"] = badge_zh
+        after = text[m.end() :].lstrip(" \t")
+        if after.startswith("\n") and after[1:].splitlines():
+            next_line = after[1:].splitlines()[0].strip()
+            if next_line.startswith("*") and next_line.endswith("*") and len(next_line) > 2:
+                meta_by_stem[key]["summary_zh"] = next_line.strip("*").strip()
+
+    en_pat = re.compile(r"\*\*\[`\[([^\]]+)\]`[^\n]*?\]\(en/([0-9a-zA-Z_-]+)\.md\)\*\*")
+    for m in en_pat.finditer(text):
+        badge_en, stem = m.group(1).strip(), m.group(2).strip()
+        key = "personal-" + stem
+        meta_by_stem.setdefault(key, {})["badge_en"] = badge_en
+
+    return meta_by_stem
+
+
 def sync_blogs(
     pllm_dir: pathlib.Path,
     site_dir: pathlib.Path,
@@ -609,15 +639,41 @@ def sync_blogs(
     blog_dir = pllm_dir / "blog"
     zh_dir = blog_dir / "zh"
     en_dir = blog_dir / "en"
+    personal_dir = blog_dir / "personal"
+    personal_en_dir = personal_dir / "en"
+
     readme_meta = parse_blog_readme_metadata(blog_dir / "README.md")
+    readme_meta.update(parse_personal_readme_metadata(personal_dir / "README.md"))
 
     zh_files = {p.stem: p for p in sorted(zh_dir.glob("*.md"))} if zh_dir.exists() else {}
     en_files = {p.stem: p for p in sorted(en_dir.glob("*.md"))} if en_dir.exists() else {}
-    stems = sorted(set(zh_files.keys()) | set(en_files.keys()))
+    main_stems = sorted(set(zh_files.keys()) | set(en_files.keys()))
+
+    p_zh_files = (
+        {"personal-" + p.stem: p for p in sorted(personal_dir.glob("*.md")) if p.name.lower() != "readme.md"}
+        if personal_dir.exists()
+        else {}
+    )
+    p_en_files = (
+        {"personal-" + p.stem: p for p in sorted(personal_en_dir.glob("*.md")) if p.name.lower() != "readme.md"}
+        if personal_en_dir.exists()
+        else {}
+    )
+    personal_stems = sorted(set(p_zh_files.keys()) | set(p_en_files.keys()))
+
+    all_entries: List[Tuple[str, pathlib.Path, pathlib.Path, bool]] = []
+    for s in main_stems:
+        zf = zh_files.get(s) or en_files[s]
+        ef = en_files.get(s) or zh_files[s]
+        all_entries.append((s, zf, ef, False))
+    for s in personal_stems:
+        zf = p_zh_files.get(s) or p_en_files[s]
+        ef = p_en_files.get(s) or p_zh_files[s]
+        all_entries.append((s, zf, ef, True))
 
     raw_ts_by_stem: Dict[str, int] = {}
-    for stem in stems:
-        rel_check = "blog/zh/{}.md".format(stem) if stem in zh_files else "blog/en/{}.md".format(stem)
+    for stem, zf, _, _ in all_entries:
+        rel_check = zf.relative_to(pllm_dir).as_posix()
         ts_str = run_git(pllm_dir, ["log", "--diff-filter=A", "--follow", "--format=%at", "-1", "--", rel_check])
         raw_ts_by_stem[stem] = (
             int(ts_str) if ts_str.isdigit() else int(datetime.datetime(2026, 11, 23, 3, 0, tzinfo=CST).timestamp())
@@ -625,12 +681,15 @@ def sync_blogs(
 
     blog_url_by_stem: Dict[str, str] = {}
     dt_by_stem: Dict[str, datetime.datetime] = {}
-    total_count = len(stems)
-    for idx, stem in enumerate(stems, start=1):
+    main_count = len(main_stems)
+    personal_count = len(personal_stems)
+
+    for idx, (stem, _, _, is_personal) in enumerate(all_entries, start=1):
         base_dt = datetime.datetime.fromtimestamp(raw_ts_by_stem[stem], tz=CST)
-        m_num = re.match(r"^(\d+)-", stem)
-        order_num = int(m_num.group(1)) if m_num else idx
-        minute_offset = max(1, total_count + 1 - order_num)
+        raw_num_target = stem[len("personal-") :] if is_personal else stem
+        m_num = re.match(r"^(\d+)-", raw_num_target)
+        local_num = int(m_num.group(1)) if m_num else idx
+        minute_offset = max(1, 30 - local_num) if not is_personal else max(1, 50 - local_num)
         post_dt = base_dt.replace(hour=base_dt.hour, minute=min(59, minute_offset), second=0, microsecond=0)
         dt_by_stem[stem] = post_dt
         blog_url_by_stem[stem] = "/blog/{}/pllm-{}/".format(post_dt.strftime("%Y"), stem)
@@ -640,9 +699,9 @@ def sync_blogs(
     expected_filenames = set()
     blog_records: List[Dict[str, object]] = []
 
-    for idx, stem in enumerate(stems, start=1):
-        zh_path = zh_files.get(stem) or en_files[stem]
-        en_path = en_files.get(stem) or zh_files[stem]
+    arch_nums = {1, 2, 11}
+
+    for idx, (stem, zh_path, en_path, is_personal) in enumerate(all_entries, start=1):
         zh_rel = zh_path.relative_to(pllm_dir).as_posix()
         en_rel = en_path.relative_to(pllm_dir).as_posix()
 
@@ -663,21 +722,45 @@ def sync_blogs(
         ).strip()
 
         rmeta = readme_meta.get(stem, {})
-        badge_zh = rmeta.get("badge_zh", "技术拆解")
-        badge_en = rmeta.get("badge_en", "Deep Dive")
+        badge_zh = rmeta.get("badge_zh", "排障手记" if is_personal else "技术拆解")
+        badge_en = rmeta.get("badge_en", "Postmortem" if is_personal else "Deep Dive")
         summary_zh_base = (rmeta.get("summary_zh") or summarize_first_sentence(tldr_zh_raw, 130)).replace("`", "")
         summary_en_base = (rmeta.get("summary_en") or summarize_first_sentence(tldr_en_raw, 190)).replace("`", "")
-        desc_zh = "{}（pLLM 技术专栏 · 支持 EN / 中文 一键切换）".format(summary_zh_base.rstrip("。"))
-        desc_en = "{} (pLLM Engineering Series · Bilingual EN / 中文)".format(summary_en_base)
 
-        m_num = re.match(r"^(\d+)-", stem)
-        order_num = int(m_num.group(1)) if m_num else idx
+        raw_num_target = stem[len("personal-") :] if is_personal else stem
+        m_num = re.match(r"^(\d+)-", raw_num_target)
+        local_num = int(m_num.group(1)) if m_num else idx
+
+        if is_personal:
+            track = "debugging-notes"
+            order_num = 100 + local_num
+            series_code = "N{:02d}".format(local_num)
+            desc_zh = "{}（pLLM 底层排障手记 · 支持 EN / 中文 一键切换）".format(summary_zh_base.rstrip("。"))
+            desc_en = "{} (pLLM Debugging Postmortem · Bilingual EN / 中文)".format(summary_en_base)
+            post_tags = "pllm pytorch triton debugging"
+            banner_zh = "> **pLLM 编译与底层排障手记（{}/{} · {}）** · [pLLM 项目主页与文档](/pllm/) · [专栏与排障索引](/pllm/#blog) · [GitHub 原文 ↗]({})".format(
+                local_num, personal_count, badge_zh, "{}/blob/main/{}".format(REPO_WEB_BASE, zh_rel)
+            )
+            banner_en = "> **pLLM Debugging Postmortems ({}/{} · {})** · [pLLM Project & Docs](/pllm/) · [Series & Postmortems Index](/pllm/#blog) · [GitHub Source ↗]({})".format(
+                local_num, personal_count, badge_en, "{}/blob/main/{}".format(REPO_WEB_BASE, en_rel)
+            )
+        else:
+            track = "systems-architecture" if local_num in arch_nums else "engine-internals"
+            order_num = local_num
+            series_code = "#{:02d}".format(local_num)
+            desc_zh = "{}（pLLM 技术专栏 · 支持 EN / 中文 一键切换）".format(summary_zh_base.rstrip("。"))
+            desc_en = "{} (pLLM Engineering Series · Bilingual EN / 中文)".format(summary_en_base)
+            post_tags = "pllm vllm inference-systems"
+            banner_zh = "> **pLLM 技术随笔与机制拆解（{}/{} · {}）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗]({})".format(
+                local_num, main_count, badge_zh, "{}/blob/main/{}".format(REPO_WEB_BASE, zh_rel)
+            )
+            banner_en = "> **pLLM Engineering Essays & Deep Dives ({}/{} · {})** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗]({})".format(
+                local_num, main_count, badge_en, "{}/blob/main/{}".format(REPO_WEB_BASE, en_rel)
+            )
+
         post_dt = dt_by_stem[stem]
         filename = "{}-pllm-{}.md".format(post_dt.strftime("%Y-%m-%d"), stem)
         expected_filenames.add(filename)
-
-        gh_zh_url = "{}/blob/main/{}".format(REPO_WEB_BASE, zh_rel)
-        gh_en_url = "{}/blob/main/{}".format(REPO_WEB_BASE, en_rel)
 
         content_lines = [
             "---",
@@ -687,10 +770,13 @@ def sync_blogs(
             "date: {}".format(post_dt.strftime("%Y-%m-%d %H:%M:%S +0800")),
             "description: {}".format(yaml_quote(desc_zh)),
             "description_en: {}".format(yaml_quote(desc_en)),
-            "tags: pllm vllm inference-systems",
-            "categories: systems",
+            "tags: {}".format(post_tags),
+            "categories: {}".format(track),
+            "blog_track: {}".format(track),
             "pllm_synced: true",
+            "pllm_track: {}".format(track),
             "pllm_order: {}".format(order_num),
+            "pllm_code: {}".format(yaml_quote(series_code)),
             "pllm_badge_zh: {}".format(yaml_quote(badge_zh)),
             "pllm_badge_en: {}".format(yaml_quote(badge_en)),
             "related_posts: true",
@@ -703,6 +789,7 @@ def sync_blogs(
                 html_attr_escape(desc_en),
             ),
             '  <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>',
+            '  <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>',
             "</div>",
             "",
             '<div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">',
@@ -713,9 +800,7 @@ def sync_blogs(
             "",
             "</div>",
             "",
-            "> **pLLM 技术随笔与机制拆解（{}/{} · {}）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗]({})".format(
-                order_num, total_count, badge_zh, gh_zh_url
-            ),
+            banner_zh,
             "",
             body_zh,
             "",
@@ -729,9 +814,7 @@ def sync_blogs(
             "",
             "</div>",
             "",
-            "> **pLLM Engineering Essays & Deep Dives ({}/{} · {})** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗]({})".format(
-                order_num, total_count, badge_en, gh_en_url
-            ),
+            banner_en,
             "",
             body_en,
             "",
@@ -745,6 +828,8 @@ def sync_blogs(
         blog_records.append(
             {
                 "order": order_num,
+                "code": series_code,
+                "track": track,
                 "stem": stem,
                 "url": blog_url_by_stem[stem],
                 "title_zh": title_zh,
@@ -985,6 +1070,8 @@ def write_sync_data_yaml(
     lines.append("blogs:")
     for b in blog_records:
         lines.append("  - order: {}".format(b["order"]))
+        lines.append("    code: {}".format(yaml_quote(str(b.get("code", "")))))
+        lines.append("    track: {}".format(yaml_quote(str(b.get("track", "")))))
         lines.append("    stem: {}".format(yaml_quote(str(b["stem"]))))
         lines.append("    url: {}".format(yaml_quote(str(b["url"]))))
         lines.append("    title_zh: {}".format(yaml_quote(str(b["title_zh"]))))

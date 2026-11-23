@@ -6,7 +6,10 @@ date: 2026-11-17 18:00:00 +0800
 description: "基于 6 个模型、7 种框架与 13 个基准的 1,030 次独立进化实验拆解单次得分方差：为什么单次评估的标准差高于大多数方法之间的真实差距。（支持 EN / 中文 一键切换，含 TL;DR）"
 description_en: "Decomposing single-run variance across 1,030 independent evolution runs spanning 6 models, 7 frameworks, and 13 benchmarks: why one run's standard deviation exceeds the true gap between most methods. (Bilingual EN / 中文 with TL;DR)"
 tags: agent-evolution evaluation research
-categories: research-notes
+categories: agent-research
+blog_track: agent-research
+blog_badge_zh: "分辨率假说 · 01"
+blog_badge_en: "Resolution · 01"
 thumbnail: /resolution-hypothesis/assets/noise.png
 related_posts: true
 ---

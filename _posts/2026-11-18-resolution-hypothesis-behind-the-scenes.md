@@ -6,7 +6,10 @@ date: 2026-11-18 12:00:00 +0800
 description: "从折腾新的 Agent 元进化算法，到在两百多万条容器轨迹里把评估分辨率拆解清楚：一份《分辨率假说》的幕后手记，以及三个带点个人偏见的判断。（支持 EN / 中文 一键切换，含 TL;DR）"
 description_en: "From trying to build a new meta-evolution algorithm to auditing evaluation resolution across 2.1 million trajectories: the story behind The Resolution Hypothesis, plus three personal takes. (Bilingual EN / 中文 with TL;DR)"
 tags: agent-evolution evaluation research
-categories: research-notes
+categories: agent-research
+blog_track: agent-research
+blog_badge_zh: "研究幕后"
+blog_badge_en: "Behind the Scenes"
 thumbnail: /resolution-hypothesis/assets/optimism_drift.png
 related_posts: true
 ---

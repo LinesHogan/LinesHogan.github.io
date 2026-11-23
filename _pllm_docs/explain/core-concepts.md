@@ -299,7 +299,7 @@ These four examples illustrate why pLLM rejects certain patterns at build time a
 - Verify correctness contracts on CPU and GPU: [Checking Correctness](/pllm/docs/guides/checking/)
 - Review measured throughput and memory figures across mechanisms: [Performance & Memory](/pllm/docs/explain/performance/)
 - Understand why certain algorithm families are outside scope: [Design Tradeoffs](/pllm/docs/explain/design-tradeoffs/)
-- Further reading: [Standalone Technical Essays](/pllm/#blog) collects ten standalone deep dives on underlying mechanics, scheduling tradeoffs, and verification
+- Further reading: [Standalone Technical Essays](/pllm/#blog) collects eleven standalone deep dives on underlying mechanics, scheduling tradeoffs, and verification
 - Look up exact definitions of all terms: [Glossary](/pllm/docs/reference/glossary/)
 
 </div>
@@ -591,7 +591,7 @@ pLLM 把负载编译当成一次静态校验（详见 [组合规则](/pllm/docs/
 - 在 CPU 与 GPU 上验证正确性契约：[检查正确性](/pllm/docs/guides/checking/)
 - 了解各项机制的实测吞吐与显存数字：[性能与显存](/pllm/docs/explain/performance/)
 - 了解为什么某些算法结构不在支持范围内：[设计取舍](/pllm/docs/explain/design-tradeoffs/)
-- 延伸阅读：[独立技术随笔](/pllm/#blog)收录围绕底层机制、调度取舍与核验方法的十篇独立文章
+- 延伸阅读：[独立技术随笔](/pllm/#blog)收录围绕底层机制、调度取舍与核验方法的十一篇独立文章
 - 查阅所有术语的精确定义：[术语表](/pllm/docs/reference/glossary/)
 
 </div>

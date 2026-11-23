@@ -2,13 +2,16 @@
 layout: post
 title: "《苦涩的教训》还有后半句：当商业推理退回“脏先验”，真正卡脖子的是引擎试错税"
 title_en: "The Second Half of the Bitter Lesson: Why Commercial Inference Is Returning to Dirty Priors, and Why Engine Forks Break the Economics of Search"
-date: 2026-11-23 03:10:00 +0800
+date: 2026-11-23 03:29:00 +0800
 description: "单晶体管造价企稳与 800:1 算存比把训练与推理拉向相反的经济轨道，促成多元语法查表、跨层索引复用与在线快权重回潮；当编码智能体让局部先验变成可规模化搜索时，无状态引擎征收的“三周拉分支税”成了新瓶颈（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
 description_en: "Richard Sutton's Bitter Lesson rests on the premise that hardware cost per unit of computation falls exponentially (pLLM Engineering Series · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
-categories: systems
+categories: systems-architecture
+blog_track: systems-architecture
 pllm_synced: true
+pllm_track: systems-architecture
 pllm_order: 1
+pllm_code: "#01"
 pllm_badge_zh: "观点思辨"
 pllm_badge_en: "Position"
 related_posts: true
@@ -16,6 +19,7 @@ related_posts: true
 
 <div class="zine-dispatch" data-title-zh="《苦涩的教训》还有后半句：当商业推理退回“脏先验”，真正卡脖子的是引擎试错税" data-title-en="The Second Half of the Bitter Lesson: Why Commercial Inference Is Returning to Dirty Priors, and Why Engine Forks Break the Economics of Search" data-desc-zh="单晶体管造价企稳与 800:1 算存比把训练与推理拉向相反的经济轨道，促成多元语法查表、跨层索引复用与在线快权重回潮；当编码智能体让局部先验变成可规模化搜索时，无状态引擎征收的“三周拉分支税”成了新瓶颈（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Richard Sutton's Bitter Lesson rests on the premise that hardware cost per unit of computation falls exponentially (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
+  <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">
@@ -26,7 +30,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（1/10 · 观点思辨）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/01-after-the-bitter-lesson.md)
+> **pLLM 技术随笔与机制拆解（1/11 · 观点思辨）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/01-after-the-bitter-lesson.md)
 
 过去十年，理查德·萨顿（Richard Sutton）的《苦涩的教训》在深度学习圈子里近乎公理：凡是往模型里塞人类先验和精巧局部结构的做法，长远看都会输给“干净统一的架构加海量算力”。
 
@@ -135,7 +139,7 @@ class ESampLite(pllm.Workload):
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (1/10 · Position)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/01-after-the-bitter-lesson.md)
+> **pLLM Engineering Essays & Deep Dives (1/11 · Position)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/01-after-the-bitter-lesson.md)
 
 For most of the past decade, Richard Sutton's _Bitter Lesson_ operated as deep learning's house creed: domain priors and intricate local machinery eventually lose to uniform architectures backed by more compute.
 

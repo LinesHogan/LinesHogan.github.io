@@ -453,3 +453,200 @@ a.pllm-blog-card:hover {
   line-height: 1.56 !important;
   color: var(--zine-ink-2) !important;
 }
+
+.pllm-blog-cat-block.is-hidden {
+  display: none;
+}
+
+/* TPOT & Steering Latency Summary Strip inside Bento Card */
+.pllm-tpot-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin: 0.45rem 0 0.7rem;
+}
+
+@media (max-width: 600px) {
+  .pllm-tpot-strip {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pllm-tpot-pill {
+  background-color: var(--zine-cream);
+  border: 1.5px solid var(--zine-ink);
+  border-radius: 5px;
+  padding: 0.42rem 0.58rem;
+  box-shadow: 2px 2px 0 var(--zine-shadow);
+}
+
+.pllm-tpot-val {
+  font-family: var(--zine-font-mono);
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--zine-ink);
+  line-height: 1.2;
+}
+
+.pllm-tpot-val .delta {
+  color: #059669;
+  font-weight: 800;
+}
+
+.pllm-tpot-lbl {
+  font-size: 0.7rem;
+  line-height: 1.3;
+  color: var(--zine-muted);
+  margin-top: 0.15rem;
+}
+
+/* ==========================================================================
+   Blog Directory: Category Filter Bar, Search & Grouped Anthology View (/blog/)
+   ========================================================================== */
+
+.zine-blog-toolbar {
+  background-color: var(--zine-paper);
+  border: 2px solid var(--zine-ink);
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 var(--zine-shadow);
+  padding: 0.95rem 1.1rem;
+  margin: 0 0 1.85rem;
+}
+
+.zine-blog-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--zine-border);
+}
+
+.zine-blog-search-wrap {
+  flex: 1 1 240px;
+  max-width: 420px;
+  position: relative;
+}
+
+.zine-blog-search {
+  width: 100%;
+  border: 1.5px solid var(--zine-ink);
+  border-radius: 999px;
+  background-color: var(--zine-cream);
+  color: var(--zine-ink);
+  font-family: var(--zine-font-sans);
+  font-size: 0.82rem;
+  padding: 0.38rem 0.9rem;
+  outline: none;
+}
+
+.zine-blog-search:focus {
+  background-color: var(--zine-paper);
+  box-shadow: 2px 2px 0 var(--zine-blue);
+}
+
+.zine-blog-view-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.zine-blog-section {
+  margin-bottom: 2.2rem;
+}
+
+.zine-blog-section.is-hidden {
+  display: none;
+}
+
+.zine-blog-sec-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid var(--zine-ink);
+}
+
+.zine-blog-sec-title {
+  font-family: var(--zine-font-display);
+  font-weight: 800;
+  font-size: 1.25rem;
+  color: var(--zine-ink);
+  margin: 0 !important;
+}
+
+.zine-blog-sec-desc {
+  font-size: 0.83rem;
+  color: var(--zine-muted);
+  margin: 0 !important;
+}
+
+.zine-blog-item.is-hidden {
+  display: none !important;
+}
+
+.zine-cat-pill {
+  display: inline-block;
+  font-family: var(--zine-font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1.2px solid var(--zine-ink);
+  background-color: var(--zine-oat);
+  color: var(--zine-ink);
+  vertical-align: middle;
+}
+
+.zine-cat-pill[data-cat="essays"] {
+  background-color: var(--zine-mustard);
+  color: #111111;
+}
+
+.zine-cat-pill[data-cat="agent-research"] {
+  background-color: var(--zine-red);
+  color: #ffffff;
+}
+
+.zine-cat-pill[data-cat="systems-architecture"] {
+  background-color: var(--zine-blue);
+  color: #ffffff;
+}
+
+.zine-cat-pill[data-cat="engine-internals"] {
+  background-color: #059669;
+  color: #ffffff;
+}
+
+.zine-cat-pill[data-cat="debugging-notes"] {
+  background-color: var(--zine-ink);
+  color: var(--zine-paper);
+}
+
+.zine-blog-meta-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.42rem;
+  margin-bottom: 0.35rem;
+}
+
+.zine-blog-empty {
+  padding: 1.5rem;
+  text-align: center;
+  background-color: var(--zine-cream);
+  border: 1.5px dashed var(--zine-ink);
+  border-radius: 6px;
+  font-family: var(--zine-font-mono);
+  font-size: 0.85rem;
+  color: var(--zine-muted);
+}
+
+.zine-blog-empty.is-hidden {
+  display: none;
+}

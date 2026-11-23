@@ -338,6 +338,38 @@ When overriding the model's layer loop with [`@pllm.custom_forward`](/pllm/docs/
 
 ---
 
+## Advanced Entry Point: Runtime Dynamic Layer Routing (`pllm.model.LayerRoute`) {#en-advanced-entry-point-runtime-dynamic-layer-routing-pllmmodellayerroute}
+
+When a serving engine is already running with captured CUDA graphs and you need to switch hidden-state probes, activation steering layers, or LoRA target layers on the fly (for example, moving an observation or steering site from layer 8 to layer 20 via `llm.import_state(...)`, routing different requests in the same continuous batch to different layers via `RequestState`, or letting the model compute its next target layer on GPU via `@pllm.write`), use [`pllm.model.LayerRoute`](/pllm/docs/reference/api/#en-pllmmodellayerroute):
+
+```python
+class DynamicSteering(pllm.Workload):
+    ctrl = pllm.InstanceState(
+        {"layer": pllm.Field((), torch.int64), "vector": pllm.Field(lambda width, _: (width,))},
+        init=pllm.Imported(),
+    )
+    route = pllm.model.LayerRoute("ctrl", over=(4, 12, 20))
+    steer = route.patch(operator="add", decode=True)
+
+    @pllm.export(name="probe", max_rows=8, max_cols=1)
+    def capture(self, r: torch.Tensor = route.residual()) -> torch.Tensor:
+        return r.float().norm(dim=-1, keepdim=True)
+
+
+print(testing.check(DynamicSteering(), CONFIG).passed)
+```
+
+### Design Constraints and Cost Model {#en-design-constraints-and-cost-model}
+
+Dynamic layer switching is exposed as the explicit `pllm.model.LayerRoute` entry point rather than overloading integer layer arguments because installing gated graph nodes across candidate layers has a bounded, non-zero cost:
+
+1. **Mandatory explicit candidate set `over=(...)`**: There is no implicit all-layer hook. Keep `over` to the candidate layers you actually switch among; on CUDA, routed taps (`hidden` / `residual` / `layer_logits`), `add` and `low_rank_affine` (`rank <= 256`) patches, and `dense` and `low_rank` (`rank <= 256`) adapters check the 0-d `int64` selector in L2 and skip pool HBM reads and GEMMs on inactive candidates (captured patch boundary norms still pass their stream/branch ports, and `per_head`, `rank > 256`, or non-contiguous last-dim patch inputs fall back to masked evaluation).
+2. **Integer encoding and `-1` kill-switch**: Declare the control field on an unoptimized state as a 0-d `int64` scalar `pllm.Field((), torch.int64)` holding a physical layer index in `over`, or `-1` to disable the route dynamically (identity for `patch` / `adapter`, exact zeros and `-1` in `event.layers` for disabled or unvisited `@pllm.custom_forward` layers). Host imports (`StateImport` / `import_state`) and `Feed` validate values against `over | {-1}` on CPU; GPU `@pllm.write` updates run with zero host synchronization and treat out-of-`over` values as `-1`.
+3. **Step-refreshed by default (`refresh="step"`, Forward-only KV)**: `route.adapter(...)` and `route.patch(decode=True)` default to `refresh="step"` (`decode=False` defaults to `refresh="admission"`), reading the step's latest version on both chunked-prefill and decode steps without pinning admission snapshots; live `llm.import_state(...)` updates take effect on the very next forward step for in-flight requests without recomputing historical KV cache entries.
+4. **Single-slot routing vs. per-layer parameter bank**: With default `layers=()`, the state stores a single set of steering vectors or LoRA factors ($$O(1)$$ memory) routed across `over` (requiring matching projection shapes across `over`); when `InstanceState(..., layers=over)` is declared, each candidate layer binds its own `{field}_{l}` slot for zero-copy GPU layer jumping.
+
+---
+
 ## Common Errors and Runtime Constraints: Preemption, Recomputation, and Prefix Caching {#en-common-errors-and-runtime-constraints-preemption-recomputation-and-prefix-caching}
 
 When deploying model-editing algorithms, concurrent scheduling introduces a few boundary constraints.
@@ -706,11 +738,43 @@ print(pllm.explain(ManualFastWeights(), CONFIG).eager_reason)
 
 ---
 
-## 常见错误与运行约束：抢占、重算与前缀缓存 {#zh-sec-18}
+## 高级入口：运行时动态切层（`pllm.model.LayerRoute`） {#zh-sec-18}
+
+在服务已经运行且捕获完 CUDA graph 后，如果希望动态切换探针捕获层、激活引导层或 LoRA 挂载层（例如将观察与引导目标从第 8 层切到第 20 层，或在同一连续批处理中让不同请求命中不同层，甚至由模型自身通过 `@pllm.write` 在 GPU 上计算下一步作用的层），可以使用显式的高级入口 [`pllm.model.LayerRoute`](/pllm/docs/reference/api/#zh-pllmmodellayerroute)：
+
+```python
+class DynamicSteering(pllm.Workload):
+    ctrl = pllm.InstanceState(
+        {"layer": pllm.Field((), torch.int64), "vector": pllm.Field(lambda width, _: (width,))},
+        init=pllm.Imported(),
+    )
+    route = pllm.model.LayerRoute("ctrl", over=(4, 12, 20))
+    steer = route.patch(operator="add", decode=True)
+
+    @pllm.export(name="probe", max_rows=8, max_cols=1)
+    def capture(self, r: torch.Tensor = route.residual()) -> torch.Tensor:
+        return r.float().norm(dim=-1, keepdim=True)
+
+
+print(testing.check(DynamicSteering(), CONFIG).passed)
+```
+
+### 设计约束与代价说明 {#zh-sec-19}
+
+动态切层之所以独立为 `pllm.model.LayerRoute` 而非普通层号参数，是因为它会在候选层集合 `over` 上预埋门控图节点，并非零代价：
+
+1. **必须显式指定候选层集合 `over=(...)`**：不存在隐式挂满全模型所有层的默认选项。候选层越少，图内门控节点的固定发射开销越低；在 CUDA 下，动态探针（`hidden` / `residual` / `layer_logits`）、`add` 与 `low_rank_affine`（`rank <= 256`）补丁、以及 `dense` 与 `low_rank`（`rank <= 256`）适配器会在 L2 中检查 `int64` 层号并跳过未命中候选层的参数读取与矩阵乘（补丁所在的边界归一化仍会传递残差与分支张量端口，`per_head`、`rank > 256` 或最后一维非连续的补丁输入则回退至掩码求值）。
+2. **运行时整数编码与 `-1` 旁路开关**：控制字段必须声明为无优化器状态中的 0 维 `int64` 标量 `pllm.Field((), torch.int64)`，存放非负物理层号（须属于 `over`），或传入 `-1` 动态关闭（`patch` / `adapter` 退化为恒等映射，读取或未在 `@pllm.custom_forward` 中访问到的层返回全零张量并在 `event.layers` 记为 `-1`）。通过 `StateImport` / `import_state` 或 `Feed` 从宿主传入不在 `over` 且非 `-1` 的层号会在边界直接报错；由 `@pllm.write` 在 GPU 上算出的越界值按 `-1` 处理，全程保持 0 主机同步。
+3. **默认逐步生效（`refresh="step"`，Forward-only KV）**：`route.adapter(...)` 与 `route.patch(decode=True)` 默认采用 `refresh="step"`（`decode=False` 时默认为 `refresh="admission"`），在分块 prefill 与 decode 各步均读取当前步最新版本而不钉住请求准入快照；在线调用 `llm.import_state(...)` 后，正在运行的请求在下一个前向步立即切换到新层，历史已写入的 KV 缓存保持不变。
+4. **单槽路由与多层参数库自动适配**：默认 `layers=()` 时，状态只需存储单份干预向量或 LoRA 因子（$$O(1)$$ 显存），在 `over` 间动态路由（要求 `over` 内同名投影形状一致）；若目标 `InstanceState` 声明了 `layers=over`，则自动绑定每层独立参数槽 `{field}_{l}`，供 GPU `@pllm.write` 零拷贝跳层。
+
+---
+
+## 常见错误与运行约束：抢占、重算与前缀缓存 {#zh-sec-20}
 
 在将模型修改类算法推向实际部署时，底层的并发调度会引入一些边界约束。
 
-### 抢占（Preemption）后的重算行为 {#zh-sec-19}
+### 抢占（Preemption）后的重算行为 {#zh-sec-21}
 
 当 vLLM 的 GPU 显存用尽且无法容纳新的 KV block 时，调度器会触发**抢占（preemption）**：驱逐某些低优先级请求的 KV cache，待显存空闲后再重新计算这些请求从 prompt 起始的历史。
 
@@ -721,7 +785,7 @@ print(pllm.explain(ManualFastWeights(), CONFIG).eager_reason)
 
 > **历史 KV 的因子保留**：在因果自回归模型中，已写入的旧 KV 缓存保留的是计算当时所使用的有效权重；后续 step 更新 Adapter 因子不会回溯重算历史前缀的 KV。
 
-### 为什么 Prefix Caching 与 Overlay / 激活补丁互斥 {#zh-sec-20}
+### 为什么 Prefix Caching 与 Overlay / 激活补丁互斥 {#zh-sec-22}
 
 在 vLLM 配置中，`enable_prefix_caching=True` 会在不同的请求之间共享具有相同前缀文本的 KV 块。
 **在 pLLM 中，所有 Overlay（Adapter、train_in_forward）与 ActivationPatch 均与 Prefix Caching 严格互斥，组合时会在构建期直接拒绝。**
@@ -733,7 +797,7 @@ Prefix Caching 的基本假设是“相同的 token 序列产生完全相同的 
 
 ---
 
-## 自测 {#zh-sec-21}
+## 自测 {#zh-sec-23}
 
 <details>
 <summary>1. 为什么在带优化器的低秩 LoRA 状态中，不能使用默认的 init=pllm.Zeros()？</summary>

@@ -7,6 +7,9 @@ description: "在算法、Infra 与业务之间跨界“逃难”，往往只是
 description_en: "Pivoting across algorithms, infrastructure, and business logic to outrun AI mistakes an outsider's switching costs for a durable moat. (Bilingual EN / 中文 with TL;DR)"
 tags: ai-essays reflections career
 categories: essays
+blog_track: essays
+blog_badge_zh: "观点随笔"
+blog_badge_en: "Essay"
 related_posts: true
 ---
 

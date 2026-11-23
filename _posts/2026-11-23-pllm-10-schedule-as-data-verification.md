@@ -2,13 +2,16 @@
 layout: post
 title: "`h - h.mean(dim=0)` 一行错都不报，却会让多租户推理串味：把连续批处理调度变成可测数据"
 title_en: "`h - h.mean(dim=0)` Throws Zero Errors While Leaking Prompts Across Tenants: Turning Batch Schedules into Testable Data"
-date: 2026-11-23 03:01:00 +0800
+date: 2026-11-23 03:20:00 +0800
 description: "用零字节 meta 追踪拦截隐式同步，将连续批处理压缩为静态整数三元组（Schedule-as-Data）；配合分块/抢占不变性、百万加盐蜕变测试与单行 return None 抢占注入，两秒内在笔记本 CPU 上抓出跨租户泄密（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
 description_en: "Ask a coding agent to center hidden states inside an inference hook, and h - h.mean(dim=0, keepdim=True) will sail past strict type checks, single-request unit tests, and CUDA Graph... (pLLM Engineering Series · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
-categories: systems
+categories: engine-internals
+blog_track: engine-internals
 pllm_synced: true
+pllm_track: engine-internals
 pllm_order: 10
+pllm_code: "#10"
 pllm_badge_zh: "极客拆解 · 多租户核验"
 pllm_badge_en: "Deep Dive · Multi-Tenant Verification"
 related_posts: true
@@ -16,6 +19,7 @@ related_posts: true
 
 <div class="zine-dispatch" data-title-zh="`h - h.mean(dim=0)` 一行错都不报，却会让多租户推理串味：把连续批处理调度变成可测数据" data-title-en="`h - h.mean(dim=0)` Throws Zero Errors While Leaking Prompts Across Tenants: Turning Batch Schedules into Testable Data" data-desc-zh="用零字节 meta 追踪拦截隐式同步，将连续批处理压缩为静态整数三元组（Schedule-as-Data）；配合分块/抢占不变性、百万加盐蜕变测试与单行 return None 抢占注入，两秒内在笔记本 CPU 上抓出跨租户泄密（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Ask a coding agent to center hidden states inside an inference hook, and h - h.mean(dim=0, keepdim=True) will sail past strict type checks, single-request unit tests, and CUDA Graph... (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
+  <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">
@@ -26,7 +30,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（10/10 · 极客拆解 · 多租户核验）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/10-schedule-as-data-verification.md)
+> **pLLM 技术随笔与机制拆解（10/11 · 极客拆解 · 多租户核验）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/10-schedule-as-data-verification.md)
 
 假设你让助手或编码智能体写一个最简单的激活探针：在 Transformer 第 8 层对隐藏状态 `h` 做一次中心化处理，它十有八九会写出下面这一行代码：
 
@@ -93,7 +97,7 @@ centered = h - h.mean(dim=0, keepdim=True)
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (10/10 · Deep Dive · Multi-Tenant Verification)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/10-schedule-as-data-verification.md)
+> **pLLM Engineering Essays & Deep Dives (10/11 · Deep Dive · Multi-Tenant Verification)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/10-schedule-as-data-verification.md)
 
 Ask a colleague or a coding agent to write a quick activation-centering hook at Layer 8 of a Transformer, and nine times out of ten you will get this one-liner:
 

@@ -2,13 +2,16 @@
 layout: post
 title: "为什么 32 个线程块跑赢 9,600 个，跳过 23% 的词却省不下 1 毫秒？连续批处理的带宽配额分析"
 title_en: "Why 32 Thread Blocks Beat 9,600—and Skipping 23% of Tokens Saves Zero Time: Bandwidth and SM Quotas in Continuous Batching"
-date: 2026-11-23 03:08:00 +0800
+date: 2026-11-23 03:27:00 +0800
 description: "建立“外部慢速 PCIe vs 片内 466 MB/层权重流”的双瓶颈模型：推导非抢占式 SM 槽位为何会被 9,600 个查表块塞满饿死矩阵乘，以及部分动态跳层为何省不下时间且暗藏概率分布漂移（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
 description_en: 'Two habits learned from single-request scripts—"launch thousands of thread blocks to hide memory latency" and "let easy tokens exit early to save proportional runtime"—both backfire inside... (pLLM Engineering Series · Bilingual EN / 中文)'
 tags: pllm vllm inference-systems
-categories: systems
+categories: engine-internals
+blog_track: engine-internals
 pllm_synced: true
+pllm_track: engine-internals
 pllm_order: 3
+pllm_code: "#03"
 pllm_badge_zh: "极客拆解 · 带宽与配额"
 pllm_badge_en: "Deep Dive · Bandwidth & Quotas"
 related_posts: true
@@ -16,6 +19,7 @@ related_posts: true
 
 <div class="zine-dispatch" data-title-zh="为什么 32 个线程块跑赢 9,600 个，跳过 23% 的词却省不下 1 毫秒？连续批处理的带宽配额分析" data-title-en="Why 32 Thread Blocks Beat 9,600—and Skipping 23% of Tokens Saves Zero Time: Bandwidth and SM Quotas in Continuous Batching" data-desc-zh="建立“外部慢速 PCIe vs 片内 466 MB/层权重流”的双瓶颈模型：推导非抢占式 SM 槽位为何会被 9,600 个查表块塞满饿死矩阵乘，以及部分动态跳层为何省不下时间且暗藏概率分布漂移（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Two habits learned from single-request scripts—&quot;launch thousands of thread blocks to hide memory latency&quot; and &quot;let easy tokens exit early to save proportional runtime&quot;—both backfire inside... (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
+  <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">
@@ -26,7 +30,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（3/10 · 极客拆解 · 带宽与配额）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/03-bandwidth-and-sm-quotas.md)
+> **pLLM 技术随笔与机制拆解（3/11 · 极客拆解 · 带宽与配额）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/03-bandwidth-and-sm-quotas.md)
 
 在单请求研究脚本里调性能，有两条几乎不用过脑子的经验：遇到高延迟访存就把启动网格（grid）开大，靠成千上万个线程块切换来掩盖延迟；遇到像 `the`、句号这类简单词，在第 16 层判断收敛后直接跳过后面几层（Early Exit），跳过四分之一的词自然能省近四分之一的时间。
 
@@ -123,7 +127,7 @@ def bounded_rows(src, rows, out, count: int, width: tl.constexpr, block: tl.cons
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (3/10 · Deep Dive · Bandwidth & Quotas)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/03-bandwidth-and-sm-quotas.md)
+> **pLLM Engineering Essays & Deep Dives (3/11 · Deep Dive · Bandwidth & Quotas)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/03-bandwidth-and-sm-quotas.md)
 
 Profiling single-request research scripts builds two reliable reflexes: when memory latency is high, launch a massive grid of thread blocks (CTAs) so warp switching hides the wait; when easy tokens like periods or `the` settle their representation by layer 16, branch around the next few layers (early exit) to pocket proportional speedups.
 

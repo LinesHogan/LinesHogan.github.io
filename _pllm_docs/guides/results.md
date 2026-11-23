@@ -101,6 +101,7 @@ with pllm.make_llm(GPU_CONFIG, workload=StreamNorm()) as llm:
   - `sample_index`: Relative sample index under that prompt (`0` for the first sample);
   - `request_id`: pLLM's internal request identifier (distinct from vLLM's `RequestOutput.request_id`).
 - **Token positions `event.positions`**: Integer tuple giving each row's token offset within its request.
+- **Dynamic layer provenance `event.layers`**: When an export method reads a single [`pllm.model.LayerRoute`](/pllm/docs/guides/model-edits/#en-advanced-entry-point-runtime-dynamic-layer-routing-pllmmodellayerroute), carries a tuple of each row's resolved physical layer index (`-1` when disabled or unmatched); empty `()` for static layer reads.
 - **CPU tensor `event.tensor()`**: Returns an independent CPU tensor copy.
 - **All-token reads `tokens="all"`**: By default, methods read the latest row per request; to observe every fresh token computed in a step (including all prefill-chunk tokens), pass `tokens="all"` on the input marker (e.g., `pllm.residual(12, tokens="all")`). All-token reads are available only to `@pllm.export` methods.
 
@@ -558,6 +559,7 @@ with pllm.make_llm(GPU_CONFIG, workload=StreamNorm()) as llm:
   - `sample_index`：每个 Prompt 下采样的相对序号（首个采样为 0）；
   - `request_id`：pLLM 内部的请求标识（不同于 vLLM 的 `RequestOutput.request_id`）。
 - **位置索引 `event.positions`**：整型元组，指示各行在其请求内的 token 偏移量。
+- **动态层溯源 `event.layers`**：当导出方法读取单个 [`pllm.model.LayerRoute`](/pllm/docs/guides/model-edits/#zh-sec-18) 时，附带每行实际命中的物理层号元组（未命中或关闭时为 `-1`）；静态层读取时为空元组 `()`。
 - **获取 CPU 张量 `event.tensor()`**：调用该方法返回一个独立的 CPU 张量副本。
 - **全量 token 读取 `tokens="all"`**：默认情况下，方法读取当前步的最新行；若需要观测一个步骤内计算出的全部 token（包括 prompt 的全部切片分块），可在输入标记中指定 `tokens="all"`（例如 `pllm.residual(12, tokens="all")`）。全量 token 读取仅对 `@pllm.export` 方法开放。
 

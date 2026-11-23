@@ -2,13 +2,16 @@
 layout: post
 title: "图是死的，表是活的：怎么在冻结的 CUDA Graph 里偷渡动态指针？"
 title_en: "Dead Graphs, Live Tables: Smuggling Dynamic Pointers and Autograd Inside Frozen CUDA Graphs"
-date: 2026-11-23 03:05:00 +0800
+date: 2026-11-23 03:24:00 +0800
 description: "借用无绑定描述符表（Bindless Descriptor Table）与空位吸收槽建模静态图动态寻址，展示如何把外部搬家张量的裸指针当成 int64 填表并在 Triton 内还原，以及从“流事件记录器”视角预判预热污染、跨流 GC 与纯函数编译器克隆冲突（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
 description_en: "Production serving engines capture decode steps into static CUDA Graphs to eliminate Python/driver launch overhead, freezing every kernel's tensor shapes and raw device addresses at warmup (pLLM Engineering Series · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
-categories: systems
+categories: engine-internals
+blog_track: engine-internals
 pllm_synced: true
+pllm_track: engine-internals
 pllm_order: 6
+pllm_code: "#06"
 pllm_badge_zh: "极客拆解 · 静态图寻址"
 pllm_badge_en: "Deep Dive · Frozen Graphs"
 related_posts: true
@@ -16,6 +19,7 @@ related_posts: true
 
 <div class="zine-dispatch" data-title-zh="图是死的，表是活的：怎么在冻结的 CUDA Graph 里偷渡动态指针？" data-title-en="Dead Graphs, Live Tables: Smuggling Dynamic Pointers and Autograd Inside Frozen CUDA Graphs" data-desc-zh="借用无绑定描述符表（Bindless Descriptor Table）与空位吸收槽建模静态图动态寻址，展示如何把外部搬家张量的裸指针当成 int64 填表并在 Triton 内还原，以及从“流事件记录器”视角预判预热污染、跨流 GC 与纯函数编译器克隆冲突（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Production serving engines capture decode steps into static CUDA Graphs to eliminate Python/driver launch overhead, freezing every kernel's tensor shapes and raw device addresses at warmup (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
+  <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">
@@ -26,7 +30,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（6/10 · 极客拆解 · 静态图寻址）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/06-cuda-graph-pointer-smuggling.md)
+> **pLLM 技术随笔与机制拆解（6/11 · 极客拆解 · 静态图寻址）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/06-cuda-graph-pointer-smuggling.md)
 
 在单卡脚本里调通一段在线学习算法（比如每生成一个词，就拿首尾层隐藏状态算一次损失、反向求导并用 `AdamW` 更新当前请求专属的轻量权重）之后，搬进并发推理引擎遇到的第一个性能悬崖，通常不在 GPU 上，而在 CPU 上。
 
@@ -125,7 +129,7 @@ def _gather_rows(descriptor, rows, output, width: tl.constexpr):
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (6/10 · Deep Dive · Frozen Graphs)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/06-cuda-graph-pointer-smuggling.md)
+> **pLLM Engineering Essays & Deep Dives (6/11 · Deep Dive · Frozen Graphs)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/06-cuda-graph-pointer-smuggling.md)
 
 After getting an online learning loop working in a single-request script—say, computing a token-level loss from hidden states, running `autograd` backward, and stepping per-request `AdamW` weights on every decode token—moving it into a concurrent serving engine hits an immediate wall. That first wall isn't on the GPU; it is on the CPU.
 

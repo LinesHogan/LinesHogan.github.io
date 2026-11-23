@@ -90,7 +90,7 @@ Organized by capability: each page explains what a feature is and when to use it
 
 ## Further Reading {#en-further-reading}
 
-- [Standalone Technical Essays (EN / ZH)](/pllm/#blog): ten standalone articles covering inference-time algorithm trends, scheduler retrospectives, bandwidth quotas, mantissa/bit tricks, compiled fast-weight training, static-graph pointer addressing, GPU memory MVCC/RCU, attention layouts, `attn_metadata` unpacking, and multi-tenant verification
+- [Standalone Technical Essays (EN / ZH)](/pllm/#blog): eleven standalone articles covering inference-time algorithm trends, unified tensor state management, scheduler retrospectives, bandwidth quotas, mantissa/bit tricks, compiled fast-weight training, static-graph pointer addressing, GPU memory MVCC/RCU, attention layouts, `attn_metadata` unpacking, and multi-tenant verification
 
 ## Examples {#en-examples}
 
@@ -183,7 +183,7 @@ pLLM 的文档按用途分成五类，每一页只做一件事：**教程**带�
 
 ## 延伸阅读 {#zh-sec-7}
 
-- [独立技术随笔 (中/英)](/pllm/#blog)：围绕推理期算法趋势、调度器复盘、带宽配额、尾声位变换、编译图快权重训练、静态图指针寻址、显存 MVCC/RCU、注意力布局、`attn_metadata` 解包及多租户核验的十篇独立文章
+- [独立技术随笔 (中/英)](/pllm/#blog)：围绕推理期算法趋势、统一张量状态层、调度器复盘、带宽配额、尾声位变换、编译图快权重训练、静态图指针寻址、显存 MVCC/RCU、注意力布局、`attn_metadata` 解包及多租户核验的十一篇独立文章
 
 ## 示例库 {#zh-sec-8}
 

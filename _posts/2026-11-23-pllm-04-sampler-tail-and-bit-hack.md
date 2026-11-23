@@ -2,13 +2,16 @@
 layout: post
 title: "解码尾声的带宽账，与 5 行 IEEE 754 保序位变换"
 title_en: "Bandwidth Accounting at the Decode Tail—and a 5-Line IEEE 754 Order-Preserving Bit Trick"
-date: 2026-11-23 03:07:00 +0800
+date: 2026-11-23 03:26:00 +0800
 description: "从 top-p 过滤后平均仅剩 4.83 个幸存词出发降维词表计算；对照 IEEE 754 位图推导单条 uint64 整数比较实现“浮点降序 + 同分下标升序”，并提炼“锁种子逐词对账”与“盯批次最大耗时行”两把排障尺子（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
 description_en: "Autoregressive decode ends in a memory-bandwidth bottleneck over the vocabulary matrix, where a few innocent lines of logit rescoring can run slower than lm_head itself (pLLM Engineering Series · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
-categories: systems
+categories: engine-internals
+blog_track: engine-internals
 pllm_synced: true
+pllm_track: engine-internals
 pllm_order: 4
+pllm_code: "#04"
 pllm_badge_zh: "极客拆解 · 尾声与位运算"
 pllm_badge_en: "Deep Dive · Bit Tricks & Tail Bandwidth"
 related_posts: true
@@ -16,6 +19,7 @@ related_posts: true
 
 <div class="zine-dispatch" data-title-zh="解码尾声的带宽账，与 5 行 IEEE 754 保序位变换" data-title-en="Bandwidth Accounting at the Decode Tail—and a 5-Line IEEE 754 Order-Preserving Bit Trick" data-desc-zh="从 top-p 过滤后平均仅剩 4.83 个幸存词出发降维词表计算；对照 IEEE 754 位图推导单条 uint64 整数比较实现“浮点降序 + 同分下标升序”，并提炼“锁种子逐词对账”与“盯批次最大耗时行”两把排障尺子（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Autoregressive decode ends in a memory-bandwidth bottleneck over the vocabulary matrix, where a few innocent lines of logit rescoring can run slower than lm_head itself (pLLM Engineering Series · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
+  <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
 
 <div class="zine-lang-panel" data-lang-panel="zh" lang="zh-CN" markdown="1">
@@ -26,7 +30,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（4/10 · 极客拆解 · 尾声与位运算）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/04-sampler-tail-and-bit-hack.md)
+> **pLLM 技术随笔与机制拆解（4/11 · 极客拆解 · 尾声与位运算）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/04-sampler-tail-and-bit-hack.md)
 
 往大模型解码循环末尾加一点自定义采样逻辑——比如用在线训练的轻量小网络预测值 $$g$$ 去压低主模型隐藏状态 $$h$$ 里的平庸候选词——公式通常只有一行：在主模型做完 `top-k` / `top-p` 过滤留下的候选词上，按 $$(1 + \beta) s_i - \beta g_i$$ 重新打分，再抽样生成下一个词。
 
@@ -142,7 +146,7 @@ _(附带一个用同样方式抓显存水位爬升查出来的 PyTorch 注册陷
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (4/10 · Deep Dive · Bit Tricks & Tail Bandwidth)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/04-sampler-tail-and-bit-hack.md)
+> **pLLM Engineering Essays & Deep Dives (4/11 · Deep Dive · Bit Tricks & Tail Bandwidth)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/04-sampler-tail-and-bit-hack.md)
 
 Adding custom sampling guidance to the end of an LLM decode loop—say, using an online-trained lightweight predictor $$g$$ to suppress bland candidate tokens in the trunk hidden state $$h$$—usually takes one line of math: over the candidate set surviving the trunk's `top-k` / `top-p` filter, rescore each surviving token as $$(1 + \beta) s_i - \beta g_i$$ before drawing the next token.
 
