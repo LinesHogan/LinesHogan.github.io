@@ -49,6 +49,69 @@
     var titleSep = document.title.indexOf(" | ");
     var titleSuffix = titleSep !== -1 ? document.title.slice(titleSep) : "";
 
+    var relatedBox = null;
+    var relatedHeading = null;
+    var relatedSubtitle = null;
+    var relatedLinks = [];
+    var postsI18nMap = null;
+    var postsI18nRequested = false;
+
+    document.querySelectorAll("h2").forEach(function (h2) {
+      if (relatedBox) return;
+      var txt = (h2.textContent || "").trim();
+      if (txt === "Enjoy Reading This Article?") {
+        relatedBox = h2.parentElement;
+        relatedHeading = h2;
+        if (h2.nextElementSibling && h2.nextElementSibling.tagName === "P") {
+          relatedSubtitle = h2.nextElementSibling;
+        }
+        relatedLinks = relatedBox ? Array.prototype.slice.call(relatedBox.querySelectorAll("ul li a[href]")) : [];
+      }
+    });
+
+    function normalizePath(href) {
+      try {
+        var u = new URL(href, window.location.origin);
+        return u.pathname;
+      } catch (e) {
+        return href;
+      }
+    }
+
+    function applyRelatedLang(target) {
+      if (!relatedBox) return;
+      if (relatedHeading) {
+        relatedHeading.textContent = target === "zh" ? "喜欢这篇文章吗？" : "Enjoy Reading This Article?";
+      }
+      if (relatedSubtitle) {
+        relatedSubtitle.textContent =
+          target === "zh" ? "以下是几篇你可能也感兴趣的延伸阅读：" : "Here are some more articles you might like to read next:";
+      }
+      if (postsI18nMap && relatedLinks.length) {
+        relatedLinks.forEach(function (a) {
+          var key = normalizePath(a.getAttribute("href") || "");
+          var entry = postsI18nMap[key] || postsI18nMap[key.replace(/\/$/, "")] || postsI18nMap[key + "/"];
+          if (entry && entry[target]) {
+            a.textContent = entry[target];
+          }
+        });
+      }
+      if (!postsI18nRequested && relatedLinks.length) {
+        postsI18nRequested = true;
+        fetch("/assets/json/posts-i18n.json")
+          .then(function (r) {
+            return r.ok ? r.json() : null;
+          })
+          .then(function (data) {
+            if (!data) return;
+            postsI18nMap = data;
+            var current = document.documentElement.classList.contains("lang-zh") ? "zh" : "en";
+            applyRelatedLang(current);
+          })
+          .catch(function () {});
+      }
+    }
+
     function detectBrowserLang() {
       try {
         var langs =
@@ -110,6 +173,7 @@
       document.documentElement.lang = target === "en" ? "en" : "zh-CN";
       document.documentElement.classList.toggle("lang-zh", target === "zh");
       document.documentElement.classList.toggle("lang-en", target === "en");
+      applyRelatedLang(target);
       if (persist) {
         try {
           window.localStorage.setItem("rh-lang", target);

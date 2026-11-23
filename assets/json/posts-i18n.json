@@ -1,0 +1,21 @@
+---
+layout: null
+sitemap: false
+---
+{
+{%- assign first_item = true -%}
+{%- for post in site.posts -%}
+  {%- assign post_url = post.url | relative_url -%}
+  {%- assign t_zh = post.title_zh | default: post.title | remove: "`" -%}
+  {%- assign t_en = post.title_en | default: post.title | remove: "`" -%}
+  {%- unless first_item -%},{%- endunless -%}
+  {%- assign first_item = false -%}
+  {{ post_url | jsonify }}:{"zh":{{ t_zh | jsonify }},"en":{{ t_en | jsonify }}}
+  {%- if post.redirect and post.redirect != "" -%}
+    {%- assign redir_url = post.redirect | relative_url -%}
+    {%- if redir_url != post_url -%}
+      ,{{ redir_url | jsonify }}:{"zh":{{ t_zh | jsonify }},"en":{{ t_en | jsonify }}}
+    {%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+}
