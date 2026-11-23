@@ -280,22 +280,25 @@ For exact error messages, root causes, and fixes when patterns on this page are 
 
 ## Self-Check {#en-self-check}
 
-<details>
+<details markdown="1">
 <summary>1. Why does a workload using <code>@pllm.custom_residual</code> still print <code>SKIP model-site execution</code> after passing <code>testing.check</code> on CPU?</summary>
 
 Model-site modifications such as `@pllm.custom_residual`, `ActivationPatch`, and `Adapter` inject directly into the forward computation between Transformer layers, which requires real model weights, attention kernels, and GPU KV-cache memory. CPU contract checks use the real planner to verify operand math, state-update timing, and cross-row isolation without simulating full LLM forward passes on CPU, so actual in-layer application is marked `SKIP` and must be verified on a real GPU engine via `testing.check_on_gpu`.
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>2. Why does <code>testing.check_on_gpu</code> require <code>multiprocessing=False</code> and a dedicated fresh process?</summary>
 
 When the base vLLM engine initializes, it reserves exclusive GPU memory pools and performs CUDA graph warmup captures. Sharing a process with prior jobs leaves fragmented allocations and CUDA context state that break graph capture. Additionally, `check_on_gpu` inspects the in-process engine's executor and tensor state directly, which cannot cross multiprocess worker pipes—hence it requires a dedicated single-process (`multiprocessing=False`) environment.
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>3. If we already have bitwise alignment checks with <code>neutral=</code>, why do we still need <code>check_distribution</code>?</summary>
 
 `neutral=` verifies baseline equivalence when the intervention is turned completely off (strength 0), whereas `check_distribution` tests numerical health when the intervention is actively running (strength > 0). Many algorithms look fine on average yet suffer extreme logit spikes on a few rare tokens. By computing full-vocabulary bidirectional KL divergence and TV distance and reporting P99 and max outliers, `check_distribution` catches tail numerical collapses hidden by averages.
+
 </details>
 
 ---
@@ -570,22 +573,25 @@ execution.retire(rows, wait=True)
 
 ## 自测 {#zh-sec-16}
 
-<details>
+<details markdown="1">
 <summary>1. 为什么一个包含了 @pllm.custom_residual 的负载在 CPU 上通过 testing.check 后，输出表格中仍会显示 SKIP model-site execution？</summary>
 
 因为 `@pllm.custom_residual`、`ActivationPatch` 以及 `Adapter` 等模型站点修改需要注入到 Transformer 骨干网络的层间前向计算中。这依赖于真实的模型权重、注意力内核与 GPU KV cache 显存。CPU 契约检查只负责使用真实规划器验证方法体内部的操作数运算、状态更新时序与跨行隔离契约，无法在 CPU 上完成整套大模型推理，因此会将实际层内应用标记为 `SKIP`，需要通过 `testing.check_on_gpu` 在真实 GPU 引擎上补齐测试。
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>2. 为什么 testing.check_on_gpu 强制要求 multiprocessing=False，并且必须运行在独立的全新进程中？</summary>
 
 vLLM 底座引擎在初始化时会分配独占的 GPU 显存池并进行 CUDA graph 的预热捕获。如果与先前的脚本复用同一进程，先前的显存碎片和 CUDA context 会破坏图捕获环境。同时，`check_on_gpu` 需要直接探查进程内部引擎的执行器与张量状态，无法穿透多进程 worker 的通信管道，因此必须在独立的单进程（`multiprocessing=False`）环境中运行。
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>3. 既然有了 neutral= 逐位对齐检查，为什么还需要 check_distribution？</summary>
 
 `neutral=` 检查的是算法完全关闭（强度为 0）时的基线等价性；而 `check_distribution` 检验的是算法正常开启（强度大于 0）时的数值健康度。许多算法在平均意义下工作良好，但在少数罕见的 token 位置会因为 logits 极端偏移而产生数值发散。`check_distribution` 通过计算全词表的双向 KL 散度与 TV 距离，并提取 P99 和最大异常点，能够精准捕捉这种被平均指标掩盖的长尾数值崩溃。
+
 </details>
 
 ---

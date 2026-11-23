@@ -236,23 +236,29 @@ InPlaceWrite: [CPU execution] ValueError: method `remember` mutates borrowed inp
 
 1. Why doesn't the prompt itself see the request's LoRA, whereas generation does starting from the first decoded token?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 Computing the LoRA requires the final-layer hidden state of the last prompt token, which only exists at the end of the prompt forward pass. `write_lora` writes the factors immediately afterward, so the next forward pass (the first decode token) reads them.
+
 </details>
 
 2. If two requests generate together in the same batch, can their LoRAs interfere with each other?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 No. `lora` is a `pllm.RequestState`, so each request owns an isolated copy; `Adapter` applies to each row only the factors belonging to that row's request.
+
 </details>
 
 3. What does matching plain vLLM identically in Step 3 (when the hypernetwork outputs zeros) verify?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 It verifies that the adapter application path itself introduces no discrepancy: any subsequent change in output comes solely from the adapter factors rather than framework overhead. When authoring your own workload, building a "zero-strength" check against plain vLLM is the cheapest correctness test available.
+
 </details>
 
 That same state can also be **trained** token-by-token during generation rather than written once—which is the subject of [03 Decode-Time Training](/pllm/docs/tutorials/03_decode_training/).
@@ -494,25 +500,31 @@ property：getter 里可以有任意代码。返回类型 `-> pllm.RequestState`
 
 1. 为什么 prompt 本身不受这个请求的 LoRA 影响，而是从第一个生成的 token 才开始？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 LoRA 要读 prompt 最后一个 token 在最后一层的 hidden 才能算出来，这个值在 prompt 的 forward 结束时才有。
 `write_lora` 在那之后写入因子，下一次 forward（第一个 decode token）才读到它。
+
 </details>
 
 2. 两个请求在同一个 batch 里生成，它们的 LoRA 会互相影响吗？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 不会。`lora` 是 `RequestState`，每个请求一份；`Adapter` 对每一行施加这一行所属请求的那份因子。
+
 </details>
 
 3. 第三步里超网络输出为零时与原生 vLLM 逐字相同，这验证了什么？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 验证了适配器的施加路径本身不引入偏差：之后输出的任何变化都来自因子本身，而不是框架。写自己的负载时，
 先构造一个"强度为零"的版本和原生 vLLM 对照，是最便宜的正确性检查。
+
 </details>
 
 同样的状态也可以边生成边**训练**出来，而不是一次写入，这就是下一篇

@@ -64,9 +64,11 @@ Answering honestly "how much does this algorithm slow down vLLM?" rests on two p
 - **Rule**: Every throughput number must be accompanied by the test configuration: GPU model, exact model ID (e.g., `Qwen/Qwen2.5-0.5B-Instruct`), dtype (e.g., bfloat16), vLLM and PyTorch versions, `batch`, `sampling_n`, generated `tokens`, and CUDA Graph mode.
 - **Why**: Absolute throughput numbers divorced from concurrency, token length, and hardware specs have no physical meaning and cannot be reproduced.
 
-<details>
+<details markdown="1">
 <summary>Self-check: Why shouldn't throughput be measured with early stopping (omitting ignore_eos)?</summary>
+
 The number of autoregressive steps determines total work. Without <code>ignore_eos=True</code>, a poorer model or shorter answer exits early and emits fewer tokens; dividing "generated tokens / elapsed time" then fails to reflect true decode step rate and can make a degraded algorithm that truncates early appear artificially faster.
+
 </details>
 
 ---
@@ -383,9 +385,11 @@ When `compare` raises an `AssertionError`:
 - **规则**：任何吞吐数字必须与测试环境并列陈列：GPU 型号、模型全称（如 `Qwen/Qwen2.5-0.5B-Instruct`）、精度（如 bfloat16）、vLLM 与 PyTorch 版本、批次（`batch`）、并发采样数（`sampling_n`）、生成 token 数（`tokens`）以及 CUDA Graph 状态。
 - **原因**：脱离并发批次、token 长度和硬件规格的绝对吞吐数字毫无物理意义，也无法被他人复现。
 
-<details>
+<details markdown="1">
 <summary>自测：为什么不能用动态停止（不设 ignore_eos）来测吞吐？</summary>
+
 答：自回归生成的步数决定了计算量。如果不设 <code>ignore_eos=True</code>，生成停顿较早的差模型或较短回答会提前退出，导致实际生成的 token 数量变少；此时若直接拿“生成 token 数 / 耗时”比较，不仅无法反映真实的自回归步进速率，还会让生成质量差（过早截断）的算法由于步数少而虚假地显现出更高的数字。
+
 </details>
 
 ---

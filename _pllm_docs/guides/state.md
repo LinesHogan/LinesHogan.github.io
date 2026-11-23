@@ -387,22 +387,25 @@ When patterns on this page are rejected, exact error messages, causes, and fixes
 
 ## 13. Self-Check {#en-sec-13}
 
-<details>
+<details markdown="1">
 <summary>1. Why does <code>dtype="auto"</code> pick <code>float32</code> rather than the more memory-efficient <code>bfloat16</code> for optimizer-updated state or accumulator fields?</summary>
 
 During autoregressive decoding, per-step online training gradients and running averages are typically small. In `bfloat16` (only 7 mantissa bits), tiny gradient steps or weighted increments added to existing weights underflow and round straight to zero (update swallowing), preventing learning or causing divergence. Measurements show carry recurrence has ~ $$1.4 \times 10^{-1}$$ relative error in `bfloat16` versus ~ $$3.7 \times 10^{-4}$$ in `float32`. pLLM therefore uses `float32` automatically for fields with small accumulations while keeping read-only and write-only fields in the model dtype (e.g., `bfloat16`) to save memory.
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>2. Why does reading a <code>carry</code> field on step 0 always return all zeros?</summary>
 
 Because of pLLM's version-publishing semantics: any method reading state during step $$n$$ always sees the version already published before step $$n$$ started (i.e., the output published on step $$n-1$$). At the start of step 0 upon request admission, no training update has run yet, and carry fields are zero-initialized at admission—so step 0 necessarily reads zeros.
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>3. Why do fields read from <code>RequestState</code> automatically carry a leading row axis (<code>[rows, *S]</code>), whereas fields read from <code>InstanceState</code> do not by default?</summary>
 
 Under continuous batching, multiple concurrent requests are packed into the same batch. `RequestState` keeps a private parameter copy per request, so on every read pLLM gathers and aligns each scheduled row to its own request's slice, yielding `[rows, *S]`. `InstanceState` has a single global copy shared across the entire engine that does not scale with concurrent request count, so it keeps its declared shape `[*S]` by default (pass `per_row=True` if you want a broadcast row axis for batched per-row math).
+
 </details>
 
 </div>
@@ -777,22 +780,25 @@ print(pllm.explain(StepMemory(), CONFIG))
 
 ## 13. 自测 {#zh-sec-25}
 
-<details>
+<details markdown="1">
 <summary>1. 为什么在带优化器的状态或累加器字段上，<code>dtype="auto"</code> 会自动选择 <code>float32</code> 而非更省显存的 <code>bfloat16</code>？</summary>
 
 在自回归解码中，在线训练每步的梯度更新和滑动平均通常幅度微小。在 `bfloat16` 精度下，尾数仅有 7 位，微小的梯度增量或加权量在加到现有权重上时会因精度下溢而被直接截断归零（更新吞噬），导致模型无法学到任何变化甚至数值发散。实测表明，Carry 进位使用 `bfloat16` 的相对误差高达约 $$1.4 \times 10^{-1}$$，而使用 `float32` 仅为约 $$3.7 \times 10^{-4}$$。因此框架自动为需要微小累加的字段采用 `float32`，而对只读权重和只写前向字段保留模型精度（如 `bfloat16`）以节省显存。
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>2. 为什么在第 0 步读取 <code>carry</code> 字段时拿到的张量值始终是全零？</summary>
 
 这是由 pLLM 的版本发布时序规则决定的：任何方法在某一步中读取状态时，看到的都是“当前步开始前已发布的版本”（即第 $$n$$ 步读取第 $$n-1$$ 步发布的结果）。而在请求准入的第 0 步开始时，该请求尚未执行过任何训练方法，不存在之前发布的版本，且 carry 字段在准入时默认进行零初始化，因此第 0 步读取到的数值必然是零。
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>3. 为什么读取 <code>RequestState</code> 的字段时张量自动带有领先的行轴（<code>[rows, *S]</code>），而读取 <code>InstanceState</code> 默认没有？</summary>
 
 在连续批处理中，多个请求被拼接在同一个批次内并发执行。<code>RequestState</code> 为每个请求维护私有的参数副本，因此读取时框架自动根据当前操作所调度的行，为每一行请求对齐并切出其私有的参数切片，形成 <code>[rows, *S]</code> 的张量；而 <code>InstanceState</code> 在全实例范围内只有一份全局唯一的张量副本，不随并发请求数扩缩，因此默认保持声明时的原始维度 <code>[*S]</code>（若需参与按行批处理运算，可显式指定 <code>per_row=True</code> 展开广播行轴）。
+
 </details>
 
 </div>

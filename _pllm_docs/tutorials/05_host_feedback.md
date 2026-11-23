@@ -306,23 +306,29 @@ ZeroStart: lora: add init=pllm.Computed(...) (e.g. random A, zero B); with both 
 
 1. Why must `max_host_training_rows` be declared upfront in `ExecutionOptions`?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 Full-model training needs substantial temporary GPU memory. pLLM reserves that memory upfront at engine startup according to your declared maximum batch size instead of gambling on dynamic allocations mid-generation; batches exceeding the declared row limit are rejected.
+
 </details>
 
 2. Why were a few rounds much slower than others?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 Whenever the training batch changes shape (number of sequences or sequence length), pLLM recompiles the training step for the new shape. Once shapes stabilize, recompilation stops.
+
 </details>
 
 3. What changed in the workload and host code when switching from TTRL to GRPO?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 The workload's training method added one `pllm.batch("weights")` input and multiplied each sample's loss by its weight; the host code computed within-group advantages and passed them in `CausalTrainBatch.weights`. The engine, LoRA, and loop structure stayed unchanged.
+
 </details>
 
 This concludes the core tutorial track. From here, explore as needed: [Workload Anatomy](/pllm/docs/guides/workload-anatomy/) systematically organizes every pattern introduced across these six notebooks; [Core Concepts](/pllm/docs/explain/core-concepts/) explains the design behind the rules; and the [Examples](/pllm/docs/#en-examples) cover one algorithm family per notebook, such as [06 Reading Inside](/pllm/docs/examples/06_reading_inside/) for reading the residual stream and per-layer logits to implement DoLa.
@@ -647,25 +653,31 @@ ZeroStart: lora: add init=pllm.Computed(...) (e.g. random A, zero B); with both 
 
 1. 为什么 `max_host_training_rows` 要在 `ExecutionOptions` 里事先声明？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 整模型的训练要临时占用不少显存。pLLM 在启动引擎时按你声明的最大批次预留这部分显存，而不是在生成途中临时
 申请、碰运气；超过声明行数的批次会被拒绝。
+
 </details>
 
 2. 为什么有几轮比其他轮慢很多？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 训练批次的形状（序列数、序列长度）变了，pLLM 要为新形状重新编译训练步。形状稳定后就不再重编。
+
 </details>
 
 3. 从 TTRL 改成 GRPO，负载和宿主代码各改了什么？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 负载的训练方法多读一个 `pllm.batch("weights")`，把每个样本的 loss 乘上权重；宿主代码算出组内优势，放进
 `CausalTrainBatch` 的 `weights` 字段。引擎、LoRA 和循环结构都不变。
+
 </details>
 
 主线教程到这里结束。接下来按需要选读：[负载的组成](/pllm/docs/guides/workload-anatomy/) 把六篇里出现的写法系统地整理了一遍，[核心概念](/pllm/docs/explain/core-concepts/) 解释这些规则背后的原因；[示例库](/pllm/docs/#zh-sec-8) 里每一篇讲一个算法族，比如 [06 读模型内部](/pllm/docs/examples/06_reading_inside/) 读残差流和逐层 logits、实现 DoLa。

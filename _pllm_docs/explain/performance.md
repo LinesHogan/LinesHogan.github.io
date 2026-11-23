@@ -290,18 +290,27 @@ TP does not reduce per-GPU VRAM used by pLLM states: states are replicated per r
 ## Self-Check {#en-self-check}
 
 1. **Question**: Since `lane: side` runs on a background stream, can you put a heavy task that reads and writes hundreds of MB of VRAM per step onto `side` and get it "for free"?
-   <details><summary>Click for answer</summary>
+   <details markdown="1">
+   <summary>Click for answer</summary>
+
    No. During decode, the base model itself is VRAM-bandwidth bound. If a side task also performs heavy VRAM reads and writes, it contends with the main stream's projections or sampler for the same memory bandwidth and slows down the main stream. Overlap yields a net win only when the side task uses resources complementary to the main stream (e.g., a few SMs waiting on slow PCIe, or filling brief inter-step gaps).
+
    </details>
 
 2. **Question**: You wrote a lookup method that reads `pllm.input_tokens()` to query a large `placement="host"` table, and in the same method also reads `pllm.final_hidden()` for gating. Why did adding the table suddenly add $$1\text{–}2\text{ ms}$$ per step?
-   <details><summary>Click for answer</summary>
+   <details markdown="1">
+   <summary>Click for answer</summary>
+
    Because the same method reads <code>pllm.final_hidden()</code>, it cannot launch until the model forward finishes (its anchor/lane in <code>explain</code> becomes <code>state.publish / main</code>) instead of launching at the start of the step on <code>request.prepare / side</code>. As a result, the ~1.6 ms PCIe transfer sits completely exposed outside the forward pass. Split the host lookup depending only on <code>input_tokens</code> into its own helper method and pass its output via <code>pllm.result</code> to the effect method reading <code>final_hidden</code>, allowing the planner to hoist the lookup to step start and overlap it with the forward pass.
+
    </details>
 
 3. **Question**: On a 7B model, you implemented early exit with `@pllm.custom_forward(tokens="decode")` and observed 30% of tokens skipping the last 4 layers at concurrency 128, yet end-to-end throughput barely budged. Why?
-   <details><summary>Click for answer</summary>
+   <details markdown="1">
+   <summary>Click for answer</summary>
+
    Layer execution during decode is weight-bandwidth bound. As long as 70%—or even just 1—of the 128 concurrent tokens still need those last 4 layers, the GPU must stream all weights for all 4 layers from VRAM into SMs. Partial skipping saves only the KV cache read traffic for those 30% of tokens; you save weight-read bandwidth only when the entire batch skips those 4 layers (landing in <code>bucket 0</code>).
+
    </details>
 
 </div>
@@ -580,18 +589,27 @@ TP 不会减少单卡上 pLLM 状态的显存占用：状态按 rank 复制而�
 ## 自测 {#zh-sec-21}
 
 1. **问题**：既然 `lane: side` 可以在后台流上跑，如果把一个每步要读写几百 MB 显存的重度任务塞进 `side` 流，能不能白嫖时间？
-   <details><summary>点击查看答案</summary>
+   <details markdown="1">
+   <summary>点击查看答案</summary>
+
    不能。Decode 阶段主干模型本身就是显存带宽受限的。如果旁路任务也在大量读写显存，它会和主干的投影或采样器争抢同一份显存带宽，导致主干变慢。只有当旁路任务占用的资源与主干互补（例如只用少量 SM 等待慢速 PCIe，或者填补步间空隙）时，重叠才能带来净收益。
+
    </details>
 
 2. **问题**：你写了一个查表方法，既读取了 `pllm.input_tokens()` 去 `placement="host"` 的大表里查向量，又在同一个方法里读取了 `pllm.final_hidden()` 做门控。为什么加上这个表之后每步突然多出了 $$1\text{–}2\text{ ms}$$？
-   <details><summary>点击查看答案</summary>
+   <details markdown="1">
+   <summary>点击查看答案</summary>
+
    因为同一个方法里读取了 <code>pllm.final_hidden()</code>，这个方法就必须等到模型前向跑完之后才能启动（<code>explain</code> 中它的 anchor/lane 是 <code>state.publish / main</code>），无法在一步最开头的 <code>request.prepare / side</code> 发射。结果约 1.6 ms 的 PCIe 传输完全暴露在模型前向之外。解决办法是把只依赖 <code>input_tokens</code> 的主机查表拆成独立的方法，用 <code>pllm.result</code> 把结果交给读 <code>final_hidden</code> 的效果方法，让规划器能把查表提前到步首与前向重叠。
+
    </details>
 
 3. **问题**：在 7B 模型上，你用 `@pllm.custom_forward(tokens="decode")` 实现了早退（Early Exit），发现在 128 并发下有 30% 的 token 跳过了后 4 层，但端到端吞吐几乎没有提升。这是为什么？
-   <details><summary>点击查看答案</summary>
+   <details markdown="1">
+   <summary>点击查看答案</summary>
+
    Decode 阶段的层计算是权重带宽受限的。只要 128 个并发 token 里还有 70%（甚至哪怕只有 1 个 token）需要跑后 4 层，GPU 就必须把这 4 层的全部权重从显存读进 SM。部分跳过只省下了那 30% token 的 KV cache 读取流量；只有当整个 batch 在这 4 层全部跳过（落入 <code>bucket 0</code>）时，才会省下读权重的带宽。
+
    </details>
 
 </div>

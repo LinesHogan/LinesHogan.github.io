@@ -196,23 +196,29 @@ In addition, loop counts must be static Python `for` loops, and early stopping m
 
 1. `layers(...)` defaults to `kv="commit"`. If pass 1 uses `commit` and subsequent passes use `kv="peek"`, which pass's K and V do later tokens read?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 Pass 1's. `peek` reads without writing, leaving pass 1's K and V in the cache—corresponding to the "first iteration only" strategy in the Ouro paper, which severely degrades loop-trained models.
+
 </details>
 
 2. What does matching plain vLLM identically at `loops=0` demonstrate?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 That `custom_forward` itself—wrapping layers into callable spans and scheduling them in segments via pLLM—alters no computation; any change when looping comes purely from your loop logic.
+
 </details>
 
 3. With `custom_forward`, `eager_reason` is non-empty. Does that mean the model falls back to ungraphed op-by-op execution at half speed?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 No. vLLM's own whole-model CUDA graph is bypassed, but pLLM captures its own graphs for each layer segment. In [12 Adaptive Depth](/pllm/docs/examples/12_adaptive_depth/), a non-skipping custom forward on Qwen2.5-7B with 32 concurrent requests achieves ~99% of native CUDA graph throughput.
+
 </details>
 
 Next up, [05 Feedback Loop](/pllm/docs/tutorials/05_host_feedback/) returns to training: closing the loop of generation, majority voting, and weight updates inside a single engine.
@@ -415,26 +421,32 @@ token 跳层只影响它自己之后的少数位置；prompt token 的 K、V 却
 
 1. `layers(...)` 默认 `kv="commit"`。如果循环的第一遍用 `commit`、之后几遍改成 `kv="peek"`，后面的 token 会读到哪一遍的 K、V？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 第一遍的。`peek` 只读不写，所以缓存里留下的是第一遍写入的 K、V，对应 Ouro 论文里"只留第一遍"的做法，
 它会让为循环训练过的模型明显变差。
+
 </details>
 
 2. `loops=0` 时输出与原生 vLLM 逐字相同，说明了什么？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 `custom_forward` 本身（把层包装成可调用的区间、由 pLLM 按段调度）不改变计算；循环带来的任何差异都来自你的
 循环逻辑。
+
 </details>
 
 3. 用了 `custom_forward` 之后，`eager_reason` 不再为空。这是否意味着模型退回逐算子执行、慢了一倍？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 不是。vLLM 自己的整模型 CUDA graph 不再使用，但 pLLM 为各段层捕获了自己的 graph。示例库中
 [12 自适应深度](/pllm/docs/examples/12_adaptive_depth/) 在 Qwen2.5-7B、32 个并发请求上实测，一个不跳层的 custom forward 约为原生 CUDA graph 吞吐的 99%。
+
 </details>
 
 下一篇 [05 反馈循环](/pllm/docs/tutorials/05_host_feedback/) 回到训练：生成、投票、更新在同一个引擎里闭环。

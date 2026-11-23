@@ -225,23 +225,29 @@ SelectedTraining: rows= and update_rows= on request training require a model eff
 
 1. Under default settings, if a training update is computed at step 10, which step is the earliest `predict` can read it? Why is there a delay?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 Step 12. With the default `publish_lag=1`, training runs on a side stream overlapped with step 11's forward pass, so step 11 cannot read it yet. That one-step lag buys overlap between training and generation; if you need strict sequential visibility, set `pllm.ExecutionOptions(publish_lag=0)` at the cost of no overlap.
+
 </details>
 
 2. At `beta = 0`, every request is still training—why do sampled outputs match plain vLLM?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 Training only updates the `distiller` state without touching logits, and `guide_sampling` with `beta=0` schedules no sampler work. Both the model forward and sampling match plain vLLM, so tokens match word-for-word (occasional single-sample divergence comes from minor rounding differences between compiled graphs).
+
 </details>
 
 3. What happens to newly arrived requests if you remove `rows="trained"`?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 For a request that hasn't trained yet, the small network is just an unlearned layer norm whose "prediction" is noise, yet it would still steer sampling by `beta`. `rows="trained"` leaves version-0 requests on standard sampling until their state has been updated at least once.
+
 </details>
 
 Next up, [04 Custom Forward](/pllm/docs/tutorials/04_custom_forward/) takes a different angle: instead of adding side computations, we change which layers the model itself executes.
@@ -491,27 +497,33 @@ SelectedTraining: rows= and update_rows= on request training require a model eff
 
 1. 默认设置下，第 10 步算出的训练更新，`predict` 最早在第几步读到？为什么要晚这一步？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 第 12 步。默认 `publish_lag=1`：训练放在旁路 stream 上和第 11 步的 forward 同时跑，所以第 11 步还读不到它。
 这一步的延迟换来了训练和生成的重叠；需要严格顺序时设 `pllm.ExecutionOptions(publish_lag=0)`，代价是训练不再
 重叠。
+
 </details>
 
 2. 为什么 beta = 0 时，每个请求都在训练，采样结果却应该和原生 vLLM 一样？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 训练只更新 `distiller` 这份状态，不碰 logits；`beta=0` 的 `guide_sampling` 不声明任何采样器工作。模型的
 forward 和采样都和原生一样，所以样本逐字相同（个别样本的分叉来自编译出的 graph 不同带来的舍入差异）。
+
 </details>
 
 3. `rows="trained"` 去掉之后，刚开始生成的请求会怎样？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 还没训练过的请求，小网络只是一个 layer norm，它的"预测"没有意义，却会按 beta 引导采样。`rows="trained"`
 让版本号为 0 的请求照常采样，等它们的状态被更新过一次再开始引导。
+
 </details>
 
 下一篇 [04 改写 forward](/pllm/docs/tutorials/04_custom_forward/) 换一个方向：不加旁路计算，而是改变模型本身跑哪些层。

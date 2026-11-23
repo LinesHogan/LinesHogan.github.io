@@ -158,13 +158,19 @@ Often your code runs without throwing, yet throughput collapses, VRAM overflows,
 ## Self-Check Questions {#en-self-check-questions}
 
 1. **Question**: While implementing per-request online learning, you decorated your method with `@pllm.train(state="adapter")` and wrote `return loss.mean()` at the end. Running `testing.check` on CPU raised `training methods return one loss per row; pLLM reduces the selected rows per state`. Why does the framework forbid calling `.mean()` inside the method?
-   <details><summary>Answer</summary>
-   Because continuous batching packs multiple concurrent requests into each step, the framework needs one scalar loss per row (<code>[rows]</code>) to attribute gradients to each request's private state, mask padding rows, and run per-state optimizer updates. Reducing to a single scalar with <code>.mean()</code> mixes losses across different requests so individual request losses cannot be recovered. Cross-row reduction must be left to <code>@pllm.train(reduction="mean"|"sum")</code>.
+   <details markdown="1">
+   <summary>Answer</summary>
+
+   Because continuous batching packs multiple concurrent requests into each step, the framework needs one scalar loss per row (<code>[rows]</code>) to attribute gradients to each request's private state, mask padding rows, and run per-state optimizer updates. Reducing to a single scalar with <code>.mean()</code> mixes losses across different requests so individual request losses cannot be recovered. Cross-row reduction must be left to <code>@pllm.train(reduction="mean"&#124;"sum")</code>.
+
    </details>
 
 2. **Question**: You added a large `placement="host"` lookup table and wrote a single method that gathers from the table via `pllm.input_tokens` and gates the result using `pllm.final_hidden()`. Why did GPU throughput drop noticeably?
-   <details><summary>Answer</summary>
+   <details markdown="1">
+   <summary>Answer</summary>
+
    Because that method also reads <code>final_hidden</code>, it cannot start until the entire model forward finishes. As a result, the PCIe host-table transfer (~1.6 ms/step for 128 vocab-wide rows on 7B in [Performance and Memory](/pllm/docs/explain/performance/)) is completely exposed outside the forward pass instead of overlapping with it. The fix is to move the host gather into a dedicated undecorated helper reading only <code>input_tokens</code> and the table (which the planner schedules at <code>request.prepare / side</code> using 1/4 of SMs in the background), and read its output in the gating method via <code>pllm.result(...)</code>.
+
    </details>
 
 ---
@@ -317,13 +323,19 @@ with pllm.make_llm(config, workload=workload) as llm:
 ## 自测小问题 {#zh-sec-10}
 
 1. **问题**：在实现每请求在线学习时，你的方法被 `@pllm.train(state="adapter")` 装饰，并在函数体最后写了 `return loss.mean()`。在 CPU 上运行 `testing.check` 时抛出了 `training methods return one loss per row; pLLM reduces the selected rows per state`。为什么框架禁止用户自己在方法里调用 `.mean()`？
-   <details><summary>答案</summary>
-   因为连续批处理中每个 step 拼入了多个并发请求，框架需要获得每行独立的标量损失 <code>[rows]</code>，才能知道每个请求的私有状态对应的梯度，进而执行逐请求的掩码过滤与优化器更新。如果用户自己在函数内调用 <code>.mean()</code> 归约成单个标量，不同请求的损失就混合在了一起，框架无法还原各请求独立的损失值。跨行归约应当交由 <code>@pllm.train(reduction="mean"|"sum")</code> 框架自动处理。
+   <details markdown="1">
+   <summary>答案</summary>
+
+   因为连续批处理中每个 step 拼入了多个并发请求，框架需要获得每行独立的标量损失 <code>[rows]</code>，才能知道每个请求的私有状态对应的梯度，进而执行逐请求的掩码过滤与优化器更新。如果用户自己在函数内调用 <code>.mean()</code> 归约成单个标量，不同请求的损失就混合在了一起，框架无法还原各请求独立的损失值。跨行归约应当交由 <code>@pllm.train(reduction="mean"&#124;"sum")</code> 框架自动处理。
+
    </details>
 
 2. **问题**：你给模型添加了一个 `placement="host"` 的超大查表状态，并在同一个方法里既通过 `pllm.input_tokens` 查表，又通过 `pllm.final_hidden()` 读取模型最后一层激活做门控。为什么在 GPU 上运行后吞吐明显下降？
-   <details><summary>答案</summary>
+   <details markdown="1">
+   <summary>答案</summary>
+
    因为该方法同时读取了 <code>final_hidden</code>，它必须等到整个模型前向全部计算完毕后才能启动执行。这导致跨 PCIe 搬运主机大表数据的耗时（[性能与显存](/pllm/docs/explain/performance/)一页中 128 行、7B 词表宽的查表约 1.6 ms/步）完全暴露在模型前向之外，无法在后台与前向重叠。正确的改法是将主机查表拆写为一个只读 <code>input_tokens</code> 的无效果方法（规划器会将其调度在步首的 <code>request.prepare / side</code> 旁路流上，利用 1/4 SM 在后台等 PCIe 搬运），再由门控方法通过 <code>pllm.result(...)</code> 读取查表结果，从而让大表搬运与主干前向深度异步重叠。
+
    </details>
 
 ---

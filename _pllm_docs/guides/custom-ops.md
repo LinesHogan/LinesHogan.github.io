@@ -188,22 +188,25 @@ For exact error messages, root causes, and fixes when patterns on this page are 
 
 ## Self-Check {#en-self-check}
 
-<details>
+<details markdown="1">
 <summary>1. Why must a workload method call the custom op object directly instead of <code>torch.ops.my_lib.my_kernel(...)</code>?</summary>
 
 pLLM statically inspects the global symbols referenced by each method so it can read the custom operator and its underlying Triton/CUDA kernel source directly. Kernel source changes are hashed into the workload's identity fingerprint to trigger graph recompilation automatically when a kernel is edited, and the op object carries its registration to worker processes. Going through the `torch.ops` dispatcher obscures the source object and prevents the framework from tracking kernel changes or shipping the registration cleanly.
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>2. Suppose a custom operator filters out tokens based on scores so its output length varies per step. Can it return a variable-length tensor directly? Why or why not?</summary>
 
 No. Workload methods run inside CUDA graphs, which require tensor memory layouts and every dimension size to be completely static at capture time. If an output shape depends on tensor data, graph capture will fail. Instead, return a fixed maximum-length tensor alongside a boolean mask, and ignore invalid positions in downstream operations using `torch.where` or masked multiplication.
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>3. If a custom operator is used only for rewriting the residual stream (<code>@pllm.custom_residual</code>) and exporting observations (<code>@pllm.export</code>), does it need <code>register_autograd</code>?</summary>
 
 No. `register_autograd` is only required when the operator lies on the backward pass of `@pllm.train` online training. Pure inference, activation exports, and forward-only rewrites do not invoke backpropagation and need no autograd rule.
+
 </details>
 
 </div>
@@ -377,22 +380,25 @@ PyTorch 算子:   5755 token/s，为原生 vLLM 的 98%
 
 ## 自测 {#zh-sec-15}
 
-<details>
+<details markdown="1">
 <summary>1. 为什么在负载方法体里必须直接调用自定义算子对象，而不能写 <code>torch.ops.my_lib.my_kernel(...)</code>？</summary>
 
 pLLM 需要静态分析方法引用的全局符号，直接读取自定义算子及其底层的 Triton/CUDA 核函数源码。核函数的源码变更会被哈希进负载身份指纹，确保核函数修改后能够自动触发图重编。通过 `torch.ops` 分发器查找会绕过这一源码分析过程，使框架无法感知核函数代码的变化。
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>2. 某个自定义算子需要根据打分剔除一部分 token，输出长度在每步并不固定，能否在算子内直接返回变长张量？为什么？</summary>
 
 不能。负载方法运行在 CUDA graph 内，CUDA graph 要求录制时的张量内存布局和每维大小完全静态固定。如果输出形状由张量数据决定，图捕获会报错失败。正确的做法是返回固定最大长度的张量，同时返回一个布尔掩码（mask），在后续步骤中使用 `torch.where` 或掩码乘法忽略无效位置。
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>3. 如果自定义算子仅用于改写残差流（<code>@pllm.custom_residual</code>）和导出观测（<code>@pllm.export</code>），需要注册 <code>register_autograd</code> 吗？</summary>
 
 不需要。`register_autograd` 仅在算子处于 `@pllm.train` 在线训练的反向求导路径上时才是必需的。纯推理、激活观测或前向重写不涉及反向传播，无需注册自动求导规则。
+
 </details>
 
 </div>

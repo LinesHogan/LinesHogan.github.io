@@ -188,8 +188,11 @@ print(testing.check(ModuleProbe(), CONFIG).passed)
 
 **Self-check**:
 When defining `FromModule`, why is `mlp = MyModule(); init=pllm.FromModule(lambda m: mlp)` rejected?
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
+
 Because the closure directly references an <code>nn.Module</code> object already instantiated in the main process. When the engine spawns worker subprocesses, a worker cannot safely reuse a module object bound to another process's device context. Instead, pass initialization config (such as hidden size or rank) as scalars into the factory so each worker constructs the module skeleton in its own context and loads weights strictly from the safetensors path via <code>pretrained=</code>.
+
 </details>
 
 ---
@@ -388,8 +391,11 @@ print(pllm.explain(PromptLoRA(), CONFIG).states[0].name)
 
 **Self-check**:
 If a LoRA adapter targets 4 projections (`q_proj`, `k_proj`, `v_proj`, `down_proj`) with `operator="low_rank", factors=("a", "b")`, which keys must be stored in the safetensors file?
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
+
 It must store 8 tensor keys, indexed in the order targets were passed: <code>a_0, b_0, a_1, b_1, a_2, b_2, a_3, b_3</code>, where <code>a_i</code> has shape <code>(rank, in_features_i)</code> and <code>b_i</code> has shape <code>(out_features_i, rank)</code>.
+
 </details>
 
 ---
@@ -569,8 +575,11 @@ print(testing.check(ModuleProbe(), CONFIG).passed)
 
 **自测**：
 在定义 `FromModule` 时，为什么写成 `mlp = MyModule(); init=pllm.FromModule(lambda m: mlp)` 会被拒绝？
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
+
 因为闭包直接引用了在主进程中提前实例化的 <code>nn.Module</code> 对象。当引擎启动多进程 worker 时，worker 子进程无法安全复用其他进程中带有本地设备绑定的模块对象。正确的做法是将初始化配置（如隐层维度、rank）作为标量传入工厂函数，让每个 worker 子进程在自身上下文中独立构建模块骨架，并通过 <code>pretrained=</code> 参数指定 safetensors 路径严格加载权重。
+
 </details>
 
 ---
@@ -769,8 +778,11 @@ print(pllm.explain(PromptLoRA(), CONFIG).states[0].name)
 
 **自测**：
 如果一个 LoRA 适配层包含了 4 个目标投影（`q_proj`, `k_proj`, `v_proj`, `down_proj`），且声明了 `operator="low_rank", factors=("a", "b")`，那么 safetensors 文件中应该存入哪些键？
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
+
 应该存入 8 个张量键，按 targets 传入顺序索引：<code>a_0, b_0, a_1, b_1, a_2, b_2, a_3, b_3</code>。其中 <code>a_i</code> 的形状为 <code>(rank, in_features_i)</code>，<code>b_i</code> 的形状为 <code>(out_features_i, rank)</code>。
+
 </details>
 
 ---

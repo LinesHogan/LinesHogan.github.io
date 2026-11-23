@@ -88,10 +88,11 @@ In multiprocessing mode, workload code must satisfy the following constraints:
 5. **Model objects cannot be stored as workload fields**  
    **Why**: Base model weights typically span gigabytes to tens of gigabytes and are already loaded and resident in GPU memory by the worker. Workload fields must not hold duplicate model weights. If your algorithm needs to invoke the base model inside a method (for example, causal language model training), use `pllm.causal_model("adapter")`, which directly reuses the base model already loaded in the worker.
 
-<details>
+<details markdown="1">
 <summary>Self-check: Why does storing a model object in a workload field fail in multiprocessing mode?</summary>
 
 Because the base model occupies large amounts of VRAM and is bound to a specific CUDA device context, making it unsafe to transfer across processes via `pickle`. Moreover, the EngineCore worker already owns the loaded base model—duplicating it wastes memory and causes deserialization errors. Inside workload methods, use `pllm.causal_model` to access the already-loaded model.
+
 </details>
 
 ---
@@ -140,10 +141,11 @@ To prevent this, pLLM uses two mechanisms:
 > [!IMPORTANT]
 > **TP does not reduce per-GPU VRAM used by request state**: `pllm.explain` notes `reservations are per rank` when reporting memory. Tensor parallelism shards base model weights across GPUs, but pLLM keeps a complete replica of request state on every GPU, so per-rank request-state VRAM does not decrease as you add GPUs.
 
-<details>
+<details markdown="1">
 <summary>Self-check: Why doesn't per-GPU request-state memory drop by half when enabling TP=2?</summary>
 
 Because Tensor Parallelism shards the base model's projection weights, whereas pLLM maintains an independent replica of request state on each TP rank to guarantee zero cross-GPU communication and deterministic execution. As a result, per-GPU request-state memory requirements remain unchanged.
+
 </details>
 
 ---
@@ -333,10 +335,11 @@ with pllm.make_llm(mp_config, workload=StreamMonitor()) as llm:
 5. **模型对象不可作为负载字段**  
    **原因**：基座模型权重通常达数 GB 至数十 GB，且已经由 worker 底层加载并驻留在 GPU 显存中。负载字段不能持有重复的模型权重。如果算法需要在方法内调用基座模型（如因果语言模型训练），应在方法内使用 `pllm.causal_model("adapter")`，它会直接复用 worker 中已加载的基座模型。
 
-<details>
+<details markdown="1">
 <summary>自测：为什么把模型对象存入负载字段会在多进程模式下失败？</summary>
 
 因为基座模型占用大量显存且与特定的 CUDA 设备上下文绑定，无法通过 `pickle` 跨进程安全传输；此外 EngineCore worker 已经拥有加载好的基座模型，重复传递不仅浪费资源，还会引发反序列化错误。方法内应当使用 `pllm.causal_model` 访问已加载的模型。
+
 </details>
 
 ---
@@ -385,10 +388,11 @@ with pllm.make_llm(tp_config, workload=StreamMonitor()) as llm:
 > [!IMPORTANT]
 > **TP 不会减少单卡上请求状态的显存占用**：`pllm.explain` 在报告显存时会提示 `reservations are per rank`。张量并行平摊的是底座模型的权重显存，但 pLLM 的请求状态在每张卡上均保留完整副本，因此请求状态占用的显存不会随卡数增加而减少。
 
-<details>
+<details markdown="1">
 <summary>自测：开启 TP=2 后，为什么单卡上的请求状态显存没有减半？</summary>
 
 因为张量并行切分的是底座模型的投影层权重，而 pLLM 为了保证零跨卡通信与确定性执行，在每个 TP rank 上都独立维护一份请求状态副本。因此单卡上的请求状态显存需求保持不变。
+
 </details>
 
 ---

@@ -451,28 +451,32 @@ When patterns on this page are rejected, exact error messages, causes, and fixes
 
 ## 7. Self-Check {#en-sec-7}
 
-<details>
+<details markdown="1">
 <summary>1. Why does <code>@pllm.export</code> default to <code>overflow="drop"</code> rather than <code>"block"</code>, and why cannot a single row exceed 32 KiB?</summary>
 
 Observation must never slow down generation: if `on_export` hits slow disk I/O, blocking would stall the entire inference engine, so the default drops excess events and increments a counter. Export events sit in fixed-size buffers of at most 32 KiB each, and a single row is never split across two events, so one row must fit (`max_cols * 8 <= 32768`).
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>2. Why does reading <code>pllm.base_logits()</code> inside <code>@pllm.add_logits</code> fail, and how should you read the current step's model output instead?</summary>
 
 `pllm.base_logits()` represents the unmodified base logits consumed by the sampler and is materialized only after sampling (`Phase.AFTER_SAMPLE`) for downstream training or feedback. `@pllm.add_logits` must run before sampling (`BEFORE_SAMPLE`) to supply a logit bias, when `base_logits()` does not yet exist. Read `pllm.layer_logits((-1,))` instead to obtain the current unnormalized final-layer logits.
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>3. Why does <code>@pllm.write</code> not support <code>rows=</code>, and how do you update state for only a subset of requests?</summary>
 
 Each write publishes one complete new version of the state. To update only selected requests, read the old state into the method and use `torch.where(mask, new_value, old_value)` to compute per-row conditional updates while writing unselected rows back unchanged.
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>4. Why are multiple <code>@pllm.add_logits</code> methods allowed in one workload, whereas multiple <code>@pllm.guide_sampling</code> methods are disallowed?</summary>
 
 Bias addition is associative and commutative, so outputs from multiple `@pllm.add_logits` methods can be summed onto the model logits in declaration order before entering the sampler. By contrast, `@pllm.guide_sampling` reweights the post–top-k/top-p candidate set once per step using one prediction; how two predictions should be combined is an algorithmic decision that belongs inside a single method.
+
 </details>
 
 </div>
@@ -909,28 +913,32 @@ print(testing.check(RunningMean(), CONFIG).passed)
 
 ## 7. 自测小问题 {#zh-sec-31}
 
-<details>
+<details markdown="1">
 <summary>1. 为什么 <code>@pllm.export</code> 默认采用 <code>overflow="drop"</code> 而非 <code>"block"</code>？为什么单行张量不能超过 32 KiB？</summary>
 
 观测不能拖慢生成：<code>on_export</code> 若遇到缓慢的磁盘 I/O，阻塞等待会让整个引擎停下来，所以默认丢弃事件、只计数。导出事件放在固定大小的缓冲里，每个事件至多 32 KiB，一行不会被拆到两个事件里，所以一行必须装得下（<code>max_cols * 8 <= 32768</code>）。
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>2. 为什么在 <code>@pllm.add_logits</code> 中读取 <code>pllm.base_logits()</code> 会报错？应当如何正确读取当前步的模型输出？</summary>
 
 <code>pllm.base_logits()</code> 在流水线中的语义是“采样器执行时所消费的未经干预的原生基准 logits”。在调度时序上，该张量是在采样动作执行完成后才正式物化并对外暴露的（位于 <code>Phase.AFTER_SAMPLE</code>），供后续训练或反馈读取。而 <code>@pllm.add_logits</code> 必须在采样前（<code>BEFORE_SAMPLE</code>）运行以提供偏置输入，此时 <code>base_logits()</code> 尚未存在，因此读取会报错。若需要读取最后一层流产生的当前未归一化 logits，应当使用 <code>pllm.layer_logits((-1,))</code>。
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>3. 为什么 <code>@pllm.write</code> 不支持 <code>rows=</code> 参数？如何实现仅对部分请求更新状态？</summary>
 
 一次写入发布这份状态的一个完整新版本。若算法只需对部分请求更新，应当在方法内部同时读取旧状态参数，并利用 <code>torch.where(mask, new_value, old_value)</code> 实现按行条件更新，将未选中的请求原样写回。
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>4. 为什么一个负载中允许并存多个 <code>@pllm.add_logits</code>，却不要声明多个 <code>@pllm.guide_sampling</code>？</summary>
 
 偏置累加运算满足数学上的结合律与交换律，多个 <code>@pllm.add_logits</code> 的输出可以按声明顺序直接累加到模型 logits 上，最后统一进入采样器；而 <code>@pllm.guide_sampling</code> 在 top-k / top-p 截断后的候选集合上按一个预测重新加权，采样器每步只做这一次；两个预测怎样合成是算法的选择，应在一个方法里合成后返回。
+
 </details>
 
 </div>

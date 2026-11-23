@@ -185,7 +185,7 @@ fn propagate(bounds: &[(u32, u32)], edges: &[(usize, usize, i64)]) -> Result<Vec
 }
 ```
 
-Unlike generic integer linear solvers that fail with an opaque `empty set`, both error exits map straight to actionable fixes: `lo > hi` means a method was declared in a phase before its input exists, while failing to converge after $$|V|$$ passes identifies a positive dependency cycle needing a larger `publish_lag`. Deleting all 457,770 lines of C dropped planning time back to microseconds.
+Unlike generic integer linear solvers that fail with an opaque `empty set`, both error exits map straight to actionable fixes: `lo > hi` means a method was declared in a phase before its input exists, while failing to converge after $$\vert V\vert $$ passes identifies a positive dependency cycle needing a larger `publish_lag`. Deleting all 457,770 lines of C dropped planning time back to microseconds.
 
 ---
 

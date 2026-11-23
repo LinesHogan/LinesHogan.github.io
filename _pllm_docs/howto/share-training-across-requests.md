@@ -287,24 +287,27 @@ For exact error messages, root causes, and fixes when patterns on this page are 
 ## Self-Check {#en-self-check}
 
 1. After declaring `key_fields=("route",)`, why can't `max_num_seqs` stay small even when instantaneous request concurrency is low?
-<details>
+<details markdown="1">
 <summary>Answer</summary>
 
 Because route-keyed state copies are not freed when their last request retires; they remain alive in a dormant state and continue occupying admission capacity (the <code>max_num_seqs</code> quota). As requests arrive for many distinct routes, dormant copies gradually exhaust the quota and cause requests with new routes to be rejected at admission.
+
 </details>
 
 2. When training online across multiple sibling samples of the same prompt, why is `reduction="sum"` recommended over the default `reduction="mean"`?
-<details>
+<details markdown="1">
 <summary>Answer</summary>
 
 Sibling samples typically finish at different decode steps due to differing output lengths. With <code>"mean"</code>, as some samples finish and exit, the active-row denominator $$n_s$$ shrinks, passively amplifying the per-token gradient contribution of remaining samples several-fold. With <code>"sum"</code>, each token's gradient weight stays constant regardless of how many sibling rows are currently active.
+
 </details>
 
 3. Can host code pass integers in `routes` (such as `routes=(1, 2, 1)`)?
-<details>
+<details markdown="1">
 <summary>Answer</summary>
 
 No. <code>routes</code> expects a tuple of strings (one non-empty string per prompt). If you are grouping by integer IDs, convert them to strings first, e.g. <code>routes=("tenant_1", "tenant_2", "tenant_1")</code>.
+
 </details>
 
 ---
@@ -586,24 +589,27 @@ print(f"状态名称: {plan.states[0].name}, 作用域: {plan.states[0].scope}")
 ## 自测 {#zh-sec-24}
 
 1. 为什么在声明了 `key_fields=("route",)` 后，即使并发请求数很小，`max_num_seqs` 依然不能设得太小？
-<details>
+<details markdown="1">
 <summary>答案</summary>
 
 因为带有业务路由键的状态副本在最后一个请求退役后不会被释放，而是以休眠状态继续存活并占用准入容量（`max_num_seqs` 额度）。如果系统访问过的 route 种类很多，休眠副本会逐渐耗尽配额，导致携带新路由到达的请求无法准入。
+
 </details>
 
 2. 在对同一 Prompt 的多个兄弟采样进行在线组训练时，为什么损失归约推荐用 `reduction="sum"` 而不是默认的 `reduction="mean"`？
-<details>
+<details markdown="1">
 <summary>答案</summary>
 
 兄弟采样通常由于生成长度不同而在不同时间步退出。若使用 `"mean"`，当部分样本结束退出后，活跃行数分母 $$n_s$$ 变小，会导致剩余未结束样本中每个 token 贡献的梯度被动放大数倍；而 `"sum"` 不受当前活跃行数变化的影响，保证每个 token 贡献恒定的梯度。
+
 </details>
 
 3. 能否在宿主代码中把 `routes` 设为整数类型（如 `routes=(1, 2, 1)`）？
-<details>
+<details markdown="1">
 <summary>答案</summary>
 
 不能。`routes` 要求传入由字符串组成的元组（每个 prompt 一个非空字符串）。如果需要根据整数 ID 分组，请将其转换为字符串传入，如 `routes=("tenant_1", "tenant_2", "tenant_1")`。
+
 </details>
 
 ---

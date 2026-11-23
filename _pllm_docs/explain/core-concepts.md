@@ -276,18 +276,27 @@ These four examples illustrate why pLLM rejects certain patterns at build time a
 ## Self-Check {#en-self-check}
 
 1. **Why does writing `return h - h.mean(dim=0, keepdim=True)` in an `@pllm.export` method pass `pllm.explain` yet fail `pllm.testing.check`?**
-   <details><summary>Answer</summary>
+   <details markdown="1">
+   <summary>Answer</summary>
+
    <code>h.mean(dim=0, keepdim=True)</code> is still pure tensor math with valid shapes and no GPU-to-CPU synchronization, so it passes static shape and memory planning in <code>pllm.explain</code>. However, dimension 0 holds dynamically packed rows from concurrent requests; averaging along <code>dim=0</code> couples one request's output to whoever else happens to be in the same batch. <code>pllm.testing.check</code> catches this when altering co-batched requests and permuting row order, raising <code>ContractError: method ... mixes rows</code>. Reduce along the feature dimension instead: <code>h - h.mean(dim=-1, keepdim=True)</code>.
+
    </details>
 
 2. **In the `Distill` workload, both `@pllm.train` and `@pllm.guide_sampling` read `"distiller"`, yet `pllm.explain` reports `(latest, 0)` for `loss` and `(boundary, 1)` for `predict`. Why?**
-   <details><summary>Answer</summary>
+   <details markdown="1">
+   <summary>Answer</summary>
+
    Under the default <code>publish_lag=1</code>, the side-stream training task launched at <code>token.commit</code> on step $$n$$ executes concurrently with step $$n+1$$'s main-stream forward pass. The guidance method <code>predict</code> on the main stream reads the version already published at the forward boundary (<code>boundary, 1</code>, computed on step $$n-1$$) so it does not stall waiting for step $$n$$'s backward pass and optimizer step. Meanwhile, the training task <code>loss</code> always iterates on the latest parameters (<code>latest, 0</code>) so every gradient update accumulates onto the newest state.
+
    </details>
 
 3. **If you want to filter or rescale the model's original vocabulary distribution inside an `@pllm.add_logits` method, why can't you declare `logits: torch.Tensor = pllm.base_logits()`? What should you use instead?**
-   <details><summary>Answer</summary>
+   <details markdown="1">
+   <summary>Answer</summary>
+
    On the step timeline, <code>@pllm.add_logits</code> runs in <code>Phase.BEFORE_SAMPLE</code> (between <code>model.execute</code> and <code>sampler.pre_draw</code>) before sampling happens, whereas <code>pllm.base_logits()</code> is only committed at <code>token.commit</code> after sampling finishes for post-sample consumers such as <code>@pllm.train</code>. To read the final layer's logits before sampling, declare the parameter default as <code>logits: torch.Tensor = pllm.layer_logits((-1,))</code> (and take <code>logits[:, 0]</code>).
+
    </details>
 
 ---
@@ -568,18 +577,27 @@ pLLM 把负载编译当成一次静态校验（详见 [组合规则](/pllm/docs/
 ## 自测 {#zh-sec-24}
 
 1. **为什么在 `@pllm.export` 方法里写 `return h - h.mean(dim=0, keepdim=True)` 能通过 `pllm.explain`，却会在 `pllm.testing.check` 时失败？**
-   <details><summary>答案</summary>
+   <details markdown="1">
+   <summary>答案</summary>
+
    <code>h.mean(dim=0, keepdim=True)</code> 仍然是纯张量运算，不包含 GPU 到 CPU 的同步，形状也合法，因此在做静态形状与显存规划的 <code>pllm.explain</code> 中能够通过。但第 0 维（<code>dim=0</code>）存放的是当前步动态打包的不同请求行；沿 <code>dim=0</code> 求均值会让一个请求的输出取决于同批其他请求是谁。<code>pllm.testing.check</code> 在改变同批其他请求输入和打乱行顺序时会捕获这一差异，抛出 <code>ContractError: method ... mixes rows</code>。应改为沿特征维归约：<code>h - h.mean(dim=-1, keepdim=True)</code>。
+
    </details>
 
 2. **在 `Distill` 负载中，`@pllm.train` 方法和 `@pllm.guide_sampling` 方法都读取了同一个状态 `"distiller"`，为什么 `pllm.explain` 显示前者读的是 `(latest, 0)`，后者读的却是 `(boundary, 1)`？**
-   <details><summary>答案</summary>
+   <details markdown="1">
+   <summary>答案</summary>
+
    默认 <code>publish_lag=1</code> 时，第 $$n$$ 步在 <code>token.commit</code> 启动的旁路训练任务与第 $$n+1$$ 步的主流前向并发执行。主流上的采样引导方法 <code>predict</code> 读取在前向边界已经发布好的版本（<code>boundary, 1</code>，即第 $$n-1$$ 步算出的版本），从而不必停下来等待旁路流完成第 $$n$$ 步的反向传播与优化器更新；而训练任务 <code>loss</code> 自身始终在最新参数（<code>latest, 0</code>）上继续迭代，保证每一步梯度更新都累加在最新状态上。
+
    </details>
 
 3. **如果你想在 `@pllm.add_logits` 方法里根据模型原本的词表分布做过滤或缩放，为什么不能把参数写成 `logits: torch.Tensor = pllm.base_logits()`？应该用什么代替？**
-   <details><summary>答案</summary>
+   <details markdown="1">
+   <summary>答案</summary>
+
    按一步的时间线，<code>@pllm.add_logits</code> 运行在采样器抽样之前的 <code>Phase.BEFORE_SAMPLE</code>（<code>model.execute</code> 到 <code>sampler.pre_draw</code> 之间），而 <code>pllm.base_logits()</code> 是在采样器完成抽样后的 <code>token.commit</code> 才提交给采样后任务（如 <code>@pllm.train</code>）读取的反馈输入。要在采样前读取模型最后一层的 logits，应将参数默认值写为 <code>logits: torch.Tensor = pllm.layer_logits((-1,))</code>（取 <code>logits[:, 0]</code>）。
+
    </details>
 
 ---

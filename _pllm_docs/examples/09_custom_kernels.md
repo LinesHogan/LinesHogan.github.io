@@ -34,7 +34,7 @@ In pLLM, there is no new operator-wrapping API to learn: wrap your kernel with P
 
 **Example Algorithm Used Here**
 
-In Example 06, we saw that the residual stream norm grows with layer depth, so a fixed steering vector has a different relative weight at different layers and tokens. Here we implement "relative steering": after layer 12's MLP, rewrite the residual stream $$h$$ as $$h + \text{strength} \times |h| \times v$$, where $$v$$ is a unit direction vector, scaling the intervention proportionally to each row's own norm. Computing a row-wise norm and adding back fits a "one program per row" Triton kernel naturally.
+In Example 06, we saw that the residual stream norm grows with layer depth, so a fixed steering vector has a different relative weight at different layers and tokens. Here we implement "relative steering": after layer 12's MLP, rewrite the residual stream $$h$$ as $$h + \text{strength} \times \vert h\vert  \times v$$, where $$v$$ is a unit direction vector, scaling the intervention proportionally to each row's own norm. Computing a row-wise norm and adding back fits a "one program per row" Triton kernel naturally.
 
 Before we start, note two facts:
 - This kernel is no faster than PyTorch here: measured throughput on 7B is `98%` of native vLLM for both (see Step 8), well within measurement noise—a single addition at layer 12 is not the bottleneck of full-model inference. You write a custom op when your algorithm genuinely needs a step PyTorch cannot express or runs too slowly; this notebook focuses solely on wiring and verification.
@@ -86,7 +86,7 @@ CONFIG = pllm.ModelConfig(MODEL, max_model_len=512, max_num_seqs=4, max_num_batc
 
 Here we solve: how do we wrap a Triton kernel into an operator recognized by both PyTorch and pLLM?
 
-In `_relative_steer_kernel` below, each program processes one row: it loads `x` and `y` and adds them in `float32` to form `h`, loads the direction vector `v`, computes the row norm $$|h|$$, and stores $$h + \text{strength} \cdot |h| \cdot v$$.
+In `_relative_steer_kernel` below, each program processes one row: it loads `x` and `y` and adds them in `float32` to form `h`, loads the direction vector `v`, computes the row norm $$\vert h\vert $$, and stores $$h + \text{strength} \cdot \vert h\vert  \cdot v$$.
 
 Next, we wrap it with `@torch.library.custom_op("tutorial::relative_steer", mutates_args=(), device_types="cuda")`. This is standard PyTorch machinery—the same mechanism `torch.compile` uses to recognize custom operators.
 Beneath it are three registrations, each serving a distinct purpose:
@@ -163,7 +163,7 @@ The output shows `0.0` max difference between GPU and CPU reference, confirming 
 
 Next, we compute the layer-12 steering direction vector and save it to disk for the workload to load.
 
-The procedure matches Tutorial 00: take the difference of last-token activations at layer 12 across 5 opposite-meaning phrase pairs and average them. Whereas Tutorial 00 read activations from the vLLM engine, here we run Hugging Face on CPU in a few seconds so Steps 5 and 6 (`explain` and CPU contract checks, along with the direction file they load) can run even on a machine without a GPU. After averaging, we normalize by its norm so `direction` is a unit vector, leaving scaling to the residual stream's own norm $$|h|$$.
+The procedure matches Tutorial 00: take the difference of last-token activations at layer 12 across 5 opposite-meaning phrase pairs and average them. Whereas Tutorial 00 read activations from the vLLM engine, here we run Hugging Face on CPU in a few seconds so Steps 5 and 6 (`explain` and CPU contract checks, along with the direction file they load) can run even on a machine without a GPU. After averaging, we normalize by its norm so `direction` is a unit vector, leaving scaling to the residual stream's own norm $$\vert h\vert $$.
 
 Finally, we save the vector to a safetensors file and load it into an `InstanceState` via `init=pllm.Pretrained(...)`. Why a file instead of Tutorial 00's `StateImport`? Because contract checks run with that actual loaded state: if the direction were only injected externally at `generate` time, it would be zero during contract checks and a bug in the kernel would go unnoticed (as we demonstrate in Step 10). With a `pllm.Pretrained` file, the checks run with the real non-zero direction.
 
@@ -459,7 +459,7 @@ Next: in [10 Custom Attention](/pllm/docs/examples/10_custom_attention/), we wri
 
 **本篇的例子算法**
 
-示例 06 看到残差流的范数随层数变大，同样一个引导向量在不同层、不同 token 上“分量”不一样。这里我们写一个“相对引导”：在第 12 层 MLP 之后，把残差流 $$h$$ 改成 $$h + \text{strength} \times |h| \times v$$，其中 $$v$$ 是单位方向向量，加的量和这一行自己的范数成正比。这一步要对每一行求范数再加回去，正好写成一个“一行一个 program”的 Triton kernel。
+示例 06 看到残差流的范数随层数变大，同样一个引导向量在不同层、不同 token 上“分量”不一样。这里我们写一个“相对引导”：在第 12 层 MLP 之后，把残差流 $$h$$ 改成 $$h + \text{strength} \times \vert h\vert  \times v$$，其中 $$v$$ 是单位方向向量，加的量和这一行自己的范数成正比。这一步要对每一行求范数再加回去，正好写成一个“一行一个 program”的 Triton kernel。
 
 在开始之前，先说明两点事实：
 - 这个 kernel 在这里并不比 PyTorch 快：在 7B 上实测吞吐都是原生 vLLM 的 98%（见第八步），两者差别在噪声范围内；第 12 层的一次加法不是瓶颈。写自定义算子的理由是你的算法真的需要一个 PyTorch 表达不了或太慢的步骤；这篇只演示接法和检查。
@@ -511,7 +511,7 @@ CONFIG = pllm.ModelConfig(MODEL, max_model_len=512, max_num_seqs=4, max_num_batc
 
 这一步要解决的问题是：怎样把 Triton kernel 包装成 PyTorch 和 pLLM 都能识别的算子？
 
-下面的 `_relative_steer_kernel` 中，一个 program 处理一行：读入 `x` 和 `y` 相加得到 `h`（转成 `float32`），读入方向向量 `v`，求出当前行的范数 $$|h|$$，最后写回 $$h + \text{strength} \cdot |h| \cdot v$$。
+下面的 `_relative_steer_kernel` 中，一个 program 处理一行：读入 `x` 和 `y` 相加得到 `h`（转成 `float32`），读入方向向量 `v`，求出当前行的范数 $$\vert h\vert $$，最后写回 $$h + \text{strength} \cdot \vert h\vert  \cdot v$$。
 
 接着我们用 `@torch.library.custom_op("tutorial::relative_steer", mutates_args=(), device_types="cuda")` 把它包装起来。这是 PyTorch 自己的机制，让 `torch.compile` 认识自定义算子用的也是这一套写法。
 在它下面还有三个注册函数，各自有不同的用途：
@@ -588,7 +588,7 @@ GPU 与 CPU 参考的最大差: 0.0
 
 这一步我们要准备第 12 层的引导方向向量，并把它存成文件供负载读取。
 
-做法和教程 00 一样：在第 12 层取 5 对反义短语最后一个 token 的激活之差再求平均。教程 00 从 vLLM 引擎里读激活；这里改在 CPU 上用 Hugging Face 跑，只要几秒钟。这样第五、六步的 `explain` 和 CPU 契约检查连同它们要读的方向文件，在没有 GPU 的机器上也能跑通。算出来之后除以它的范数，只保留单位方向向量 `direction`，把引导的强度交给残差流自己的范数 $$|h|$$。
+做法和教程 00 一样：在第 12 层取 5 对反义短语最后一个 token 的激活之差再求平均。教程 00 从 vLLM 引擎里读激活；这里改在 CPU 上用 Hugging Face 跑，只要几秒钟。这样第五、六步的 `explain` 和 CPU 契约检查连同它们要读的方向文件，在没有 GPU 的机器上也能跑通。算出来之后除以它的范数，只保留单位方向向量 `direction`，把引导的强度交给残差流自己的范数 $$\vert h\vert $$。
 
 最后我们把方向存成 safetensors 文件，下一步在负载里用 `init=pllm.Pretrained(...)` 从文件读进一份 `InstanceState`。为什么用文件而不是教程 00 的 `StateImport`？因为契约检查会用这份真实的方向去跑；如果方向是调用 `generate` 时才从外部送进来的，在检查脚本里它就是零，kernel 里的错误就看不出来了（第十步会用到这一点）。用 `pllm.Pretrained` 文件，检查时用的就是这份真实的方向。
 

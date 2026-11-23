@@ -250,23 +250,29 @@ Centered: [row permutation] request 'r2', export norm at token 5: max |diff| 23.
 
 1. Your probe was trained offline on Hugging Face's `hidden_states[13]` (the residual stream after layer 12). Which input marker should you read in pLLM?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 `pllm.residual(12)`. `pllm.hidden(12)` is only layer 12's MLP output before the residual addition, and `pllm.final_hidden()` is the vector after the final norm—all three are distinct quantities.
+
 </details>
 
 2. Why do outputs stay identical to plain vLLM even with the monitoring workload attached?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 Exports are read-only: they neither modify logits nor mutate state, and the model continues running inside CUDA graphs (`eager_reason` is empty), so the model executes the exact same computation as without a workload.
+
 </details>
 
 3. You pass 8 prompts to `generate` at once while using an export with `max_rows=4` reading `tokens="prefill"`. What happens?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 Prompts finishing prefill in the same step share those 4 rows; excess rows are dropped (counted in the event's `dropped_rows`) without blocking generation. To guarantee one row per prompt, send at most `max_rows` prompts per `generate` call or increase `max_rows`. In this tutorial, `CONFIG` allows at most 4 concurrent requests, so a step has at most 4 prefill-end rows.
+
 </details>
 
 Next up, [02 Per-Request LoRA](/pllm/docs/tutorials/02_request_adapters/) starts modifying the model: once each request finishes reading its prompt, a hypernetwork generates a dedicated LoRA adapter for it on the fly.
@@ -529,27 +535,33 @@ Centered: [row permutation] request 'r2', export norm at token 5: max |diff| 23.
 
 1. 你离线训练探针时用的是 Hugging Face 的 `hidden_states[13]`（第 12 层之后的残差流）。在 pLLM 里该读哪个输入？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 `pllm.residual(12)`。`pllm.hidden(12)` 只是第 12 层 MLP 的输出（加回残差之前），`pllm.final_hidden()` 是最终
 norm 之后的向量，三者是不同的量。
+
 </details>
 
 2. 为什么挂上监控负载之后，输出仍和原生 vLLM 逐字相同？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 导出只读不写：它不改 logits、不改状态，模型也仍在 CUDA graph 里运行（`eager_reason` 为空），所以模型的计算和
 不挂负载时完全一样。
+
 </details>
 
 3. 一次 `generate` 传入 8 个 prompt，用 `max_rows=4` 的导出读 `tokens="prefill"` 的行，会发生什么？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 同一步里结束 prefill 的 prompt 共用这 4 行，多出来的行被丢弃，丢了多少记在事件的 `dropped_rows` 里，不会阻塞
 生成。要拿到每个 prompt 的一行，每次 `generate` 最多传 `max_rows` 个 prompt，或者调大 `max_rows`。本篇的
 `CONFIG` 最多同时跑 4 个请求，所以一步最多 4 行。
+
 </details>
 
 下一篇 [02 每请求 LoRA](/pllm/docs/tutorials/02_request_adapters/) 开始改模型：每个请求读完 prompt 之后，由一个超网络

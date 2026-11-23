@@ -379,24 +379,27 @@ When patterns on this page are rejected, exact error messages, causes, and fixes
 ## Self-Check {#en-self-check}
 
 1. Why does `hidden - hidden.mean(dim=0, keepdim=True)` pass Python syntax checks yet fail `pllm.testing.check` with `mixes rows`?
-<details>
+<details markdown="1">
 <summary>Answer</summary>
 
 Dimension 0 indexes the distinct request rows packed together in the current step (`[rows, hidden]`). Taking a mean over `dim=0` mixes activations across unrelated requests in the same batch, making one request's output depend on whichever other requests happen to be batched alongside it. Reduce along the feature dimension instead: `hidden - hidden.mean(dim=-1, keepdim=True)`.
+
 </details>
 
 2. In a `@dataclass(frozen=True)` workload, why does `@pllm.guide_sampling(beta=beta)` break `neutral=MyWorkload(beta=0.0)`, and how do you fix it?
-<details>
+<details markdown="1">
 <summary>Answer</summary>
 
 When the `class` body executes, no `self` instance exists yet, so `beta=beta` captures the class attribute's default value (e.g., `0.5`) inside the decorator; constructing `MyWorkload(beta=0.0)` later does not change it. Define a method `def strength(self) -> float: return self.beta` and write `@pllm.guide_sampling(beta=strength)` so pLLM reads `self.beta` when binding the instance.
+
 </details>
 
 3. To save a new tensor into each request's own state on every decode step, can a plain method read `w: torch.Tensor = pllm.parameter("state", "w")` and call `w.copy_(new_val)`? Why or why not?
-<details>
+<details markdown="1">
 <summary>Answer</summary>
 
 No. `pllm.parameter` returns a read-only view, and the same state version may be read concurrently by other methods in the same step. Calling `w.copy_()` in-place breaks version isolation and triggers a `mutates borrowed input` failure in `testing.check`. Decorate the method with `@pllm.write(state="state", fields=("w",))` and return `(new_val,)` so the framework atomically publishes the next version of the state.
+
 </details>
 
 ---
@@ -772,24 +775,27 @@ print(testing.check_on_gpu(GatedDistill(), GPU_CONFIG, neutral=GatedDistill(beta
 ## 自测 {#zh-sec-18}
 
 1. 为什么在方法体里写 `hidden - hidden.mean(dim=0, keepdim=True)` 能通过 Python 语法检查，却会在 `pllm.testing.check` 时报 `mixes rows`？
-<details>
+<details markdown="1">
 <summary>答案</summary>
 
 张量的第 0 维是当前步打包在一起的不同请求行（`[rows, hidden]`）。`dim=0` 求均值会把同一批次里不同请求的激活混在一起，导致一个请求的输出取决于此时有哪些其他请求恰好和它同批运行。应改为沿着特征维归约：`hidden - hidden.mean(dim=-1, keepdim=True)`。
+
 </details>
 
 2. 在 `@dataclass(frozen=True)` 负载类中，为什么 `@pllm.guide_sampling(beta=beta)` 会让 `neutral=MyWorkload(beta=0.0)` 失效，应该怎么改？
-<details>
+<details markdown="1">
 <summary>答案</summary>
 
 `class` 定义体执行时还没有实例 `self`，直接写 `beta=beta` 会把类属性的默认值（如 `0.5`）固定进装饰器里，之后构造 `MyWorkload(beta=0.0)` 也不会改变它。应在类里定义方法 `def strength(self) -> float: return self.beta`，并在装饰器里写 `@pllm.guide_sampling(beta=strength)`，让 pLLM 在绑定该实例时读取 `self.beta`。
+
 </details>
 
 3. 想在每步解码时把一个新张量存入每个请求自己的状态里，能不能在普通方法里直接对 `w: torch.Tensor = pllm.parameter("state", "w")` 调用 `w.copy_(new_val)`？为什么？
-<details>
+<details markdown="1">
 <summary>答案</summary>
 
 不能。`pllm.parameter` 拿到的是只读视图，同一状态版本可能正被同一步的其他方法读取，原地调用 `w.copy_()` 会破坏版本隔离并在 `testing.check` 中触发 `mutates borrowed input` 报错。应当使用 `@pllm.write(state="state", fields=("w",))` 装饰方法并返回 `(new_val,)`，由框架原子地发布为状态的下一个版本。
+
 </details>
 
 ---

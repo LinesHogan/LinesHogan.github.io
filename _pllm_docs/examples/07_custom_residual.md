@@ -262,7 +262,7 @@ In this step, we answer: if a residual branch carries per-request "memory" that 
 
 In plain terms, here is what this memory sublayer computes: beside layer 12's MLP, we place a `[hidden, hidden]` fast-weight matrix $$M$$ (one independent copy per request, initialized to zero).
 - **Read**: each token passing through layer 12 normalizes its incoming residual stream $$x$$ to form key $$k$$, reads $$M k$$ from the matrix, scales it by a gating factor `gate` (`2` in this demo), and adds it into the residual stream after the MLP output.
-- **Write (update)**: after accumulating a fixed-length chunk (`chunk=16`, i.e., 16 tokens), $$M$$ takes one gradient-descent step (learning rate `1.0`) toward the objective $$\|M k - y\|^2$$, where $$y$$ is the MLP output at that layer.
+- **Write (update)**: after accumulating a fixed-length chunk (`chunk=16`, i.e., 16 tokens), $$M$$ takes one gradient-descent step (learning rate `1.0`) toward the objective $$\Vert M k - y\Vert ^2$$, where $$y$$ is the MLP output at that layer.
 
 This is the core skeleton of "read-and-write fast-weight memory" architectures such as TTT (Test-Time Training) and Titans. When `gate = 0`, the read term is zeroed out and the model reduces to the base model.
 
@@ -610,7 +610,7 @@ value residual        :   1703 token/s，为 CUDA graph 原生的 99%
 
 我们先用白话描述一下这个记忆子层在算什么：在第 12 层 MLP 旁边放一个形状为 `[hidden, hidden]` 的快权重矩阵 $$M$$（每个请求各自拥有一份，初始为零）。
 - **读取**：每个经过第 12 层的 token，先把自己的残差流输入 $$x$$ 做归一化得到键 $$k$$，从矩阵里读出 $$M k$$，乘上一个门控系数 `gate`（演示中设为 `2`），加到 MLP 输出后的残差流里。
-- **写入（更新）**：每凑满固定长度的一块（这里设 `chunk=16`，即 16 个 token），矩阵 $$M$$ 就对着目标 $$\|M k - y\|^2$$（其中 $$y$$ 是这一层 MLP 的输出）走一步梯度下降（学习率设为 `1.0`）。
+- **写入（更新）**：每凑满固定长度的一块（这里设 `chunk=16`，即 16 个 token），矩阵 $$M$$ 就对着目标 $$\Vert M k - y\Vert ^2$$（其中 $$y$$ 是这一层 MLP 的输出）走一步梯度下降（学习率设为 `1.0`）。
 
 这就是 TTT（Test-Time Training）或 Titans 一类“边读边写的快权重记忆”的骨架。当 `gate = 0` 时，读出的记忆项被乘零丢弃，模型退化为原模型。
 

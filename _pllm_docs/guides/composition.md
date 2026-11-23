@@ -191,20 +191,22 @@ For error messages covering other composition conflicts, see the [Effects and re
 
 1. A composed workload `Both` contains a monitoring component `monitor: StreamNorm`, whose method declares `@pllm.export(name="stream_norm", ...)`. When consuming events on the host, does `monitor.on_export(event)` receive `event.tensor_name` as `"monitor.stream_norm"` or `"stream_norm"`? Why?
 
-<details>
+<details markdown="1">
 <summary>Answer</summary>
 
 `"stream_norm"`. Before dispatching a GPU export event into a component's own `on_export` callback, pLLM's export router strips the outer field prefix `monitor.`. This preserves component reusability: sub-components can be written and unit-tested without knowing what field name an outer workload will mount them under.
+
 </details>
 
 2. A researcher wants component A to compute per-row classification features into state `feat`, and component B to read `feat` to produce logit biases. They write A and B as two sub-workloads in an outer dataclass, and hit an error when declaring `pllm.parameter("a.feat", "value")` in B. Why does pLLM disallow this, and what is the right implementation?
 
-<details>
+<details markdown="1">
 <summary>Answer</summary>
 
 pLLM enforces component independence: each component's state trajectory must match running it standalone. Cross-component state reads/writes would introduce implicit timing dependencies and break the `component independence` contract check.
 
 Right approach: Because `feat` is a tightly shared intermediate state between the two methods, they belong to the same algorithm semantically. Put both the producer method and the consumer method of `feat` inside a single `pllm.Workload` class.
+
 </details>
 
 </div>
@@ -381,20 +383,22 @@ except ValueError as e:
 
 1. 组合负载 `Both` 中包含监控组件 `monitor: StreamNorm`，其内部方法声明了 `@pllm.export(name="stream_norm", ...)`。在宿主端消费事件时，`monitor.on_export(event)` 接收到的 `event.tensor_name` 是 `"monitor.stream_norm"` 还是 `"stream_norm"`？为什么？
 
-<details>
+<details markdown="1">
 <summary>答案</summary>
 
 是 `"stream_norm"`。pLLM 的导出分发机制在将 GPU 导出的事件送入组件自身的 `on_export` 回调前，会自动剥离外层字段名前缀 `monitor.`。这样设计的目的是实现组件复用：子组件编写和单测时无需感知外部挂载它的字段名。
+
 </details>
 
 2. 研究员想要让组件 A 计算出每一行的分类特征，并将其存入状态 `feat`，再让组件 B 读取 `feat` 生成对应的 logits 偏置。他们把 A 和 B 写成了两个独立的子负载拼入外层 dataclass，但在 B 中声明 `pllm.parameter("a.feat", "value")` 时报错。为什么 pLLM 不支持这种写法？正确的实现方式是什么？
 
-<details>
+<details markdown="1">
 <summary>答案</summary>
 
 pLLM 强制组件独立性：每个组件的状态轨迹必须与它单独运行时完全一致，跨组件读写状态会引入隐式时序依赖并破坏单测契约（`component independence` 检查会失败）。
 
 正确做法：由于状态 `feat` 本就是这两个方法紧密共享的核心中间量，它们在算法语义上属于同一个算法。应该把产生 `feat` 的方法和读取 `feat` 的方法写在同一个 `pllm.Workload` 类中。
+
 </details>
 
 </div>

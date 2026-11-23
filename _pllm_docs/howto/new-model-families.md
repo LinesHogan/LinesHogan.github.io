@@ -212,17 +212,19 @@ For exact rejection messages, causes, and fixes related to this page, see the [E
 ## 7. Self-Check {#en-sec-7}
 
 1. On Qwen3-MoE, why does attaching LoRA to attention `v_proj` work while attaching LoRA to MLP `down_proj` is rejected?
-<details>
+<details markdown="1">
 <summary>Answer</summary>
 
 Qwen3-MoE keeps the same attention layout as dense Qwen3, so attention <code>v_proj</code> is a single uniform dense matrix where a clean low-rank delta applies. Its MLP layers, however, are sparse Mixture-of-Experts layers that route tokens dynamically to many separate expert networks, with no single dense projection matrix to overlay.
+
 </details>
 
 2. When loading the Kimi K2.5 slice, why is `trust_remote_code=True` mandatory even though the model runs on vLLM's native DeepSeek V3 kernels?
-<details>
+<details markdown="1">
 <summary>Answer</summary>
 
 The slice tool strips <code>auto_map</code> from the model config so the backbone runs directly on vLLM's built-in <code>DeepseekV3ForCausalLM</code> implementation, requiring no remote model code. However, Kimi's tokenization depends on its custom <code>tokenization_kimi.py</code>; omitting <code>trust_remote_code=True</code> causes Transformers to fall back to a generic tokenizer conversion that splits tokens differently (e.g., splitting <code>"I'm"</code> into two tokens).
+
 </details>
 
 ---
@@ -429,17 +431,19 @@ with pllm.make_llm(slice_config, workload=ObserveResidual()) as llm:
 ## 7. 自测 {#zh-sec-17}
 
 1. 为什么在 Qwen3-MoE 模型上，给注意力层的 `v_proj` 挂载 LoRA 可以正常运行，而给 MLP 的 `down_proj` 挂载 LoRA 会被直接拒绝？
-<details>
+<details markdown="1">
 <summary>答案</summary>
 
 Qwen3-MoE 保留了与 Qwen3 相同的注意力结构，注意力层的 `v_proj` 是规整的单一稠密矩阵，可以切出清晰的低秩修正。而其 MLP 层是稀疏专家层，token 会被路由门控分发到许多独立的小专家网络中，不存在单一的稠密投影矩阵，因此 pLLM 拒绝在此挂载单一的 MLP LoRA 改写。
+
 </details>
 
 2. 为什么在加载 Kimi K2.5 切片时必须显式指定 `trust_remote_code=True`，而模型本身却能使用 vLLM 原生的 DeepSeek V3 算子运行？
-<details>
+<details markdown="1">
 <summary>答案</summary>
 
 切片工具生成切片配置时去掉了模型的 `auto_map`，模型骨干网络直接复用 vLLM 内置的原生 `DeepseekV3ForCausalLM` 实现，因此模型前向本身不需要远程代码。但 Kimi 的分词逻辑依赖自定义的 `tokenization_kimi.py`，如果省略 `trust_remote_code=True`，Transformers 会自动回退到通用分词转换，导致词元切分不一致（例如将 `"I'm"` 错误切分为两个 token）。
+
 </details>
 
 ---

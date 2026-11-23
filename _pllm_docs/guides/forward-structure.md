@@ -390,24 +390,27 @@ For exact error messages, root causes, and fixes when declarations on this page 
 ## Self-Check {#en-self-check}
 
 1. Why is an identity `@pllm.custom_residual` (returning `x + y` or `v`) bitwise equal to native vLLM in eager mode, yet slightly different in bf16 rounding from native vLLM's default graph mode?
-<details>
+<details markdown="1">
 <summary>Answer</summary>
 
 In default graph mode, native vLLM uses PyTorch Inductor fused kernels (such as Fused Add+Norm). When `@pllm.custom_residual` is attached, vLLM captures the model's unfused operators into CUDA graphs instead. The arithmetic therefore matches eager mode bitwise while exhibiting normal bf16 floating-point rounding differences relative to Inductor's fused kernels.
+
 </details>
 
 2. Why does `kv.attend(q, topk=...)` save read bandwidth and FLOPs without reducing per-request KV VRAM capacity?
-<details>
+<details markdown="1">
 <summary>Answer</summary>
 
 `kv.attend(q, topk=...)` reads only the selected positions when computing attention softmax and GEMM, saving memory read bandwidth. However, all historical tokens' KVs must remain resident in physical VRAM pages so future tokens can score and select from them, so no physical blocks can be freed.
+
 </details>
 
 3. In looped-depth models, how do `layers(...)`'s default `kv="commit"` and `kv="peek"` differ, and why did the Ouro paper find overwriting every pass (keeping the last pass) works well (78.85) while keeping only the first pass collapses (18.73)?
-<details>
+<details markdown="1">
 <summary>Answer</summary>
 
 `kv="commit"` writes each pass's computed K/V into the cache, with later passes overwriting earlier ones, so subsequent tokens see the refined high-quality K/V from that token's final loop pass (78.85 on GSM8K in the Ouro paper). Using `kv="peek"` after the first pass leaves only the coarse shallow K/V from pass 1 in the cache, starving later tokens of looped deep representations and collapsing models trained with looped depth (18.73 on GSM8K).
+
 </details>
 
 </div>
@@ -783,24 +786,27 @@ print(testing.check(StepLoopWorkload(), CONFIG).passed)
 ## 自测 {#zh-sec-26}
 
 1. 为什么 `@pllm.custom_residual` 的恒等改写（返回 `x + y` 或 `v`）与 eager 模式的原生 vLLM 逐位相同，却与默认图模式的原生 vLLM 存在微小 bf16 舍入差异？
-<details>
+<details markdown="1">
 <summary>答案</summary>
 
 默认图模式下的原生 vLLM 会使用 PyTorch Inductor 融合算子（例如 Fused Add+Norm）。当挂载 `@pllm.custom_residual` 时，vLLM 改为捕获模型原本的非融合算子到 CUDA graph 中。因此数学运算与 eager 模式完全逐位一致，但和 Inductor 融合算子之间存在正常的 bf16 浮点舍入差异。
+
 </details>
 
 2. 为什么 `kv.attend(q, topk=...)` 能够节省读取带宽与 FLOPs，却无法降低每个请求占用的 KV 显存容量？
-<details>
+<details markdown="1">
 <summary>答案</summary>
 
 `kv.attend(q, topk=...)` 只是在计算 attention softmax 和 GEMM 时仅读取被选中的位置，从而节省了显存读取带宽。但所有历史 token 的 KV 仍然必须常驻在物理显存页中，供未来的 token 计算相关性分数并从中挑选，因此无法释放物理显存块。
+
 </details>
 
 3. 在循环深度模型中，`layers(...)` 默认 `kv="commit"` 与 `kv="peek"` 分别有什么影响？为什么 Ouro 论文发现每一遍都覆盖写回（保留最后一遍）效果优异（78.85），而只留第一遍（18.73）会导致模型崩掉？
-<details>
+<details markdown="1">
 <summary>答案</summary>
 
 `kv="commit"` 每一遍都把算出的 K/V 写进缓存，后一遍覆盖前一遍，因此后续 token 看到的是这个 token 最后一遍循环提炼后的高质量 K/V；Ouro 论文实测 GSM8K 达 78.85。若改用 `kv="peek"`（或只在第一遍 commit、后续 peek），缓存里留下的只是第一遍浅层计算的粗糙 K/V，使得后续 token 无法利用深层循环的特征，导致按循环训练过的模型崩掉（GSM8K 仅 18.73）。
+
 </details>
 
 </div>

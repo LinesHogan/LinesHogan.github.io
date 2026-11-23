@@ -277,25 +277,28 @@ When patterns on this page are rejected, exact error messages, causes, and fixes
 
 ## Self-Check {#en-self-check}
 
-<details>
+<details markdown="1">
 <summary>1. An activation steering algorithm wants to add a steering vector onto the output of layer 12. Should it read and modify <code>pllm.residual(12)</code> or <code>pllm.hidden(12)</code>? Why?</summary>
 
 **Answer**: Use `pllm.residual(12)`.
 **Why**: The residual stream is the main backbone carrying accumulated information across layers—`residual(12)` holds the sum of token embeddings and all sublayer outputs through layer 12, and the next layer reads directly from it. `pllm.hidden(12)` is only layer 12's fresh MLP increment before the residual addition; steering on `hidden` misses the accumulated context from earlier layers.
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>2. Why does reading <code>pllm.base_logits()</code> inside a <code>@pllm.add_logits</code> method fail? If an algorithm needs to add a penalty based on current predicted probabilities, what should it read instead?</summary>
 
 **Answer**: `@pllm.add_logits` runs before sampling (`BEFORE_SAMPLE`) and contributes to the logits fed into the sampler, whereas `pllm.base_logits()` is the unmodified base-model logits materialized only after sampling (`AFTER_SAMPLE`). Reading it before sampling creates a causal cycle in the schedule.
 Read `pllm.layer_logits((-1,))` instead to access the model's unadjusted final-layer logits before sampling.
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>3. If you want to extract representations for every token in the prompt for clustering, can you read <code>tokens="all"</code> inside a <code>@pllm.train</code> method? Why or why not?</summary>
 
 **Answer**: No.
 **Why**: Online training and in-forward intervention methods such as `@pllm.train` run inside CUDA graphs whose buffers and row dimension are statically sized to `max_num_seqs`. A prompt's total token count is bounded by `max_num_batched_tokens` (typically thousands), far larger than `max_num_seqs`. Only `@pllm.export` can chunk large variable-length token batches and stream them to a host queue.
+
 </details>
 
 </div>
@@ -558,25 +561,28 @@ tap      lm_head[0], prefill,decode: 29171840 bytes shared by top1
 
 ## 自测 {#zh-sec-15}
 
-<details>
+<details markdown="1">
 <summary>1. 激活引导（Activation Steering）算法希望在第 12 层的输出上叠加一个引导向量，应该读取并改写 <code>pllm.residual(12)</code> 还是 <code>pllm.hidden(12)</code>？为什么？</summary>
 
 **答案**：应当使用 `pllm.residual(12)`。
 **原因**：残差流（residual stream）是模型跨层传递累积信息的主干通道，第 12 层的 `residual` 包含了词嵌入和前 12 层所有子层的输出之和，下一层也是直接从残差流上读取输入的。而 `pllm.hidden(12)` 仅仅是第 12 层 MLP 自身新计算出来的单层增量，尚未加回残差流。如果针对 `hidden` 进行引导，会脱离主干残差流，丢失此前各层的累积上下文。
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>2. 为什么在 <code>@pllm.add_logits</code> 方法中读取 <code>pllm.base_logits()</code> 会报错？如果算法需要基于当前预测概率增加惩罚项，该怎么写？</summary>
 
 **答案**：`@pllm.add_logits` 运行在采样之前（`BEFORE_SAMPLE`），其输出直接参与决定最终送进采样器的 logits；而 `pllm.base_logits()` 是采样阶段记录的基座模型原始 logits，只能在采样之后（`AFTER_SAMPLE`）读取。如果在采样前读取，会在图调度中产生因果循环依赖。
 如果算法需要在采样前读取模型的未调整输出，应声明读取 `pllm.layer_logits((-1,))`。
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>3. 如果想要提取整个 prompt 中每个 token 的表征做聚类分析，能否直接在一个 <code>@pllm.train</code> 方法中读取 <code>tokens="all"</code>？为什么？</summary>
 
 **答案**：不能。
 **原因**：`@pllm.train` 等在线训练与前向干预方法运行在 CUDA graph 内，其显存和张量行数是按照请求数量（`max_num_seqs`）预先分配固定大小的；而 prompt 中的 token 总数上限是 `max_num_batched_tokens`（通常为数千），远大于请求数。只有 `@pllm.export` 具有将变长的大批 token 行切块分批流式传输回主机端队列的能力。
+
 </details>
 
 </div>

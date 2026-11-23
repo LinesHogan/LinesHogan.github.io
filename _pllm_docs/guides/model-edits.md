@@ -399,22 +399,25 @@ Therefore, pLLM enforces `enable_prefix_caching=False` whenever a workload alter
 
 ## Self-Check {#en-self-check}
 
-<details>
+<details markdown="1">
 <summary>1. Why cannot a trainable low-rank LoRA state use the default init=pllm.Zeros()?</summary>
 
 The low-rank delta is $$\Delta y = \text{scale} \cdot (x A^T) B^T$$. The partial derivative of the loss with respect to $$A$$ is multiplied by $$B^T$$, and the derivative with respect to $$B$$ is multiplied by $$A^T$$. If both $$A$$ and $$B$$ start at zero, both first-step gradients are mathematically zero, so the optimizer can never move the parameters. Non-zero initialization (such as random Gaussian $$A$$ and zero $$B$$) is required.
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>2. Why does an ActivationPatch at layer 12 not alter the layer-12 KV cache of past tokens?</summary>
 
 Autoregressive decoding follows Forward-only KV semantics: past tokens' KV entries were already computed and committed during the forward pass that processed those tokens. Updating past KV caches to reflect new activation edits would require re-running the forward pass over the entire prefix on every generation step, turning $$O(1)$$ per-step decode into $$O(T)$$ and destroying concurrent throughput.
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>3. Does attaching pllm.model.Adapter to an InstanceState force eager mode?</summary>
 
 No. Whether bound to `RequestState` or a shared `InstanceState`, `pllm.model.Adapter` resolves deltas via a graph-capturable overlay table indexed by row or version slot, staying inside vLLM's CUDA graphs. Whole-model CUDA graphs are omitted only when explicitly disabled (`cuda_graphs=False`) or when combined with a sliced-graph feature such as `@pllm.custom_forward`.
+
 </details>
 
 </div>
@@ -799,22 +802,25 @@ Prefix Caching 的基本假设是“相同的 token 序列产生完全相同的 
 
 ## 自测 {#zh-sec-23}
 
-<details>
+<details markdown="1">
 <summary>1. 为什么在带优化器的低秩 LoRA 状态中，不能使用默认的 init=pllm.Zeros()？</summary>
 
 低秩矩阵增量计算公式为 $$\Delta y = \text{scale} \cdot (x A^T) B^T$$。损失对 $$A$$ 的偏导数乘有因子 $$B^T$$，对 $$B$$ 的偏导数乘有因子 $$A^T$$。若 $$A$$ 和 $$B$$ 均初始化为全 0，则两个矩阵的第一步梯度数学上严格恒为 0，优化器永远无法学动参数。必须使用非零初始化（如 $$A$$ 高斯随机初始化，$$B$$ 置 0）。
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>2. 为什么 ActivationPatch 对第 12 层的修改不会改变旧 token 在第 12 层的 KV cache？</summary>
 
 自回归解码遵循 Forward-only KV 机制：旧 token 的 KV 缓存在处理该 token 的当步前向时就已经计算并落盘。若要让过去的 KV 缓存也反映新的激活干预，引擎必须在每个生成步骤重新执行一遍整个历史前缀的前向传播，这会导致生成延迟从 $$O(1)$$ 骤增为 $$O(T)$$，严重破坏并发吞吐。
+
 </details>
 
-<details>
+<details markdown="1">
 <summary>3. 挂载到 InstanceState 上的 pllm.model.Adapter 会退回 eager 模式吗？</summary>
 
 不会。无论绑定 `RequestState` 还是共享 `InstanceState`，`pllm.model.Adapter` 都通过统一的可进图覆盖表按每行或版本槽地址解析增量，保留在 vLLM 的 CUDA graph 内。只有在主动关闭 CUDA graph（`cuda_graphs=False`）或使用了切片捕获图写法（如 `@pllm.custom_forward`）时才不会保留整模型 CUDA graph。
+
 </details>
 
 </div>

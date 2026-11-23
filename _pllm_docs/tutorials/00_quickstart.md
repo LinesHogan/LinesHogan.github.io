@@ -271,23 +271,29 @@ The first error asks you to give the parameter a source. Why doesn't pLLM guess 
 
 1. In Hugging Face, activation steering is a forward hook. Why can't you copy that pattern directly into vLLM?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 vLLM captures the model into CUDA graphs, and Python hooks are not invoked during graph replay. In addition, tokens from multiple requests are packed into a single tensor, so a hook has no way to tell which row belongs to which request. pLLM lets you declare "patch layer 12's output using state `steer`," and handles installing the patch and matching every row.
+
 </details>
 
 2. In Step 5, suppose you call `generate` once with `batch=pllm.io.StateImport(...)` and then call `generate` again without `batch=`. Which vector do requests in the second call read?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 The previously imported vector. Every call with `batch=` publishes a new version of the state; calls without `batch=` keep using the latest published version.
+
 </details>
 
 3. In `testing.check(Steering(), CONFIG)`, the `"activation application"` row reports `SKIP`. Does that mean the patch is broken?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 No. No model weights are loaded on CPU, so patches that operate inside the model cannot execute; the check explicitly skips it and explains why. To verify that part, run `pllm.testing.check_on_gpu` on a GPU.
+
 </details>
 
 ## Next Steps {#en-next-steps}
@@ -580,26 +586,32 @@ Unused: the workload has no effect on the model: add @pllm.train, @pllm.add_logi
 
 1. 在 Hugging Face 里，激活引导是一个 forward hook。为什么在 vLLM 里不能照搬？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 vLLM 把模型捕获进 CUDA graph，重放 graph 时 Python hook 不会被调用；而且几个请求的 token 被拼进同一个张量，
 hook 不知道哪一行属于哪个请求。pLLM 让你声明"改第 12 层的输出、读状态 `steer`"，由它把补丁装进模型、对上每一行。
+
 </details>
 
 2. 第五步里，先调用一次带 `batch=pllm.io.StateImport(...)` 的 `generate`，再调用一次不带 `batch=` 的 `generate`。
    第二次调用里的请求读到的是哪个向量？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 上一次导入的向量。每次带 `batch=` 的调用发布状态的一个新版本；不带 `batch=` 的调用沿用最新已发布的版本。
+
 </details>
 
 3. `testing.check(Steering(), CONFIG)` 里 "activation application" 一行是 `SKIP`。这说明补丁有问题吗？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 不说明。CPU 上没有加载模型，作用在模型内部的补丁无从执行，所以检查明确跳过它并写出原因。要确认这部分，
 在 GPU 上运行 `pllm.testing.check_on_gpu`。
+
 </details>
 
 ## 下一步 {#zh-sec-10}

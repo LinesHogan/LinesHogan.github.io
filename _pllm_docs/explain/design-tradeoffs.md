@@ -410,18 +410,27 @@ When an algorithm hits a boundary today because it conflicts with physical or se
 ## Self-Check {#en-self-check}
 
 1. **Why does pLLM allow multiple `@pllm.add_logits` methods in a workload, yet at most one `@pllm.guide_sampling` method?**
-   <details><summary>Answer</summary>
+   <details markdown="1">
+   <summary>Answer</summary>
+
    <code>@pllm.add_logits</code> simply adds bias vectors to pre-filter vocabulary logits; addition is commutative and associative ($$A + B = B + A$$), so the result is uniquely defined regardless of order. By contrast, <code>@pllm.guide_sampling</code> performs nonlinear contrastive reweighting ($$(1 + \beta)\text{logits} - \beta\,\text{pred\_logits}$$) on a distribution already truncated by top-k / top-p filtering. Combining two predictions—averaging features, summing log-probabilities, or cascading truncations—represents distinct algorithmic semantics, which pLLM refuses to guess.
+
    </details>
 
 2. **If a researcher wants to drop unimportant prompt tokens to reduce Time to First Token (TTFT), why can't they pass an `active=` mask for prompt rows in `@pllm.custom_forward`?**
-   <details><summary>Answer</summary>
+   <details markdown="1">
+   <summary>Answer</summary>
+
    When a row skips a layer via early exit, pLLM backfills approximate K/V entries using that layer's projections on the row's current hidden state so the KV cache stays contiguous. Prompts span tens to thousands of tokens; skipping layers during prefill replaces whole stretches of upper-layer context KV with synthetic approximations. Over hundreds of subsequent decode steps, every generated token would attend over distorted prompt KV, rapidly degrading generation quality.
+
    </details>
 
 3. **Why is enabling Prefix Caching mutually exclusive with `@pllm.custom_residual` or parameter overlays?**
-   <details><summary>Answer</summary>
+   <details markdown="1">
+   <summary>Answer</summary>
+
    Prefix caching assumes that identical prompt token sequences always produce identical KV caches and indexes reusable pages solely by token-ID hashes. When <code>@pllm.custom_residual</code> or parameter overlays alter forward computation, the resulting KV values depend on dynamic per-request state, online-trained weight versions, or injected steering vectors. Enabling prefix caching would cause new requests with matching prompts to reuse stale KV pages produced under another request's state, violating mathematical correctness.
+
    </details>
 
 ---
@@ -828,18 +837,27 @@ disable prefix caching when using parameter overlays or activation patches
 ## 自测 {#zh-sec-58}
 
 1. **为什么在 pLLM 中可以声明多个 `@pllm.add_logits`，却只能声明一个 `@pllm.guide_sampling`？**
-   <details><summary>答案</summary>
+   <details markdown="1">
+   <summary>答案</summary>
+
    <code>@pllm.add_logits</code> 只是在采样前向词表 logits 累加偏置向量，加法运算满足交换律与结合律（$$A + B = B + A$$），无论添加顺序如何，数学结果完全唯一确定。而 <code>@pllm.guide_sampling</code> 是在经过 top-k / top-p 过滤后的分布上执行非线性的对比重加权（基于 $$(1 + \beta)\text{logits} - \beta\,\text{pred\_logits}$$）。如果存在多个预测特征，它们应该在特征空间加权平均、在对数概率空间相加、还是分层级联截断，代表着完全不同的算法意图，pLLM 拒绝替开发者做出未经证实的语义猜测。
+
    </details>
 
 2. **如果一位研究员希望通过丢弃 prompt 中不重要的 token 来缩减首字延迟（TTFT），为什么不能在 `@pllm.custom_forward` 中直接给 prompt 传入 `active=` 掩码？**
-   <details><summary>答案</summary>
+   <details markdown="1">
+   <summary>答案</summary>
+
    当某一行早退跳过某一层时，为了保证 KV 缓存的物理与结构完整，pLLM 会用当前隐藏状态经过该层的投影补齐近似的 K/V。Prompt 通常由数十到数千个连续 token 组成，如果在 prompt 阶段大面积早退，高层网络中整段上下文的 KV 将全被合成的近似值占据；在接下来的数百步自回归解码中，后续生成的每一个 decode token 在做因果注意力时都会读取这些严重失真的 prompt KV，导致生成文本迅速退化。
+
    </details>
 
 3. **为什么开启前缀缓存（Prefix Caching）与使用 `@pllm.custom_residual` 或参数覆盖是互斥的？**
-   <details><summary>答案</summary>
+   <details markdown="1">
+   <summary>答案</summary>
+
    前缀缓存的基本假设是“相同的 prompt token 序列必然产生逐位完全一致的 KV 缓存”，并仅以 token id 的哈希值作为复用依据。而当使用 <code>@pllm.custom_residual</code> 或参数覆盖改写前向计算时，模型层内产生的 KV 数值不仅取决于输入的 token id，还取决于该请求当前的动态状态、在线微调的权重版本或外部注入的引导向量。如果开启前缀缓存，后续相同 prompt 的新请求会错误地复用前一个请求在不同状态下产生的旧 KV 缓存，破坏推理的数学确定性。
+
    </details>
 
 ---

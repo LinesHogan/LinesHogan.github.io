@@ -438,13 +438,19 @@ For exact error messages, root causes, and fixes when declarations on this page 
 #### Self-Check Questions {#en-self-check-questions}
 
 1. **Question**: During decode training, if you want certain tokens not to produce gradient updates, is it valid to simply return `0.0 * loss` in the training method? Why or why not?
-   <details><summary>Answer</summary>
+   <details markdown="1">
+   <summary>Answer</summary>
+
    No. For two reasons: first, with the default <code>reduction="mean"</code>, zero-loss rows still count toward the denominator $$n_s$$, diluting the gradients of active rows sharing the same state in that step; second, and more importantly, in AdamW a zero gradient still advances the step counter $$t$$, decays momentum, and applies weight decay, so parameters still change. To truly skip updates, exclude rows via the <code>rows=</code> selector where conditional updates are supported, or use <code>reduction="sum"</code> with zero weights to avoid diluting the denominator.
+
    </details>
 
 2. **Question**: Why does the default <code>publish_lag=1</code> mean that step $$n$$'s training result is not read by the model forward until step $$n+2$$? What happens if you force <code>publish_lag=0</code>?
-   <details><summary>Answer</summary>
+   <details markdown="1">
+   <summary>Answer</summary>
+
    Because online training is scheduled asynchronously on the side CUDA stream (<code>side</code> lane), overlapping step $$n$$'s parameter update with step $$n+1$$'s model forward on the GPU timeline. To avoid stalling step $$n+1$$'s forward while waiting for backward and AdamW to finish, step $$n+1$$'s forward reads the stable version already published before step $$n$$ started (i.e., step $$n-1$$'s update), so step $$n$$'s new version takes effect at step $$n+2$$. Setting <code>publish_lag=0</code> forces step $$n+1$$'s forward to wait serially for step $$n$$'s training to finish, breaking pipeline overlap and introducing timeline bubbles—most noticeable on shorter steps (e.g., on 0.5B at 128 concurrency with training only, throughput drops from 91.9% to 89.8% of native; on 7B where a step is much longer, the difference is near measurement noise).
+
    </details>
 
 </div>
@@ -867,13 +873,19 @@ print(f"eager_reason: {report.eager_reason!r}")
 #### 自测小问题 {#zh-sec-24}
 
 1. **问题**：在 decode 训练中，如果你希望某些 token 不产生梯度更新，直接在训练方法里返回 `0.0 * loss` 是否可行？为什么？
-   <details><summary>答案</summary>
+   <details markdown="1">
+   <summary>答案</summary>
+
    不可行。有两个原因：第一，若使用默认的 <code>reduction="mean"</code>，损失为 0 的行依然会作为分母 $$n_s$$ 的一部分计入均值，从而稀释同一状态在当前步其他有效行的梯度；第二，更关键的是在 AdamW 优化器中，零梯度依然会推进时间步 $$t$$、衰减动量并施加权重衰减（weight decay），导致参数依然发生变化。真正彻底跳过更新应在具备条件更新的环境下使用 <code>rows=</code> 选择器排除，或改用 <code>reduction="sum"</code> 配合零权重以避免稀释分母。
+
    </details>
 
 2. **问题**：为什么默认的 <code>publish_lag=1</code> 让第 $$n$$ 步的训练结果直到第 $$n+2$$ 步才能被模型前向读取？如果强行设为 <code>publish_lag=0</code> 会发生什么？
-   <details><summary>答案</summary>
+   <details markdown="1">
+   <summary>答案</summary>
+
    因为在线训练被调度在旁路 CUDA stream（<code>side</code> lane）上异步执行，第 $$n$$ 步的参数更新与第 $$n+1$$ 步的模型前向在 GPU 时间线上并行重叠。为了避免第 $$n+1$$ 步前向前停下来串行等待反向传播与 AdamW 完成，第 $$n+1$$ 步前向直接读取第 $$n$$ 步开始前已发布的稳定版本（即第 $$n-1$$ 步的更新结果），因此第 $$n$$ 步的新版本在第 $$n+2$$ 步才正式生效。如果设为 <code>publish_lag=0</code>，第 $$n+1$$ 步前向必须串行等待第 $$n$$ 步训练全部算完，这会打断流水线并引入时间线气泡，步越短代价越明显（例如 0.5B、128 并发、只训练时，吞吐从原生的 91.9% 降至 89.8%；7B 一步更长，差别在噪声附近）。
+
    </details>
 
 </div>

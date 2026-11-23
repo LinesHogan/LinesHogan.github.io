@@ -280,9 +280,11 @@ In RTX 4090 benchmarks (7B, 128 concurrency, 594 MiB table, `NGramPrior` from Ex
 * Host-resident table (`placement="host"`): 5,615 tok/s (96%), peak pLLM memory drops to **946 MiB** (only ~0.5 ms slower per step than device placement, saving the entire 594 MiB of VRAM);
 * Guided sampling capacity (`ESamp`, $$\beta=0.5$$): default `guidance_capacity=4096` achieves 5,678 tok/s (96.3%), with 256 and 1024 within noise of it; exact dense guidance (`guidance_capacity=None`) drops to 5,533 tok/s (93.9%).
 
-<details>
+<details markdown="1">
 <summary>Self-check: Why did a host lookup add 1–2 ms per step after also reading final_hidden in the same method?</summary>
+
 Because the same method read <code>final_hidden</code>, it had to wait until the entire model forward completed (anchored at <code>state.publish / main</code>) instead of launching at <code>request.prepare / side</code> at the start of the step. As a result, the ~1.6 ms PCIe transfer was completely exposed outside the forward pass. The fix is to isolate the lookup—which depends only on <code>input_tokens</code>—into an undecorated helper method and pass its output to the effect method via <code>pllm.result</code>.
+
 </details>
 
 ---
@@ -730,9 +732,11 @@ class FastHostLookup(pllm.Workload):
 * 主机端查表（`placement="host"`）：5,615 tok/s（96%），显存峰值降至 **946 MiB**（单步只比放显存慢约 0.5 ms，省下整张表的 594 MiB 显存）；
 * 引导采样容量（`ESamp`，$$\beta=0.5$$）：默认 `guidance_capacity=4096` 吞吐为 5,678 tok/s（96.3%），256 和 1024 与它相差在噪声内；精确 dense 路径（`guidance_capacity=None`）为 5,533 tok/s（93.9%）。
 
-<details>
+<details markdown="1">
 <summary>自测：为什么主机查表混读了 final_hidden 之后每步多出了 1–2 ms？</summary>
+
 因为同一个方法读取了 <code>final_hidden</code>，该方法必须等待模型前向全部计算完毕才能启动（anchor 是 <code>state.publish / main</code>），无法在步首的 <code>request.prepare / side</code> 发射。结果约 1.6 ms 的 PCIe 传输完全暴露在前向之外。解决办法是将只依赖 <code>input_tokens</code> 的查表拆成独立方法，通过 <code>pllm.result</code> 传递给效果方法。
+
 </details>
 
 ---

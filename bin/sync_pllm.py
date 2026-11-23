@@ -384,22 +384,40 @@ def convert_prose_chunk(
 
     out_lines: List[str] = []
     for line in chunk.splitlines():
-        is_table_row = line.lstrip().startswith("|")
 
         def restore_line_math(m: re.Match) -> str:
             idx = int(m.group(1))
             expr = math_tokens[idx]
-            if is_table_row:
-                expr = re.sub(r"(?<!\\)\|(?![|])", r"\\vert ", expr)
+            # Kramdown's block-level pipe-table parser runs before inline math and does NOT
+            # require a leading `|`, so ANY `|` inside `$$...$$` (even in paragraphs/blockquotes)
+            # splits the line into an accidental <table>, and `\|` inside real table cells gets
+            # unescaped to a single `|`. Always normalize to `\Vert ` / `\vert `.
+            expr = expr.replace(r"\|", r"\Vert ")
+            expr = expr.replace("||", r"\Vert ")
+            expr = expr.replace("|", r"\vert ")
             if "{{" in expr or "{%" in expr:
                 return "{% raw %}$$" + expr + "$${% endraw %}"
             return "$${}$$".format(expr)
 
         line = re.sub(r"\x00MATH(\d+)\x00", restore_line_math, line)
         line = re.sub(r"\x00CODE(\d+)\x00", lambda m: code_tokens[int(m.group(1))], line)
+        # Escape bare `|` inside inline HTML `<code>...</code>` so Kramdown never treats it as a table cell
+        if "<code>" in line and "|" in line:
+            line = re.sub(
+                r"<code>(.*?)</code>",
+                lambda m: "<code>{}</code>".format(m.group(1).replace("|", "&#124;")),
+                line,
+            )
         out_lines.append(line)
 
-    return "\n".join(out_lines)
+    result = "\n".join(out_lines)
+    # Enable Kramdown Markdown & MathJax parsing inside HTML <details> blocks
+    if "<details>" in result:
+        result = re.sub(r"<details>(?![^<]*markdown=)", '<details markdown="1">', result)
+        result = re.sub(r'([ \t]*)<details markdown="1"><summary>', r'\1<details markdown="1">\n\1<summary>', result)
+        result = re.sub(r"(</summary>)\n(?!\n)", r"\1\n\n", result)
+        result = re.sub(r"(?<!\n)\n([ \t]*</details>)", r"\n\n\1", result)
+    return result
 
 
 def transform_markdown_document(

@@ -83,14 +83,14 @@ In ordinary per-request training, methods return a per-row loss (`[rows]`) and t
 
 In per-request training, how many request rows appear in each engine step is decided dynamically by the continuous-batching scheduler, so user code cannot know the scheduling layout ahead of time and delegates reduction to the framework.
 
-A host batch, by contrast, consists of complete sequences assembled by your own Python host code. In sequence-level RL and alignment algorithms, how sequence lengths $$|o_i|$$ and group size $$G$$ are normalized is part of the algorithm's core mathematics and cannot be expressed during token-by-token generation:
+A host batch, by contrast, consists of complete sequences assembled by your own Python host code. In sequence-level RL and alignment algorithms, how sequence lengths $$\vert o_i\vert $$ and group size $$G$$ are normalized is part of the algorithm's core mathematics and cannot be expressed during token-by-token generation:
 
 | Algorithm | Scalar Loss Reduction Formula | Normalization Behavior and Meaning |
 | :--- | :--- | :--- |
-| **GRPO** | $$\frac{1}{G}\sum_{i=1}^{G} A_i \frac{1}{\|o_i\|} \sum_{t} \ell_{i,t}$$ | Averages each sequence internally by its own generated length $$\|o_i\|$$, then averages across the $$G$$ candidates in the group. Every sequence gets equal weight regardless of length. |
-| **DAPO** | $$\frac{\sum_{i=1}^{G} \sum_{t} A_i \ell_{i,t}}{\sum_{i=1}^{G} \|o_i\|}$$ | Sums all token losses across all sequences in the group and divides by the total token count. Longer sequences contribute proportionally more to the total gradient. |
+| **GRPO** | $$\frac{1}{G}\sum_{i=1}^{G} A_i \frac{1}{\Vert o_i\Vert } \sum_{t} \ell_{i,t}$$ | Averages each sequence internally by its own generated length $$\Vert o_i\Vert $$, then averages across the $$G$$ candidates in the group. Every sequence gets equal weight regardless of length. |
+| **DAPO** | $$\frac{\sum_{i=1}^{G} \sum_{t} A_i \ell_{i,t}}{\sum_{i=1}^{G} \Vert o_i\Vert }$$ | Sums all token losses across all sequences in the group and divides by the total token count. Longer sequences contribute proportionally more to the total gradient. |
 | **RLOO / REINFORCE** | $$\frac{1}{G}\sum_{i=1}^{G} A_i \sum_{t} \ell_{i,t}$$ | Sums token losses within each sequence and averages across the $$G$$ candidate sequences in the group. |
-| **Dr.GRPO** | $$\frac{1}{G}\sum_{i=1}^{G} A_i \frac{1}{L_{\max}} \sum_{t} \ell_{i,t}$$ | Replaces dynamic sequence length $$\|o_i\|$$ with a fixed maximum length constant $$L_{\max}$$, eliminating implicit length-normalization bias. |
+| **Dr.GRPO** | $$\frac{1}{G}\sum_{i=1}^{G} A_i \frac{1}{L_{\max}} \sum_{t} \ell_{i,t}$$ | Replaces dynamic sequence length $$\Vert o_i\Vert $$ with a fixed maximum length constant $$L_{\max}$$, eliminating implicit length-normalization bias. |
 
 Because only the algorithm author knows which reduction formula applies—and those formulas depend on full sequence lengths and advantage weights—the framework requires the method to compute the reduction explicitly and return a single scalar.
 
@@ -371,30 +371,38 @@ For exact error messages, root causes, and fixes when declarations on this page 
 
 1. Why must `max_host_training_rows` be declared upfront in `ExecutionOptions` when launching the engine?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 Backpropagating through the whole model temporarily consumes large amounts of activation and workspace VRAM. pLLM statically reserves this VRAM at engine startup based on the declared maximum row count so generation never hits unexpected OOM when allocating large training workspaces mid-run. Batches exceeding that row count are rejected immediately.
+
 </details>
 
 2. In a TTRL or GRPO loop, why do certain rounds take noticeably longer than others?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 Whenever the incoming training batch shape changes (e.g., number of sequences or maximum token length), pLLM compiles a training computation graph for that new shape, incurring a one-time compilation cost on that round. Once batch shapes stabilize, later steps reuse the compiled graph and return to normal speed.
+
 </details>
 
 3. Why cannot `@pllm.train` use `reduction="mean"` on host batch training, forcing you to divide manually inside the method?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 Different sequence-level RL and alignment algorithms (such as GRPO, DAPO, RLOO, and Dr.GRPO) normalize sequence lengths and candidate groups differently (per-sequence length, total batch tokens, or fixed max length). That math can only be expressed explicitly by the algorithm author on the host batch; a single generic reduction parameter cannot capture all of them.
+
 </details>
 
 4. When should you use `llm.generate(batch=...)` versus `llm.generate_feedback(...)`?
 
-<details><summary>Answer</summary>
+<details markdown="1">
+<summary>Answer</summary>
 
 Use `generate(batch=...)` when the algorithm re-samples all prompts every round and trains adapters inside the model forward (such as TTRL or online RL); use `generate_feedback(...)` when performing fine-grained partial retries (retrying only samples that failed verification, or keeping the model frozen while fitting a host-side reward head).
+
 </details>
 
 ---
@@ -471,14 +479,14 @@ model: pllm.model.CausalModel = pllm.causal_model("adapter_name")
 
 逐请求训练在每个引擎步处理多少个请求的行，是由连续批处理调度器动态决定的，算法代码无法预知调度结果，因此归约必须交给框架。
 
-而宿主批次是你自己在 Python 宿主端拼装好的完整序列。在序列级强化学习与对齐算法中，序列长度 $$|o_i|$$ 与候选组大小 $$G$$ 的归一化方式是算法核心数学的一部分，在线逐 token 生成时无法完成：
+而宿主批次是你自己在 Python 宿主端拼装好的完整序列。在序列级强化学习与对齐算法中，序列长度 $$\vert o_i\vert $$ 与候选组大小 $$G$$ 的归一化方式是算法核心数学的一部分，在线逐 token 生成时无法完成：
 
 | 算法 | 标量损失归约公式 | 归一化特点与数学含义 |
 | :--- | :--- | :--- |
-| **GRPO** | $$\frac{1}{G}\sum_{i=1}^{G} A_i \frac{1}{\|o_i\|} \sum_{t} \ell_{i,t}$$ | 先在每条序列内部除以其自身生成长度 $$\|o_i\|$$ 取平均，再在候选组内 $$G$$ 条序列间取均值。各序列权重相等，不受长度差异影响。 |
-| **DAPO** | $$\frac{\sum_{i=1}^{G} \sum_{t} A_i \ell_{i,t}}{\sum_{i=1}^{G} \|o_i\|}$$ | 将组内所有序列的所有 token 损失求和后，除以总 token 数。长序列由于 token 数量更多，对总梯度的贡献更大。 |
+| **GRPO** | $$\frac{1}{G}\sum_{i=1}^{G} A_i \frac{1}{\Vert o_i\Vert } \sum_{t} \ell_{i,t}$$ | 先在每条序列内部除以其自身生成长度 $$\Vert o_i\Vert $$ 取平均，再在候选组内 $$G$$ 条序列间取均值。各序列权重相等，不受长度差异影响。 |
+| **DAPO** | $$\frac{\sum_{i=1}^{G} \sum_{t} A_i \ell_{i,t}}{\sum_{i=1}^{G} \Vert o_i\Vert }$$ | 将组内所有序列的所有 token 损失求和后，除以总 token 数。长序列由于 token 数量更多，对总梯度的贡献更大。 |
 | **RLOO / REINFORCE** | $$\frac{1}{G}\sum_{i=1}^{G} A_i \sum_{t} \ell_{i,t}$$ | 序列内部对 token 损失直接求和，组间按候选序列数 $$G$$ 取均值。 |
-| **Dr.GRPO** | $$\frac{1}{G}\sum_{i=1}^{G} A_i \frac{1}{L_{\max}} \sum_{t} \ell_{i,t}$$ | 用固定的最大长度常数 $$L_{\max}$$ 代替动态序列长度 $$\|o_i\|$$，消除长度归一化带来的隐式偏置。 |
+| **Dr.GRPO** | $$\frac{1}{G}\sum_{i=1}^{G} A_i \frac{1}{L_{\max}} \sum_{t} \ell_{i,t}$$ | 用固定的最大长度常数 $$L_{\max}$$ 代替动态序列长度 $$\Vert o_i\Vert $$，消除长度归一化带来的隐式偏置。 |
 
 由于只有算法作者清楚自己希望采用上述哪种归约公式，且这些公式依赖完整的序列长度与优势权重，因此框架要求方法显式完成归约并返回单标量。
 
@@ -758,30 +766,38 @@ with pllm.make_llm(gpu_config, workload=TTRL()) as llm:
 
 1. 为什么 `max_host_training_rows` 必须在启动引擎时的 `ExecutionOptions` 中事先声明？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 对整模型执行反向传播需要临时占用大量激活值与计算工作区显存。pLLM 在启动引擎时按照声明的最大批次静态预留这部分显存，避免在生成途中因临时申请大块显存而发生不可预期的显存耗尽。送入超过该行数的批次会被直接拒绝。
+
 </details>
 
 2. 在 TTRL 或 GRPO 的循环中，为什么某几轮的执行耗时明显长于其他轮？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 当送入训练的批次形状（例如序列数、最大 token 长度）发生变化时，pLLM 需要为新的批次形状编译训练计算图，该轮会产生一次性的编译开销。当批次形状稳定后，后续训练复用已编译的图，耗时恢复正常。
+
 </details>
 
 3. 为什么在 `@pllm.train` 方法中不能使用 `reduction="mean"`，而必须在方法内自己做除法？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 不同的序列强化学习与对齐算法（如 GRPO、DAPO、RLOO、Dr.GRPO）对待序列长度与候选组的归一化方式不同（例如是按序列自身长度归一化、按整批总 token 数归一化、还是除以最大长度常数）。这些数学逻辑只能由算法作者在宿主批次上显式计算，框架无法用一个通用的 reduction 参数代表所有算法。
+
 </details>
 
 4. 什么时候应当使用 `llm.generate(batch=...)`，什么时候应当使用 `llm.generate_feedback(...)`？
 
-<details><summary>答案</summary>
+<details markdown="1">
+<summary>答案</summary>
 
 当算法每一轮都要重新对全部提示词采样并训练模型内的适配器（如 TTRL、在线强化学习）时，使用 `generate(batch=...)`；当算法执行细粒度的局部重试（例如只重试未通过判别的样本，或者模型冻结只在宿主侧拟合奖励头）时，使用 `generate_feedback(...)`。
+
 </details>
 
 ---
