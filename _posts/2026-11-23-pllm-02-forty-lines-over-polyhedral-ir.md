@@ -3,13 +3,15 @@ layout: post
 title: "复盘一次过度设计：删掉 45 万行多面体编译器，换成 40 行最长路"
 title_en: "Deleting 450,000 Lines of Polyhedral C for 40 Lines of Longest-Path: An Over-Engineering Postmortem"
 date: 2026-11-23 03:28:00 +0800
-description: "复盘引进 45.7 万行 ISL 多面体库却只用来算 lag >= 1 的弯路；展示如何将跨步时间线折叠为 8 刻度一致依赖图，以及如何用剖析器定位双卡 All-Reduce 优先级抢占与可分页内存假异步（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
-description_en: "Systems programmers have an occupational habit of judging technical depth by the weight of their dependencies (pLLM Engineering Series · Bilingual EN / 中文)"
+description: "复盘引进 45.7 万行 ISL 多面体库却只用来算 lag >= 1 的弯路；展示如何将跨步时间线折叠为 8 刻度一致依赖图，以及如何用剖析器定位双卡 All-Reduce 优先级抢占与可分页内存假异步（系统与架构专栏 · 支持 EN / 中文 一键切换）"
+description_en: "Systems programmers have an occupational habit of judging technical depth by the weight of their dependencies (Systems & Architecture · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
-categories: systems-architecture
-blog_track: systems-architecture
+categories: systems
+blog_track: systems
+blog_series_zh: "pLLM"
+blog_series_en: "pLLM"
 pllm_synced: true
-pllm_track: systems-architecture
+pllm_track: design-architecture
 pllm_order: 2
 pllm_code: "#02"
 pllm_badge_zh: "工程复盘"
@@ -17,7 +19,7 @@ pllm_badge_en: "Postmortem"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="复盘一次过度设计：删掉 45 万行多面体编译器，换成 40 行最长路" data-title-en="Deleting 450,000 Lines of Polyhedral C for 40 Lines of Longest-Path: An Over-Engineering Postmortem" data-desc-zh="复盘引进 45.7 万行 ISL 多面体库却只用来算 lag &gt;= 1 的弯路；展示如何将跨步时间线折叠为 8 刻度一致依赖图，以及如何用剖析器定位双卡 All-Reduce 优先级抢占与可分页内存假异步（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Systems programmers have an occupational habit of judging technical depth by the weight of their dependencies (pLLM Engineering Series · Bilingual EN / 中文)">
+<div class="zine-dispatch" data-title-zh="复盘一次过度设计：删掉 45 万行多面体编译器，换成 40 行最长路" data-title-en="Deleting 450,000 Lines of Polyhedral C for 40 Lines of Longest-Path: An Over-Engineering Postmortem" data-desc-zh="复盘引进 45.7 万行 ISL 多面体库却只用来算 lag &gt;= 1 的弯路；展示如何将跨步时间线折叠为 8 刻度一致依赖图，以及如何用剖析器定位双卡 All-Reduce 优先级抢占与可分页内存假异步（系统与架构专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Systems programmers have an occupational habit of judging technical depth by the weight of their dependencies (Systems &amp; Architecture · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
@@ -30,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（2/11 · 工程复盘）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/02-forty-lines-over-polyhedral-ir.md)
+> **系统与架构专栏（2/11 · 工程复盘）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/02-forty-lines-over-polyhedral-ir.md)
 
 写底层基础软件的人，心里多少都有点“编译器情结”。只要手头的活涉及循环迭代、跨步数据依赖外加两条 CUDA Stream 的并行编排，脑子里就容易浮现出多面体模型（Polyhedral Model）和整数线性规划——仿佛不先立一套工整的中间表示（IR），直接写几十行图算法就显得不够庄重。
 
@@ -123,7 +125,7 @@ fn propagate(bounds: &[(u32, u32)], edges: &[(usize, usize, i64)]) -> Result<Vec
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (2/11 · Postmortem)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/02-forty-lines-over-polyhedral-ir.md)
+> **Systems & Architecture (2/11 · Postmortem)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/02-forty-lines-over-polyhedral-ir.md)
 
 Systems engineers have a soft spot for compiler machinery. Hand us an iterative loop with cross-step state dependencies and two CUDA streams to coordinate, and our minds drift straight toward polyhedral models and integer linear programming—as if solving a scheduling problem without first designing an intermediate representation (IR) were cutting corners.
 

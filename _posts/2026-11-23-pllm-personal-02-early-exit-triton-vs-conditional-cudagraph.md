@@ -3,13 +3,15 @@ layout: post
 title: "不重录 CUDA Graph 实现动态切层：条件子图、掩码求值与早退 Triton 内核的比较"
 title_en: "Dynamic Layer Switching Without Recapturing CUDA Graphs: Conditional Subgraphs, Masked Evaluation, and Early-Exit Triton Kernels"
 date: 2026-11-23 15:48:00 +0800
-description: "在多个候选层预埋动态钩子时，对比 CUDA 条件子图的工作区显存占用、朴素 torch.where 的无效访存带宽，以及基于片上 L2 标量判定的早退 Triton 内核与归一化端口原地累加方案；同时记录 rank > 256 回退路径中一行 bool(mask.any()) 引发图捕获报错的原因（pLLM 底层排障手记 · 支持 EN / 中文 一键切换）"
-description_en: "Once an online serving engine has captured CUDA Graphs across batch buckets, dynamically switching the target layer of an activation intervention, tap, or LoRA adapter by re-recording the... (pLLM Debugging Postmortem · Bilingual EN / 中文)"
+description: "在多个候选层预埋动态钩子时，对比 CUDA 条件子图的工作区显存占用、朴素 torch.where 的无效访存带宽，以及基于片上 L2 标量判定的早退 Triton 内核与归一化端口原地累加方案；同时记录 rank > 256 回退路径中一行 bool(mask.any()) 引发图捕获报错的原因（工程与排障笔记 · 支持 EN / 中文 一键切换）"
+description_en: "Once an online serving engine has captured CUDA Graphs across batch buckets, dynamically switching the target layer of an activation intervention, tap, or LoRA adapter by re-recording the... (Engineering & Debugging Notes · Bilingual EN / 中文)"
 tags: pllm pytorch triton debugging
-categories: debugging-notes
-blog_track: debugging-notes
+categories: engineering-notes
+blog_track: engineering-notes
+blog_series_zh: "pLLM"
+blog_series_en: "pLLM"
 pllm_synced: true
-pllm_track: debugging-notes
+pllm_track: engineering-notes
 pllm_order: 102
 pllm_code: "N02"
 pllm_badge_zh: "静态图与早退内核"
@@ -17,7 +19,7 @@ pllm_badge_en: "CUDA Graphs & Triton"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="不重录 CUDA Graph 实现动态切层：条件子图、掩码求值与早退 Triton 内核的比较" data-title-en="Dynamic Layer Switching Without Recapturing CUDA Graphs: Conditional Subgraphs, Masked Evaluation, and Early-Exit Triton Kernels" data-desc-zh="在多个候选层预埋动态钩子时，对比 CUDA 条件子图的工作区显存占用、朴素 torch.where 的无效访存带宽，以及基于片上 L2 标量判定的早退 Triton 内核与归一化端口原地累加方案；同时记录 rank &gt; 256 回退路径中一行 bool(mask.any()) 引发图捕获报错的原因（pLLM 底层排障手记 · 支持 EN / 中文 一键切换）" data-desc-en="Once an online serving engine has captured CUDA Graphs across batch buckets, dynamically switching the target layer of an activation intervention, tap, or LoRA adapter by re-recording the... (pLLM Debugging Postmortem · Bilingual EN / 中文)">
+<div class="zine-dispatch" data-title-zh="不重录 CUDA Graph 实现动态切层：条件子图、掩码求值与早退 Triton 内核的比较" data-title-en="Dynamic Layer Switching Without Recapturing CUDA Graphs: Conditional Subgraphs, Masked Evaluation, and Early-Exit Triton Kernels" data-desc-zh="在多个候选层预埋动态钩子时，对比 CUDA 条件子图的工作区显存占用、朴素 torch.where 的无效访存带宽，以及基于片上 L2 标量判定的早退 Triton 内核与归一化端口原地累加方案；同时记录 rank &gt; 256 回退路径中一行 bool(mask.any()) 引发图捕获报错的原因（工程与排障笔记 · 支持 EN / 中文 一键切换）" data-desc-en="Once an online serving engine has captured CUDA Graphs across batch buckets, dynamically switching the target layer of an activation intervention, tap, or LoRA adapter by re-recording the... (Engineering &amp; Debugging Notes · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
@@ -30,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 编译与底层排障手记（2/4 · 静态图与早退内核）** · [pLLM 项目主页与文档](/pllm/) · [专栏与排障索引](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/02-early-exit-triton-vs-conditional-cudagraph.md)
+> **工程与排障笔记（#2 · 静态图与早退内核）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/02-early-exit-triton-vs-conditional-cudagraph.md)
 
 在做模型内部表征分析或在线激活引导（Steering）时，经常会遇到这样的场景：模型已经加载并完成了各个批次档位的 CUDA Graph 预热捕获，此时希望把读取残差或注入干预向量的位置从第 8 层调整到第 20 层，或者在同一个连续批处理步中让请求 A 走第 4 层 LoRA、请求 B 走第 18 层 LoRA、请求 C 传 `-1` 保持原模型输出。
 
@@ -132,7 +134,7 @@ if not target.is_cuda or target.dtype == torch.float64 or rank > 256 or target.s
 
 </div>
 
-> **pLLM Debugging Postmortems (2/4 · CUDA Graphs & Triton)** · [pLLM Project & Docs](/pllm/) · [Series & Postmortems Index](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/en/02-early-exit-triton-vs-conditional-cudagraph.md)
+> **Engineering & Debugging Notes (#2 · CUDA Graphs & Triton)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/en/02-early-exit-triton-vs-conditional-cudagraph.md)
 
 When analyzing internal model representations or running online activation steering, a familiar requirement turns up quickly: the model is already loaded and CUDA Graphs are already warmed up across every batch-size bucket, and now you want to move a residual tap or steering vector from layer 8 to layer 20—or, inside a single continuous-batching step, route Request A through a layer-4 LoRA, Request B through a layer-18 LoRA, and Request C through `-1` to leave the base model untouched.
 

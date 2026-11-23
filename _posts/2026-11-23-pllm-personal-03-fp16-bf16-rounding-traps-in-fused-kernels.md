@@ -3,13 +3,15 @@ layout: post
 title: "融合 Triton 内核与 PyTorch 原生算子的两次舍入差异：FP16 吸收效应与弱类型标量"
 title_en: "Two Rounding Traps in Fused Triton Kernels: FP16 Absorption and Weakly Typed Scalars"
 date: 2026-11-23 15:47:00 +0800
-description: "正态随机测试通过的融合内核，在 FP16 [2048, 0] 输入下算出 1 而原生 PyTorch 算出 0，在多卡张量并行 down_proj 的 FP32 部分和路径上又因缩放因子 0.123 出现尾数偏差。结合 IEEE 754 尾数间距与 PyTorch 弱类型标量规则还原两处差异，并讨论如何构造最小数值与步长测试用例（pLLM 底层排障手记 · 支持 EN / 中文 一键切换）"
-description_en: "Fusing a chain of eager PyTorch ops into one Triton kernel can change outputs on boundary inputs even when the algebra is identical—the culprit is whether intermediate values stay in... (pLLM Debugging Postmortem · Bilingual EN / 中文)"
+description: "正态随机测试通过的融合内核，在 FP16 [2048, 0] 输入下算出 1 而原生 PyTorch 算出 0，在多卡张量并行 down_proj 的 FP32 部分和路径上又因缩放因子 0.123 出现尾数偏差。结合 IEEE 754 尾数间距与 PyTorch 弱类型标量规则还原两处差异，并讨论如何构造最小数值与步长测试用例（工程与排障笔记 · 支持 EN / 中文 一键切换）"
+description_en: "Fusing a chain of eager PyTorch ops into one Triton kernel can change outputs on boundary inputs even when the algebra is identical—the culprit is whether intermediate values stay in... (Engineering & Debugging Notes · Bilingual EN / 中文)"
 tags: pllm pytorch triton debugging
-categories: debugging-notes
-blog_track: debugging-notes
+categories: engineering-notes
+blog_track: engineering-notes
+blog_series_zh: "pLLM"
+blog_series_en: "pLLM"
 pllm_synced: true
-pllm_track: debugging-notes
+pllm_track: engineering-notes
 pllm_order: 103
 pllm_code: "N03"
 pllm_badge_zh: "浮点算术与张量并行"
@@ -17,7 +19,7 @@ pllm_badge_en: "IEEE 754 & Tensor Parallelism"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="融合 Triton 内核与 PyTorch 原生算子的两次舍入差异：FP16 吸收效应与弱类型标量" data-title-en="Two Rounding Traps in Fused Triton Kernels: FP16 Absorption and Weakly Typed Scalars" data-desc-zh="正态随机测试通过的融合内核，在 FP16 [2048, 0] 输入下算出 1 而原生 PyTorch 算出 0，在多卡张量并行 down_proj 的 FP32 部分和路径上又因缩放因子 0.123 出现尾数偏差。结合 IEEE 754 尾数间距与 PyTorch 弱类型标量规则还原两处差异，并讨论如何构造最小数值与步长测试用例（pLLM 底层排障手记 · 支持 EN / 中文 一键切换）" data-desc-en="Fusing a chain of eager PyTorch ops into one Triton kernel can change outputs on boundary inputs even when the algebra is identical—the culprit is whether intermediate values stay in... (pLLM Debugging Postmortem · Bilingual EN / 中文)">
+<div class="zine-dispatch" data-title-zh="融合 Triton 内核与 PyTorch 原生算子的两次舍入差异：FP16 吸收效应与弱类型标量" data-title-en="Two Rounding Traps in Fused Triton Kernels: FP16 Absorption and Weakly Typed Scalars" data-desc-zh="正态随机测试通过的融合内核，在 FP16 [2048, 0] 输入下算出 1 而原生 PyTorch 算出 0，在多卡张量并行 down_proj 的 FP32 部分和路径上又因缩放因子 0.123 出现尾数偏差。结合 IEEE 754 尾数间距与 PyTorch 弱类型标量规则还原两处差异，并讨论如何构造最小数值与步长测试用例（工程与排障笔记 · 支持 EN / 中文 一键切换）" data-desc-en="Fusing a chain of eager PyTorch ops into one Triton kernel can change outputs on boundary inputs even when the algebra is identical—the culprit is whether intermediate values stay in... (Engineering &amp; Debugging Notes · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
@@ -30,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 编译与底层排障手记（3/4 · 浮点算术与张量并行）** · [pLLM 项目主页与文档](/pllm/) · [专栏与排障索引](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/03-fp16-bf16-rounding-traps-in-fused-kernels.md)
+> **工程与排障笔记（#3 · 浮点算术与张量并行）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/03-fp16-bf16-rounding-traps-in-fused-kernels.md)
 
 编写融合 GPU 内核时，常见的做法是把参考实现里的矩阵乘加搬进 Triton，中间累加统一用 `tl.float32`，最后写回显存时再转成目标半精度类型，随后用 `torch.randn` 生成几组正态分布张量跑 `assert_close` 验证。
 
@@ -117,7 +119,7 @@ delta = scaled.to(out_ptr.dtype.element_ty)
 
 </div>
 
-> **pLLM Debugging Postmortems (3/4 · IEEE 754 & Tensor Parallelism)** · [pLLM Project & Docs](/pllm/) · [Series & Postmortems Index](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/en/03-fp16-bf16-rounding-traps-in-fused-kernels.md)
+> **Engineering & Debugging Notes (#3 · IEEE 754 & Tensor Parallelism)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/en/03-fp16-bf16-rounding-traps-in-fused-kernels.md)
 
 The standard playbook for writing a fused GPU kernel is straightforward: move the reference multiply-add sequence into Triton, accumulate intermediates in `tl.float32`, cast back to the target half-precision dtype on the final store, and validate with `assert_close` over a handful of `torch.randn` tensors.
 

@@ -6,8 +6,8 @@ date: 2026-11-17 19:00:00 +0800
 description: "逐行审计 12 个基准的评测器源码与进化产物：往基线后补一句话就能复现 90% 的涨幅，修好评测问题后，中位涨幅从 17.6 pp 降到 0.8 pp。（支持 EN / 中文 一键切换，含 TL;DR）"
 description_en: "A line-by-line audit of graders and evolved artifacts across 12 benchmarks: one sentence recovers 90% of the headline gains, and repairing the graders drops the median from 17.6 pp to 0.8 pp. (Bilingual EN / 中文 with TL;DR)"
 tags: agent-evolution evaluation research
-categories: agent-research
-blog_track: agent-research
+categories: research
+blog_track: research
 blog_badge_zh: "分辨率假说 · 02"
 blog_badge_en: "Resolution · 02"
 thumbnail: /resolution-hypothesis/assets/gain_ledger.png

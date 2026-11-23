@@ -3,13 +3,15 @@ layout: post
 title: "连续批处理的行坐标还原：探针实测 vLLM `attn_metadata` 与图内无同步反解"
 title_en: "Reconstructing Token Coordinates in Flattened Batches: Probing vLLM's `attn_metadata` and Sync-Free On-GPU Parsing"
 date: 2026-11-23 03:21:00 +0800
-description: "示范如何用 5 步最小混批探针与单请求 MSE 对账测清 attn_metadata 的真实语义；从 CSR 行偏移出发推导图内零同步 searchsorted 坐标还原、边界夹紧抽页与 slot_mapping = -1 读写控制，并划分与上游三整数路由的职责边界（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
-description_en: "Continuous batching and chunked prefill pack variable-length request slices end to end into a 2D [num_tokens, hidden] tensor—trailed by silent padding rows under static CUDA Graphs (pLLM Engineering Series · Bilingual EN / 中文)"
+description: "示范如何用 5 步最小混批探针与单请求 MSE 对账测清 attn_metadata 的真实语义；从 CSR 行偏移出发推导图内零同步 searchsorted 坐标还原、边界夹紧抽页与 slot_mapping = -1 读写控制，并划分与上游三整数路由的职责边界（系统与架构专栏 · 支持 EN / 中文 一键切换）"
+description_en: "Continuous batching and chunked prefill pack variable-length request slices end to end into a 2D [num_tokens, hidden] tensor—trailed by silent padding rows under static CUDA Graphs (Systems & Architecture · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
-categories: engine-internals
-blog_track: engine-internals
+categories: systems
+blog_track: systems
+blog_series_zh: "pLLM"
+blog_series_en: "pLLM"
 pllm_synced: true
-pllm_track: engine-internals
+pllm_track: systems-internals
 pllm_order: 9
 pllm_code: "#09"
 pllm_badge_zh: "极客拆解 · 批次解包与元数据"
@@ -17,7 +19,7 @@ pllm_badge_en: "Deep Dive · Unpacking Jagged Batches"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="连续批处理的行坐标还原：探针实测 vLLM `attn_metadata` 与图内无同步反解" data-title-en="Reconstructing Token Coordinates in Flattened Batches: Probing vLLM's `attn_metadata` and Sync-Free On-GPU Parsing" data-desc-zh="示范如何用 5 步最小混批探针与单请求 MSE 对账测清 attn_metadata 的真实语义；从 CSR 行偏移出发推导图内零同步 searchsorted 坐标还原、边界夹紧抽页与 slot_mapping = -1 读写控制，并划分与上游三整数路由的职责边界（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Continuous batching and chunked prefill pack variable-length request slices end to end into a 2D [num_tokens, hidden] tensor—trailed by silent padding rows under static CUDA Graphs (pLLM Engineering Series · Bilingual EN / 中文)">
+<div class="zine-dispatch" data-title-zh="连续批处理的行坐标还原：探针实测 vLLM `attn_metadata` 与图内无同步反解" data-title-en="Reconstructing Token Coordinates in Flattened Batches: Probing vLLM's `attn_metadata` and Sync-Free On-GPU Parsing" data-desc-zh="示范如何用 5 步最小混批探针与单请求 MSE 对账测清 attn_metadata 的真实语义；从 CSR 行偏移出发推导图内零同步 searchsorted 坐标还原、边界夹紧抽页与 slot_mapping = -1 读写控制，并划分与上游三整数路由的职责边界（系统与架构专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Continuous batching and chunked prefill pack variable-length request slices end to end into a 2D [num_tokens, hidden] tensor—trailed by silent padding rows under static CUDA Graphs (Systems &amp; Architecture · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
@@ -30,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（9/11 · 极客拆解 · 批次解包与元数据）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/09-anatomy-of-attn-metadata.md)
+> **系统与架构专栏（9/11 · 极客拆解 · 批次解包与元数据）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/09-anatomy-of-attn-metadata.md)
 
 在单请求脚本里编写模型层逻辑时，激活张量的形状是规整的三维 `[batch_size, seq_len, hidden_size]`，请求下标与序列位置直接对应前两个维度。
 
@@ -128,7 +130,7 @@ keys = key_cache[blocks, safe % 16].masked_fill(~valid[..., None, None], 0.0)
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (9/11 · Deep Dive · Unpacking Jagged Batches)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/09-anatomy-of-attn-metadata.md)
+> **Systems & Architecture (9/11 · Deep Dive · Unpacking Jagged Batches)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/09-anatomy-of-attn-metadata.md)
 
 In a single-request research script, activations arrive as a 3D `[batch_size, seq_len, hidden_size]` tensor where request index and token position correspond directly to the first two axes.
 

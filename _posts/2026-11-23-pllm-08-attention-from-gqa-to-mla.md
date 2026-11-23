@@ -3,13 +3,15 @@ layout: post
 title: "少读 98% 的历史反而慢 5 倍，换上 DeepSeek 又罢工：从显存布局重看自定义注意力"
 title_en: "Why Reading 98% Less History Ran 5x Slower—and Broke on DeepSeek: Rethinking Custom Attention from Memory Layouts"
 date: 2026-11-23 03:22:00 +0800
-description: "示范如何用一页纸 Roofline 除法锁定 7:1 GQA 头部打包失效（附 FullAttentionSpec 吞并 RSWASpec 子类的继承排查），再顺着维度复杂度用矩阵乘法结合律推导出零解压的 DeepSeek MLA 潜空间流式注意力（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
-description_en: "Custom attention code written around unfolded [batch, heads, seq, dim] Key and Value tensors hits two walls inside a production serving engine: passing window_size to FlashAttention-2 on... (pLLM Engineering Series · Bilingual EN / 中文)"
+description: "示范如何用一页纸 Roofline 除法锁定 7:1 GQA 头部打包失效（附 FullAttentionSpec 吞并 RSWASpec 子类的继承排查），再顺着维度复杂度用矩阵乘法结合律推导出零解压的 DeepSeek MLA 潜空间流式注意力（系统与架构专栏 · 支持 EN / 中文 一键切换）"
+description_en: "Custom attention code written around unfolded [batch, heads, seq, dim] Key and Value tensors hits two walls inside a production serving engine: passing window_size to FlashAttention-2 on... (Systems & Architecture · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
-categories: engine-internals
-blog_track: engine-internals
+categories: systems
+blog_track: systems
+blog_series_zh: "pLLM"
+blog_series_en: "pLLM"
 pllm_synced: true
-pllm_track: engine-internals
+pllm_track: systems-internals
 pllm_order: 8
 pllm_code: "#08"
 pllm_badge_zh: "极客拆解 · 跨代际注意力"
@@ -17,7 +19,7 @@ pllm_badge_en: "Deep Dive · Attention Layouts"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="少读 98% 的历史反而慢 5 倍，换上 DeepSeek 又罢工：从显存布局重看自定义注意力" data-title-en="Why Reading 98% Less History Ran 5x Slower—and Broke on DeepSeek: Rethinking Custom Attention from Memory Layouts" data-desc-zh="示范如何用一页纸 Roofline 除法锁定 7:1 GQA 头部打包失效（附 FullAttentionSpec 吞并 RSWASpec 子类的继承排查），再顺着维度复杂度用矩阵乘法结合律推导出零解压的 DeepSeek MLA 潜空间流式注意力（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Custom attention code written around unfolded [batch, heads, seq, dim] Key and Value tensors hits two walls inside a production serving engine: passing window_size to FlashAttention-2 on... (pLLM Engineering Series · Bilingual EN / 中文)">
+<div class="zine-dispatch" data-title-zh="少读 98% 的历史反而慢 5 倍，换上 DeepSeek 又罢工：从显存布局重看自定义注意力" data-title-en="Why Reading 98% Less History Ran 5x Slower—and Broke on DeepSeek: Rethinking Custom Attention from Memory Layouts" data-desc-zh="示范如何用一页纸 Roofline 除法锁定 7:1 GQA 头部打包失效（附 FullAttentionSpec 吞并 RSWASpec 子类的继承排查），再顺着维度复杂度用矩阵乘法结合律推导出零解压的 DeepSeek MLA 潜空间流式注意力（系统与架构专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Custom attention code written around unfolded [batch, heads, seq, dim] Key and Value tensors hits two walls inside a production serving engine: passing window_size to FlashAttention-2 on... (Systems &amp; Architecture · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
@@ -30,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（8/11 · 极客拆解 · 跨代际注意力）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/08-attention-from-gqa-to-mla.md)
+> **系统与架构专栏（8/11 · 极客拆解 · 跨代际注意力）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/08-attention-from-gqa-to-mla.md)
 
 做长上下文探测、局部/全局交替注意力或者块级稀疏筛选时，研究员在单机脚本里习惯直接伸手去拿 `Key` 和 `Value` 张量，或者给注意力函数传一个 `window_size` 参数。
 
@@ -151,7 +153,7 @@ class WindowProbe(pllm.Workload):
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (8/11 · Deep Dive · Attention Layouts)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/08-attention-from-gqa-to-mla.md)
+> **Systems & Architecture (8/11 · Deep Dive · Attention Layouts)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/08-attention-from-gqa-to-mla.md)
 
 Researchers prototyping long-context probes, alternating local/global windows, or sparse top-$$k$$ attention in standalone scripts are used to reaching directly for `Key` and `Value` tensors—or passing a `window_size` argument to an attention kernel.
 

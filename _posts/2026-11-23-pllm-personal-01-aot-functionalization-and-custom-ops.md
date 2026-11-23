@@ -3,13 +3,15 @@ layout: post
 title: "自定义算子接入 `torch.compile` 后写入失效：从一次排障看 PyTorch AOT 函数化"
 title_en: "Why Custom Op Writes Disappear Under `torch.compile`: Debugging PyTorch AOT Functionalization"
 date: 2026-11-23 15:49:00 +0800
-description: "即时执行时写入激活池的 [7, 7, 7, 7]，在开启 aot_eager 编译后读出来仍是全零。从图编译器的单静态赋值（SSA）要求出发，梳理 auto_functionalized 的“克隆—执行—回写”过程，定位全局字典旁路写入与 mutates_args 声明不一致导致的覆盖问题，并顺带修正自适应跳层下的层号记录时机（pLLM 底层排障手记 · 支持 EN / 中文 一键切换）"
-description_en: "When wrapping inter-layer normalization boundaries in a PyTorch custom op, writes to an activation tap pool worked fine in Eager mode yet read back as all zeros under torch.compile's AOT... (pLLM Debugging Postmortem · Bilingual EN / 中文)"
+description: "即时执行时写入激活池的 [7, 7, 7, 7]，在开启 aot_eager 编译后读出来仍是全零。从图编译器的单静态赋值（SSA）要求出发，梳理 auto_functionalized 的“克隆—执行—回写”过程，定位全局字典旁路写入与 mutates_args 声明不一致导致的覆盖问题，并顺带修正自适应跳层下的层号记录时机（工程与排障笔记 · 支持 EN / 中文 一键切换）"
+description_en: "When wrapping inter-layer normalization boundaries in a PyTorch custom op, writes to an activation tap pool worked fine in Eager mode yet read back as all zeros under torch.compile's AOT... (Engineering & Debugging Notes · Bilingual EN / 中文)"
 tags: pllm pytorch triton debugging
-categories: debugging-notes
-blog_track: debugging-notes
+categories: engineering-notes
+blog_track: engineering-notes
+blog_series_zh: "pLLM"
+blog_series_en: "pLLM"
 pllm_synced: true
-pllm_track: debugging-notes
+pllm_track: engineering-notes
 pllm_order: 101
 pllm_code: "N01"
 pllm_badge_zh: "编译与自定义算子"
@@ -17,7 +19,7 @@ pllm_badge_en: "Compiler & Custom Ops"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="自定义算子接入 `torch.compile` 后写入失效：从一次排障看 PyTorch AOT 函数化" data-title-en="Why Custom Op Writes Disappear Under `torch.compile`: Debugging PyTorch AOT Functionalization" data-desc-zh="即时执行时写入激活池的 [7, 7, 7, 7]，在开启 aot_eager 编译后读出来仍是全零。从图编译器的单静态赋值（SSA）要求出发，梳理 auto_functionalized 的“克隆—执行—回写”过程，定位全局字典旁路写入与 mutates_args 声明不一致导致的覆盖问题，并顺带修正自适应跳层下的层号记录时机（pLLM 底层排障手记 · 支持 EN / 中文 一键切换）" data-desc-en="When wrapping inter-layer normalization boundaries in a PyTorch custom op, writes to an activation tap pool worked fine in Eager mode yet read back as all zeros under torch.compile's AOT... (pLLM Debugging Postmortem · Bilingual EN / 中文)">
+<div class="zine-dispatch" data-title-zh="自定义算子接入 `torch.compile` 后写入失效：从一次排障看 PyTorch AOT 函数化" data-title-en="Why Custom Op Writes Disappear Under `torch.compile`: Debugging PyTorch AOT Functionalization" data-desc-zh="即时执行时写入激活池的 [7, 7, 7, 7]，在开启 aot_eager 编译后读出来仍是全零。从图编译器的单静态赋值（SSA）要求出发，梳理 auto_functionalized 的“克隆—执行—回写”过程，定位全局字典旁路写入与 mutates_args 声明不一致导致的覆盖问题，并顺带修正自适应跳层下的层号记录时机（工程与排障笔记 · 支持 EN / 中文 一键切换）" data-desc-en="When wrapping inter-layer normalization boundaries in a PyTorch custom op, writes to an activation tap pool worked fine in Eager mode yet read back as all zeros under torch.compile's AOT... (Engineering &amp; Debugging Notes · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
@@ -30,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 编译与底层排障手记（1/4 · 编译与自定义算子）** · [pLLM 项目主页与文档](/pllm/) · [专栏与排障索引](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/01-aot-functionalization-and-custom-ops.md)
+> **工程与排障笔记（#1 · 编译与自定义算子）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/01-aot-functionalization-and-custom-ops.md)
 
 问题出在给层间 `RMSNorm` 边界挂载探针拷贝的时候。
 
@@ -145,7 +147,7 @@ def _routed_tap_copy_kernel(
 
 </div>
 
-> **pLLM Debugging Postmortems (1/4 · Compiler & Custom Ops)** · [pLLM Project & Docs](/pllm/) · [Series & Postmortems Index](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/en/01-aot-functionalization-and-custom-ops.md)
+> **Engineering & Debugging Notes (#1 · Compiler & Custom Ops)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/en/01-aot-functionalization-and-custom-ops.md)
 
 The bug showed up while attaching an activation tap copy to an inter-layer `RMSNorm` boundary.
 

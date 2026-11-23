@@ -669,22 +669,17 @@ a.pllm-blog-card:hover {
   color: #111111;
 }
 
-.zine-cat-pill[data-cat="agent-research"] {
+.zine-cat-pill[data-cat="research"] {
   background-color: var(--zine-red);
   color: #ffffff;
 }
 
-.zine-cat-pill[data-cat="systems-architecture"] {
+.zine-cat-pill[data-cat="systems"] {
   background-color: var(--zine-blue);
   color: #ffffff;
 }
 
-.zine-cat-pill[data-cat="engine-internals"] {
-  background-color: #059669;
-  color: #ffffff;
-}
-
-.zine-cat-pill[data-cat="debugging-notes"] {
+.zine-cat-pill[data-cat="engineering-notes"] {
   background-color: var(--zine-ink);
   color: var(--zine-paper);
 }

@@ -9,9 +9,9 @@ nav_order: 3
 
 {% assign sync = site.data.pllm_sync %}
 {% assign pllm_posts = site.posts | where: "pllm_synced", true | sort: "pllm_order" %}
-{% assign arch_posts = pllm_posts | where: "pllm_track", "systems-architecture" %}
-{% assign intern_posts = pllm_posts | where: "pllm_track", "engine-internals" %}
-{% assign debug_posts = pllm_posts | where: "pllm_track", "debugging-notes" %}
+{% assign arch_posts = pllm_posts | where: "pllm_track", "design-architecture" %}
+{% assign intern_posts = pllm_posts | where: "pllm_track", "systems-internals" %}
+{% assign debug_posts = pllm_posts | where: "pllm_track", "engineering-notes" %}
 
 <link rel="stylesheet" href="{{ '/assets/css/pllm-hub.css' | relative_url | bust_file_cache }}">
 
@@ -444,24 +444,24 @@ pllm skill --install claude   # or: codex | cursor
   </div>
 
   <div class="pllm-filter-bar" role="group" aria-label="Filter blog tracks">
-    <button type="button" class="pllm-filter-btn is-active" data-pllm-blog-filter="all" aria-pressed="true" data-i18n-zh="全部文章 ({{ pllm_posts.size }})" data-i18n-en="All Articles ({{ pllm_posts.size }})">All Articles ({{ pllm_posts.size }})</button>
-    <button type="button" class="pllm-filter-btn" data-pllm-blog-filter="systems-architecture" aria-pressed="false" data-i18n-zh="行业思考与架构设计 ({{ arch_posts.size }})" data-i18n-en="Why &amp; Architecture ({{ arch_posts.size }})">Why &amp; Architecture ({{ arch_posts.size }})</button>
-    <button type="button" class="pllm-filter-btn" data-pllm-blog-filter="engine-internals" aria-pressed="false" data-i18n-zh="推理引擎底层拆解 ({{ intern_posts.size }})" data-i18n-en="How Engines Work Inside ({{ intern_posts.size }})">How Engines Work Inside ({{ intern_posts.size }})</button>
-    <button type="button" class="pllm-filter-btn" data-pllm-blog-filter="debugging-notes" aria-pressed="false" data-i18n-zh="真实编译与 GPU 踩坑记 ({{ debug_posts.size }})" data-i18n-en="Real Debugging Stories ({{ debug_posts.size }})">Real Debugging Stories ({{ debug_posts.size }})</button>
+    <button type="button" class="pllm-filter-btn is-active" data-pllm-blog-filter="all" aria-pressed="true" data-i18n-zh="全部文章 ({{ pllm_posts.size }})" data-i18n-en="All ({{ pllm_posts.size }})">All ({{ pllm_posts.size }})</button>
+    <button type="button" class="pllm-filter-btn" data-pllm-blog-filter="design-architecture" aria-pressed="false" data-i18n-zh="设计理念与架构 ({{ arch_posts.size }})" data-i18n-en="Design &amp; Architecture ({{ arch_posts.size }})">Design &amp; Architecture ({{ arch_posts.size }})</button>
+    <button type="button" class="pllm-filter-btn" data-pllm-blog-filter="systems-internals" aria-pressed="false" data-i18n-zh="底层机制拆解 ({{ intern_posts.size }})" data-i18n-en="Systems Internals ({{ intern_posts.size }})">Systems Internals ({{ intern_posts.size }})</button>
+    <button type="button" class="pllm-filter-btn" data-pllm-blog-filter="engineering-notes" aria-pressed="false" data-i18n-zh="工程与排障笔记 ({{ debug_posts.size }})" data-i18n-en="Engineering &amp; Debugging ({{ debug_posts.size }})">Engineering &amp; Debugging ({{ debug_posts.size }})</button>
   </div>
 
-  <div class="pllm-blog-cat-block" data-pllm-blog-block="systems-architecture">
-    <h3 class="zine-cat-heading" data-i18n-zh="一 · 为什么要做这件事：行业趋势、状态层设计与弯路复盘" data-i18n-en="Part 1 &middot; Why We Built It: Inference Economics, State Design &amp; Lessons Learned">Part 1 &middot; Why We Built It: Inference Economics, State Design &amp; Lessons Learned</h3>
+  <div class="pllm-blog-cat-block" data-pllm-blog-block="design-architecture">
+    <h3 class="zine-cat-heading" data-i18n-zh="设计理念与系统架构" data-i18n-en="Design Philosophy &amp; System Architecture">Design Philosophy &amp; System Architecture</h3>
     <div class="zine-lang-panel" data-lang-panel="en" lang="en">
       <figure class="pllm-hero-figure">
-        <img src="{{ '/assets/img/pllm/blog/assets/system-anatomy-en.svg' | relative_url | bust_file_cache }}" alt="Visual Guide to the 11-Part Inference Engine Series">
+        <img src="{{ '/assets/img/pllm/blog/assets/system-anatomy-en.svg' | relative_url | bust_file_cache }}" alt="Visual Guide to the Inference Engine Series">
         <figcaption class="pllm-fig-caption">Visual Reading Map &middot; Where each standalone article sits inside a modern LLM serving engine.</figcaption>
       </figure>
     </div>
     <div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN">
       <figure class="pllm-hero-figure">
-        <img src="{{ '/assets/img/pllm/blog/assets/system-anatomy-zh.svg' | relative_url | bust_file_cache }}" alt="十一篇推理系统文章在引擎中的对应位置">
-        <figcaption class="pllm-fig-caption">阅读路标 · 每篇独立文章对应现代推理引擎里的一个真实痛点与核心模块。</figcaption>
+        <img src="{{ '/assets/img/pllm/blog/assets/system-anatomy-zh.svg' | relative_url | bust_file_cache }}" alt="推理系统系列文章在引擎中的对应位置">
+        <figcaption class="pllm-fig-caption">阅读路标 · 每篇独立文章对应现代推理引擎里的一个核心模块。</figcaption>
       </figure>
     </div>
     <div class="pllm-blog-grid">
@@ -470,7 +470,7 @@ pllm skill --install claude   # or: codex | cursor
       {% assign title_en = post.title_en | default: post.title %}
       {% assign desc_zh = post.description_zh | default: post.description %}
       {% assign desc_en = post.description_en | default: post.description %}
-      {% assign badge_zh = post.pllm_badge_zh | default: "架构与复盘" %}
+      {% assign badge_zh = post.pllm_badge_zh | default: "架构设计" %}
       {% assign badge_en = post.pllm_badge_en | default: "Architecture" %}
       {% assign code_lbl = post.pllm_code | default: "#01" %}
       {% assign read_time = post.content | number_of_words | divided_by: 360 | plus: 1 %}
@@ -487,8 +487,8 @@ pllm skill --install claude   # or: codex | cursor
     </div>
   </div>
 
-  <div class="pllm-blog-cat-block" data-pllm-blog-block="engine-internals">
-    <h3 class="zine-cat-heading" data-i18n-zh="二 · 把现代推理引擎拆开看：带宽账、静态图与并发隔离" data-i18n-en="Part 2 &middot; How Modern Serving Engines Actually Work Under the Hood">Part 2 &middot; How Modern Serving Engines Actually Work Under the Hood</h3>
+  <div class="pllm-blog-cat-block" data-pllm-blog-block="systems-internals">
+    <h3 class="zine-cat-heading" data-i18n-zh="底层机制拆解" data-i18n-en="Systems Internals Deep Dives">Systems Internals Deep Dives</h3>
     <div class="pllm-blog-grid">
       {% for post in intern_posts %}
       {% assign title_zh = post.title_zh | default: post.title %}
@@ -512,27 +512,15 @@ pllm skill --install claude   # or: codex | cursor
     </div>
   </div>
 
-  <div class="pllm-blog-cat-block" data-pllm-blog-block="debugging-notes">
-    <h3 class="zine-cat-heading" data-i18n-zh="三 · 真实踩坑与排障实录：当编译器、半精度浮点遇上并发状态" data-i18n-en="Part 3 &middot; Real Debugging Stories: Compilers, Floating-Point Traps &amp; Live State">Part 3 &middot; Real Debugging Stories: Compilers, Floating-Point Traps &amp; Live State</h3>
-    <div class="zine-lang-panel" data-lang-panel="en" lang="en">
-      <figure class="pllm-hero-figure">
-        <img src="{{ '/assets/img/pllm/blog/assets/personal-roadmap-en.svg' | relative_url | bust_file_cache }}" alt="Debugging Stories Overview Map">
-        <figcaption class="pllm-fig-caption">Four Real Bugs, Four Layers of the Stack &middot; From scheduler timing and CUDA Graph memory to FP16 rounding and torch.compile.</figcaption>
-      </figure>
-    </div>
-    <div class="zine-lang-panel is-hidden" data-lang-panel="zh" lang="zh-CN">
-      <figure class="pllm-hero-figure">
-        <img src="{{ '/assets/img/pllm/blog/assets/personal-roadmap-zh.svg' | relative_url | bust_file_cache }}" alt="四篇真实排障手记在技术栈中的对应位置">
-        <figcaption class="pllm-fig-caption">四个真实诡异 Bug · 分别发生在多步请求调度、CUDA Graph 显存、半精度浮点舍入与 torch.compile 编译阶段。</figcaption>
-      </figure>
-    </div>
+  <div class="pllm-blog-cat-block" data-pllm-blog-block="engineering-notes">
+    <h3 class="zine-cat-heading" data-i18n-zh="工程与排障笔记" data-i18n-en="Engineering &amp; Debugging Notes">Engineering &amp; Debugging Notes</h3>
     <div class="pllm-blog-grid">
       {% for post in debug_posts %}
       {% assign title_zh = post.title_zh | default: post.title %}
       {% assign title_en = post.title_en | default: post.title %}
       {% assign desc_zh = post.description_zh | default: post.description %}
       {% assign desc_en = post.description_en | default: post.description %}
-      {% assign badge_zh = post.pllm_badge_zh | default: "排障实录" %}
+      {% assign badge_zh = post.pllm_badge_zh | default: "排障笔记" %}
       {% assign badge_en = post.pllm_badge_en | default: "Debugging" %}
       {% assign code_lbl = post.pllm_code | default: "N01" %}
       {% assign read_time = post.content | number_of_words | divided_by: 360 | plus: 1 %}

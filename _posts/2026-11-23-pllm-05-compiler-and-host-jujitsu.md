@@ -3,13 +3,15 @@ layout: post
 title: "从 `assert bs == 1` 到编译态多卡并发：在 `torch.compile` 图里改残差与训快权重"
 title_en: "From `assert bs == 1` to Multi-GPU Compiled Serving: Editing Residuals and Training Fast Weights Inside `torch.compile`"
 date: 2026-11-23 03:25:00 +0800
-description: "一条完整链路打通图内干预与在线快权重训练：借 fused_add_rms_norm 接缝与 data_ptr() 进图、10 行 make_fx 剪掉 61,440 个多余内核、grad → vmap(chunk_size=1) → compile 配 float32 增量破解 99.99% 精度吞没、以及双假图对比自动证明 TP > 1 零通信更新（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
-description_en: "Open-source repositories for test-time training (such as In-Place TTT) and activation steering routinely open with assert len(input_ids) == 1—because dropping single-request research hooks... (pLLM Engineering Series · Bilingual EN / 中文)"
+description: "一条完整链路打通图内干预与在线快权重训练：借 fused_add_rms_norm 接缝与 data_ptr() 进图、10 行 make_fx 剪掉 61,440 个多余内核、grad → vmap(chunk_size=1) → compile 配 float32 增量破解 99.99% 精度吞没、以及双假图对比自动证明 TP > 1 零通信更新（系统与架构专栏 · 支持 EN / 中文 一键切换）"
+description_en: "Open-source repositories for test-time training (such as In-Place TTT) and activation steering routinely open with assert len(input_ids) == 1—because dropping single-request research hooks... (Systems & Architecture · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
-categories: engine-internals
-blog_track: engine-internals
+categories: systems
+blog_track: systems
+blog_series_zh: "pLLM"
+blog_series_en: "pLLM"
 pllm_synced: true
-pllm_track: engine-internals
+pllm_track: systems-internals
 pllm_order: 5
 pllm_code: "#05"
 pllm_badge_zh: "极客拆解 · 编译图与快权重"
@@ -17,7 +19,7 @@ pllm_badge_en: "Deep Dive · Compiled Fast Weights"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="从 `assert bs == 1` 到编译态多卡并发：在 `torch.compile` 图里改残差与训快权重" data-title-en="From `assert bs == 1` to Multi-GPU Compiled Serving: Editing Residuals and Training Fast Weights Inside `torch.compile`" data-desc-zh="一条完整链路打通图内干预与在线快权重训练：借 fused_add_rms_norm 接缝与 data_ptr() 进图、10 行 make_fx 剪掉 61,440 个多余内核、grad → vmap(chunk_size=1) → compile 配 float32 增量破解 99.99% 精度吞没、以及双假图对比自动证明 TP &gt; 1 零通信更新（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Open-source repositories for test-time training (such as In-Place TTT) and activation steering routinely open with assert len(input_ids) == 1—because dropping single-request research hooks... (pLLM Engineering Series · Bilingual EN / 中文)">
+<div class="zine-dispatch" data-title-zh="从 `assert bs == 1` 到编译态多卡并发：在 `torch.compile` 图里改残差与训快权重" data-title-en="From `assert bs == 1` to Multi-GPU Compiled Serving: Editing Residuals and Training Fast Weights Inside `torch.compile`" data-desc-zh="一条完整链路打通图内干预与在线快权重训练：借 fused_add_rms_norm 接缝与 data_ptr() 进图、10 行 make_fx 剪掉 61,440 个多余内核、grad → vmap(chunk_size=1) → compile 配 float32 增量破解 99.99% 精度吞没、以及双假图对比自动证明 TP &gt; 1 零通信更新（系统与架构专栏 · 支持 EN / 中文 一键切换）" data-desc-en="Open-source repositories for test-time training (such as In-Place TTT) and activation steering routinely open with assert len(input_ids) == 1—because dropping single-request research hooks... (Systems &amp; Architecture · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
@@ -30,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（5/11 · 极客拆解 · 编译图与快权重）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/05-compiler-and-host-jujitsu.md)
+> **系统与架构专栏（5/11 · 极客拆解 · 编译图与快权重）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/05-compiler-and-host-jujitsu.md)
 
 翻开不少前沿推理期算法——比如把选定层 MLP 的下投影矩阵 `down_proj` 当成在线“快权重（Fast Weights）”、每攒够一段上下文就做一次外积更新的 In-Place TTT，或是逐请求动态加减方向向量的激活引导——它们的官方开源代码在推理入口处往往写着同一行断言：
 
@@ -150,7 +152,7 @@ compiled = torch.compile(eager, fullgraph=True, dynamic=False, options={"triton.
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (5/11 · Deep Dive · Compiled Fast Weights)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/05-compiler-and-host-jujitsu.md)
+> **Systems & Architecture (5/11 · Deep Dive · Compiled Fast Weights)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/05-compiler-and-host-jujitsu.md)
 
 Open almost any research release for inference-time adaptation—whether In-Place Test-Time Training (TTT), which treats selected MLP `down_proj` matrices as online fast weights updated every token chunk, or per-request activation steering—and you will likely find this line near the top of `generate`:
 

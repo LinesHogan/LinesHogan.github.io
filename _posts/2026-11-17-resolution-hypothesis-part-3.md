@@ -6,8 +6,8 @@ date: 2026-11-17 20:00:00 +0800
 description: "把提议与选择拆开来看：静态候选池里已有平均 +11.4 pp 的好 Skill，但执行门控与 LLM 裁判的成对准确率只有 45.4%–49.7%。在继续设计复杂进化算法之前，先把评估刻度校准是更现实的第一步。（支持 EN / 中文 一键切换，含 TL;DR）"
 description_en: "Decoupling proposal from selection: +11.4 pp shared skills already sit in a static 100-skill pool, yet execution gates and LLM judges achieve 45.4%–49.7% pairwise accuracy. Calibrating the measurement ruler comes before designing more complex evolution loops. (Bilingual EN / 中文 with TL;DR)"
 tags: agent-evolution evaluation research
-categories: agent-research
-blog_track: agent-research
+categories: research
+blog_track: research
 blog_badge_zh: "分辨率假说 · 03"
 blog_badge_en: "Resolution · 03"
 thumbnail: /resolution-hypothesis/assets/quality_selection.png

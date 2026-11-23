@@ -3,13 +3,15 @@ layout: post
 title: "连续批处理下的状态生命周期排障：准入快照时机、抢占重算边界与导出维度对齐"
 title_en: "Debugging State Lifecycles Under Continuous Batching: Admission Pins, Preemption Boundaries, and Export Dimensions"
 date: 2026-11-23 15:46:00 +0800
-description: '单步测试通过后，在多请求连续批处理场景下遇到首步准入快照读到旧版本、KV 抢占恢复后用新层重算旧词、混合类型状态挂优化器导致浮点初值截断为零、以及 tokens="all" 导出形状不匹配四个问题。结合分页张量状态系统（PTTS）梳理状态版本与调度时间线的对齐规则（pLLM 底层排障手记 · 支持 EN / 中文 一键切换）'
-description_en: "Once a continuous-batching inference engine adds mutable runtime state—dynamic layer routing, per-request fast weights, or online parameter imports—bugs tend to surface along cross-step and... (pLLM Debugging Postmortem · Bilingual EN / 中文)"
+description: '单步测试通过后，在多请求连续批处理场景下遇到首步准入快照读到旧版本、KV 抢占恢复后用新层重算旧词、混合类型状态挂优化器导致浮点初值截断为零、以及 tokens="all" 导出形状不匹配四个问题。结合分页张量状态系统（PTTS）梳理状态版本与调度时间线的对齐规则（工程与排障笔记 · 支持 EN / 中文 一键切换）'
+description_en: "Once a continuous-batching inference engine adds mutable runtime state—dynamic layer routing, per-request fast weights, or online parameter imports—bugs tend to surface along cross-step and... (Engineering & Debugging Notes · Bilingual EN / 中文)"
 tags: pllm pytorch triton debugging
-categories: debugging-notes
-blog_track: debugging-notes
+categories: engineering-notes
+blog_track: engineering-notes
+blog_series_zh: "pLLM"
+blog_series_en: "pLLM"
 pllm_synced: true
-pllm_track: debugging-notes
+pllm_track: engineering-notes
 pllm_order: 104
 pllm_code: "N04"
 pllm_badge_zh: "多版本状态与连续批处理"
@@ -17,7 +19,7 @@ pllm_badge_en: "MVCC & Continuous Batching"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="连续批处理下的状态生命周期排障：准入快照时机、抢占重算边界与导出维度对齐" data-title-en="Debugging State Lifecycles Under Continuous Batching: Admission Pins, Preemption Boundaries, and Export Dimensions" data-desc-zh="单步测试通过后，在多请求连续批处理场景下遇到首步准入快照读到旧版本、KV 抢占恢复后用新层重算旧词、混合类型状态挂优化器导致浮点初值截断为零、以及 tokens=&quot;all&quot; 导出形状不匹配四个问题。结合分页张量状态系统（PTTS）梳理状态版本与调度时间线的对齐规则（pLLM 底层排障手记 · 支持 EN / 中文 一键切换）" data-desc-en="Once a continuous-batching inference engine adds mutable runtime state—dynamic layer routing, per-request fast weights, or online parameter imports—bugs tend to surface along cross-step and... (pLLM Debugging Postmortem · Bilingual EN / 中文)">
+<div class="zine-dispatch" data-title-zh="连续批处理下的状态生命周期排障：准入快照时机、抢占重算边界与导出维度对齐" data-title-en="Debugging State Lifecycles Under Continuous Batching: Admission Pins, Preemption Boundaries, and Export Dimensions" data-desc-zh="单步测试通过后，在多请求连续批处理场景下遇到首步准入快照读到旧版本、KV 抢占恢复后用新层重算旧词、混合类型状态挂优化器导致浮点初值截断为零、以及 tokens=&quot;all&quot; 导出形状不匹配四个问题。结合分页张量状态系统（PTTS）梳理状态版本与调度时间线的对齐规则（工程与排障笔记 · 支持 EN / 中文 一键切换）" data-desc-en="Once a continuous-batching inference engine adds mutable runtime state—dynamic layer routing, per-request fast weights, or online parameter imports—bugs tend to surface along cross-step and... (Engineering &amp; Debugging Notes · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
@@ -30,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 编译与底层排障手记（4/4 · 多版本状态与连续批处理）** · [pLLM 项目主页与文档](/pllm/) · [专栏与排障索引](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/04-mvcc-pins-preemption-and-batch-dedup.md)
+> **工程与排障笔记（#4 · 多版本状态与连续批处理）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/04-mvcc-pins-preemption-and-batch-dedup.md)
 
 在无状态推理引擎中，只要 KV Cache 块表映射正确，一个请求无论是单跑、与别的请求拼成分块预填充加解码的混合批次（Chunked Prefill + Decode），还是因显存不足被换出后重算，得到的激活值都是一致的。
 
@@ -111,7 +113,7 @@ related_posts: true
 
 </div>
 
-> **pLLM Debugging Postmortems (4/4 · MVCC & Continuous Batching)** · [pLLM Project & Docs](/pllm/) · [Series & Postmortems Index](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/en/04-mvcc-pins-preemption-and-batch-dedup.md)
+> **Engineering & Debugging Notes (#4 · MVCC & Continuous Batching)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/personal/en/04-mvcc-pins-preemption-and-batch-dedup.md)
 
 In a stateless inference engine, as long as the KV-cache block table maps correctly, a request produces the same activations whether it runs solo, rides inside a mixed chunked-prefill-plus-decode batch, or gets evicted under memory pressure and recomputed later.
 

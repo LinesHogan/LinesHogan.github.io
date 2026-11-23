@@ -732,29 +732,31 @@ def sync_blogs(
         local_num = int(m_num.group(1)) if m_num else idx
 
         if is_personal:
-            track = "debugging-notes"
+            blog_cat = "engineering-notes"
+            pllm_subtrack = "engineering-notes"
             order_num = 100 + local_num
             series_code = "N{:02d}".format(local_num)
-            desc_zh = "{}（pLLM 底层排障手记 · 支持 EN / 中文 一键切换）".format(summary_zh_base.rstrip("。"))
-            desc_en = "{} (pLLM Debugging Postmortem · Bilingual EN / 中文)".format(summary_en_base)
+            desc_zh = "{}（工程与排障笔记 · 支持 EN / 中文 一键切换）".format(summary_zh_base.rstrip("。"))
+            desc_en = "{} (Engineering & Debugging Notes · Bilingual EN / 中文)".format(summary_en_base)
             post_tags = "pllm pytorch triton debugging"
-            banner_zh = "> **pLLM 编译与底层排障手记（{}/{} · {}）** · [pLLM 项目主页与文档](/pllm/) · [专栏与排障索引](/pllm/#blog) · [GitHub 原文 ↗]({})".format(
-                local_num, personal_count, badge_zh, "{}/blob/main/{}".format(REPO_WEB_BASE, zh_rel)
+            banner_zh = "> **工程与排障笔记（#{} · {}）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗]({})".format(
+                local_num, badge_zh, "{}/blob/main/{}".format(REPO_WEB_BASE, zh_rel)
             )
-            banner_en = "> **pLLM Debugging Postmortems ({}/{} · {})** · [pLLM Project & Docs](/pllm/) · [Series & Postmortems Index](/pllm/#blog) · [GitHub Source ↗]({})".format(
-                local_num, personal_count, badge_en, "{}/blob/main/{}".format(REPO_WEB_BASE, en_rel)
+            banner_en = "> **Engineering & Debugging Notes (#{} · {})** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗]({})".format(
+                local_num, badge_en, "{}/blob/main/{}".format(REPO_WEB_BASE, en_rel)
             )
         else:
-            track = "systems-architecture" if local_num in arch_nums else "engine-internals"
+            blog_cat = "systems"
+            pllm_subtrack = "design-architecture" if local_num in arch_nums else "systems-internals"
             order_num = local_num
             series_code = "#{:02d}".format(local_num)
-            desc_zh = "{}（pLLM 技术专栏 · 支持 EN / 中文 一键切换）".format(summary_zh_base.rstrip("。"))
-            desc_en = "{} (pLLM Engineering Series · Bilingual EN / 中文)".format(summary_en_base)
+            desc_zh = "{}（系统与架构专栏 · 支持 EN / 中文 一键切换）".format(summary_zh_base.rstrip("。"))
+            desc_en = "{} (Systems & Architecture · Bilingual EN / 中文)".format(summary_en_base)
             post_tags = "pllm vllm inference-systems"
-            banner_zh = "> **pLLM 技术随笔与机制拆解（{}/{} · {}）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗]({})".format(
+            banner_zh = "> **系统与架构专栏（{}/{} · {}）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗]({})".format(
                 local_num, main_count, badge_zh, "{}/blob/main/{}".format(REPO_WEB_BASE, zh_rel)
             )
-            banner_en = "> **pLLM Engineering Essays & Deep Dives ({}/{} · {})** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗]({})".format(
+            banner_en = "> **Systems & Architecture ({}/{} · {})** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗]({})".format(
                 local_num, main_count, badge_en, "{}/blob/main/{}".format(REPO_WEB_BASE, en_rel)
             )
 
@@ -771,10 +773,12 @@ def sync_blogs(
             "description: {}".format(yaml_quote(desc_zh)),
             "description_en: {}".format(yaml_quote(desc_en)),
             "tags: {}".format(post_tags),
-            "categories: {}".format(track),
-            "blog_track: {}".format(track),
+            "categories: {}".format(blog_cat),
+            "blog_track: {}".format(blog_cat),
+            "blog_series_zh: {}".format(yaml_quote("pLLM")),
+            "blog_series_en: {}".format(yaml_quote("pLLM")),
             "pllm_synced: true",
-            "pllm_track: {}".format(track),
+            "pllm_track: {}".format(pllm_subtrack),
             "pllm_order: {}".format(order_num),
             "pllm_code: {}".format(yaml_quote(series_code)),
             "pllm_badge_zh: {}".format(yaml_quote(badge_zh)),
@@ -829,7 +833,7 @@ def sync_blogs(
             {
                 "order": order_num,
                 "code": series_code,
-                "track": track,
+                "track": pllm_subtrack,
                 "stem": stem,
                 "url": blog_url_by_stem[stem],
                 "title_zh": title_zh,

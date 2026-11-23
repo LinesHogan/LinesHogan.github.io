@@ -3,13 +3,15 @@ layout: post
 title: "PagedAttention 之后：用统一的张量状态层（PTTS）承接推理期算法"
 title_en: "Beyond PagedAttention: Unifying Stateful Inference Algorithms on One Tensor State Layer (PTTS)"
 date: 2026-11-23 15:19:00 +0800
-description: "对比 PagedAttention 专管的一维序列块表与非 KV 推理期算法的多样状态需求；拆解 PTTS 如何用整字段固定基地址槽池、整数槽号版本根与因果读写划分统一瞬态探针、多租户引导/LoRA、在线学习、分块快权重零拷贝沿用与运行时免重录动态切层（pLLM 技术专栏 · 支持 EN / 中文 一键切换）"
-description_en: "PagedAttention turned append-only KV caches into clean block tables, but it models only one state geometry: fixed per-token slices growing along the sequence axis (pLLM Engineering Series · Bilingual EN / 中文)"
+description: "对比 PagedAttention 专管的一维序列块表与非 KV 推理期算法的多样状态需求；拆解 PTTS 如何用整字段固定基地址槽池、整数槽号版本根与因果读写划分统一瞬态探针、多租户引导/LoRA、在线学习、分块快权重零拷贝沿用与运行时免重录动态切层（系统与架构专栏 · 支持 EN / 中文 一键切换）"
+description_en: "PagedAttention turned append-only KV caches into clean block tables, but it models only one state geometry: fixed per-token slices growing along the sequence axis (Systems & Architecture · Bilingual EN / 中文)"
 tags: pllm vllm inference-systems
-categories: systems-architecture
-blog_track: systems-architecture
+categories: systems
+blog_track: systems
+blog_series_zh: "pLLM"
+blog_series_en: "pLLM"
 pllm_synced: true
-pllm_track: systems-architecture
+pllm_track: design-architecture
 pllm_order: 11
 pllm_code: "#11"
 pllm_badge_zh: "架构抽象 · 状态底座"
@@ -17,7 +19,7 @@ pllm_badge_en: "Architecture · State Layer"
 related_posts: true
 ---
 
-<div class="zine-dispatch" data-title-zh="PagedAttention 之后：用统一的张量状态层（PTTS）承接推理期算法" data-title-en="Beyond PagedAttention: Unifying Stateful Inference Algorithms on One Tensor State Layer (PTTS)" data-desc-zh="对比 PagedAttention 专管的一维序列块表与非 KV 推理期算法的多样状态需求；拆解 PTTS 如何用整字段固定基地址槽池、整数槽号版本根与因果读写划分统一瞬态探针、多租户引导/LoRA、在线学习、分块快权重零拷贝沿用与运行时免重录动态切层（pLLM 技术专栏 · 支持 EN / 中文 一键切换）" data-desc-en="PagedAttention turned append-only KV caches into clean block tables, but it models only one state geometry: fixed per-token slices growing along the sequence axis (pLLM Engineering Series · Bilingual EN / 中文)">
+<div class="zine-dispatch" data-title-zh="PagedAttention 之后：用统一的张量状态层（PTTS）承接推理期算法" data-title-en="Beyond PagedAttention: Unifying Stateful Inference Algorithms on One Tensor State Layer (PTTS)" data-desc-zh="对比 PagedAttention 专管的一维序列块表与非 KV 推理期算法的多样状态需求；拆解 PTTS 如何用整字段固定基地址槽池、整数槽号版本根与因果读写划分统一瞬态探针、多租户引导/LoRA、在线学习、分块快权重零拷贝沿用与运行时免重录动态切层（系统与架构专栏 · 支持 EN / 中文 一键切换）" data-desc-en="PagedAttention turned append-only KV caches into clean block tables, but it models only one state geometry: fixed per-token slices growing along the sequence axis (Systems &amp; Architecture · Bilingual EN / 中文)">
   <a class="zine-pill-link" data-i18n-zh="pLLM 项目主页与文档 →" data-i18n-en="pLLM Project &amp; Docs →" href="/pllm/">pLLM 项目主页与文档 →</a>
   <a class="zine-pill-link" data-i18n-zh="全部博客分类索引 →" data-i18n-en="Blog Categories →" href="/blog/">Blog Categories →</a>
 </div>
@@ -30,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **pLLM 技术随笔与机制拆解（11/11 · 架构抽象 · 状态底座）** · [pLLM 项目主页与文档](/pllm/) · [专栏总览与系统解剖图](/pllm/#blog) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/11-ptts-beyond-paged-attention.md)
+> **系统与架构专栏（11/11 · 架构抽象 · 状态底座）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/11-ptts-beyond-paged-attention.md)
 
 回顾现代推理引擎的演进，PagedAttention 解决了一个核心系统问题：把原本每个请求各自连续申请、长短不一的 KV 缓存，统一拆成固定长度的物理块（Block），通过一张整数块表做间接寻址。只要算法的状态满足“每步沿序列位置向后追加 `[kv_heads, head_dim]`，且历史位置只读不改”，这一套抽象就足够干净。
 
@@ -109,7 +111,7 @@ class DynamicSteering(pllm.Workload):
 
 </div>
 
-> **pLLM Engineering Essays & Deep Dives (11/11 · Architecture · State Layer)** · [pLLM Project & Docs](/pllm/) · [Series Index & Anatomy Map](/pllm/#blog) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/11-ptts-beyond-paged-attention.md)
+> **Systems & Architecture (11/11 · Architecture · State Layer)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/11-ptts-beyond-paged-attention.md)
 
 PagedAttention solved a foundational memory problem in LLM serving: replacing per-request contiguous KV allocations with fixed-size physical blocks indexed through a block table. Whenever an algorithm's state follows that single law—append `[kv_heads, head_dim]` at token index $$t$$ while keeping positions $$0..t-1$$ immutable—sequence block tables are hard to beat.
 
