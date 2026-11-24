@@ -865,7 +865,7 @@ def sync_blogs(
 
     for existing in posts_dir.glob("*-pllm-*.md"):
         if existing.name not in expected_filenames:
-            head = existing.read_text(encoding="utf-8")[:600]
+            head = existing.read_text(encoding="utf-8")[:2000]
             if "pllm_synced: true" in head:
                 existing.unlink()
 
