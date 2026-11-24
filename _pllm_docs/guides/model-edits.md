@@ -29,7 +29,7 @@ pLLM provides three declarative mechanisms for editing models so each request or
 
 1. [`pllm.model.ActivationPatch`](/pllm/docs/reference/api/#en-pllmmodelactivationpatch): adds activation corrections onto the residual stream after specified layers (e.g., activation steering, LoReFT), running entirely inside the model's CUDA graph.
 2. [`pllm.model.Adapter`](/pllm/docs/reference/api/#en-pllmmodeladapter): applies weight deltas $$\Delta W$$ onto specified projection matrices (such as attention Q/K/V or MLP projections, e.g., per-request LoRA, dense deltas, per-head deltas), automatically isolated per request and addressed inside CUDA graphs.
-3. [`@pllm.train_in_forward`](/pllm/docs/reference/api/#en-pllmtrain_in_forward): updates private state directly from a projection layer's inputs and targets *while the forward pass is running* (e.g., In-Place TTT fast weights), closing the train-during-forward loop.
+3. [`@pllm.train_in_forward`](/pllm/docs/reference/api/#en-pllmtrain_in_forward): updates private state directly from a projection layer's inputs and targets _while the forward pass is running_ (e.g., In-Place TTT fast weights), closing the train-during-forward loop.
 
 ---
 
@@ -155,19 +155,23 @@ pllm.model.Adapter(
     state: str,
     targets: tuple[pllm.model.Projection, ...],
     weight: str = "value",
-    operator: Literal["dense", "low_rank", "per_head"] = "dense",
-    factors: tuple[str, str] = ("a", "b"),
+    operator: Literal["dense", "low_rank", "per_head"] | Callable[..., torch.Tensor] = "dense",
+    factors: tuple[str, ...] = ("a", "b"),
     scale: float = 1.0,
+    *,
+    share: Mapping[str, tuple[tuple[int, ...], ...]] = {},
 )
 ```
 
-- **`targets`**: tuple of target projections. Each is declared via `pllm.model.Projection(name, layer=None)` using standard Hugging Face module names (`"q_proj"`, `"k_proj"`, `"v_proj"`, `"gate_proj"`, `"up_proj"`, `"down_proj"`); `layer=None` targets every layer of the model.
+- **`targets`**: tuple of target projections. Each is declared via `pllm.model.Projection(name, layer=None)` using standard Hugging Face module names (`"q_proj"`, `"k_proj"`, `"v_proj"`, `"o_proj"`, `"gate_proj"`, `"up_proj"`, `"down_proj"`); `layer=None` targets every layer of the model.
 - **`operator`**:
   - `"low_rank"`: low-rank product $$\text{scale} \cdot (x A^T) B^T$$, reading the two fields named by `factors` (default `("a", "b")`).
   - `"dense"`: dense matrix delta $$\text{scale} \cdot x W_{\text{delta}}^T$$, reading the field named by `weight` (default `"value"`).
   - `"per_head"`: independent `(head_dim, head_dim)` block transform per attention head, reading the `weight` field.
+  - Custom callable `fn(hidden, *weights) -> delta`: pure PyTorch function or `torch.library.custom_op` (`mutates_args=()` with `register_fake`), reading the fields named by `factors` (validated with `FakeTensorMode` and `fixed_shapes` at declaration time; requires `tensor_parallel_size=1`).
+- **`share`**: optional mapping from field name to layer-index groups whose targets share a single state field per projection name (for example, folded architectures such as Concertina sharing low-rank `A`/`B` factors across adjacent layers).
 - **Multi-target field expansion rule**:
-  When one `Adapter` targets multiple `targets`, each `pllm.Field` shape callback `lambda in_features, out_features: (...)` in the state is invoked in turn with each target projection's input and output widths. Underlying private fields are automatically expanded and named in target order as `a_0`, `b_0`, `a_1`, `b_1`, ...
+  When one `Adapter` targets multiple `targets`, each `pllm.Field` shape callback `lambda in_features, out_features: (...)` in the state is invoked in turn with each target projection's input and output widths. Underlying private fields are automatically expanded and named in target order as `a_0`, `b_0`, `a_1`, `b_1`, ... (fields listed in `share=` allocate once per group leader).
 
 ### Both `RequestState` and `InstanceState` Stay in CUDA Graphs {#en-both-requeststate-and-instancestate-stay-in-cuda-graphs}
 
@@ -192,9 +196,9 @@ When using `Adapter` on AWQ, GPTQ, or FP8 quantized models:
 
 Under `tensor_parallel_size > 1` (vLLM 0.32+), `"dense"` and `"low_rank"` operators follow the base projection's exact communication sharding:
 - **Column-parallel projections (`q_proj`, `k_proj`, `v_proj`, `gate_proj`, `up_proj`)**: sharded along output features. Dense weights are row-sharded; in low-rank deltas, $$B$$ is sharded along output features while $$A$$ is replicated across ranks.
-- **Row-parallel projections (`down_proj`)**: sharded along input features. Dense weights are column-sharded; in low-rank deltas, $$A$$ is sharded along input features while $$B$$ is replicated across ranks.
+- **Row-parallel projections (`o_proj`, `down_proj`)**: sharded along input features. Dense weights are column-sharded; in low-rank deltas, $$A$$ is sharded along input features while $$B$$ is replicated across ranks.
 - State must be initialized with `pllm.Zeros` or `pllm.Computed` and may only be updated shard-locally via `@pllm.train_in_forward` (training a replicated $$A$$ from column-sharded outputs or a replicated $$B$$ from row-sharded inputs across GPUs is disallowed).
-- The `"per_head"` operator and states with optimizers or external imports (`Imported` / checkpoints) currently require `tensor_parallel_size=1`.
+- The `"per_head"` operator, custom projection operator callables, and states with optimizers or external imports (`Imported` / checkpoints) currently require `tensor_parallel_size=1`.
 
 ---
 
@@ -279,7 +283,7 @@ Inside a `@pllm.train_in_forward` method, input parameters use marker defaults:
 ### Visibility Policies: `forward_pinned` vs. the Cost of `exact` {#en-visibility-policies-forward_pinned-vs-the-cost-of-exact}
 
 - **`visibility="forward_pinned"` (default)**: the entire forward pass reads the state version pinned on entry; updates produced inside the forward are published for subsequent forward steps.
-- **`visibility="exact"`**: within the *same* forward pass, the next chunk's projection computation **immediately sees the parameters updated by the preceding chunk**.
+- **`visibility="exact"`**: within the _same_ forward pass, the next chunk's projection computation **immediately sees the parameters updated by the preceding chunk**.
 - **Cost and trade-off**: `"exact"` breaks full-batch parallelism across chunks, inserting chunk-level synchronization and parameter dependencies inside the forward stream and requiring private intermediate state buffers; unless your algorithm relies on intra-forward chunk recurrence (such as TTT), keep the default `"forward_pinned"`.
 
 ### Manual Updates: Returning `UpdateOutput` {#en-manual-updates-returning-updateoutput}
@@ -388,7 +392,7 @@ When vLLM runs out of GPU memory for new KV blocks, the scheduler triggers **pre
 ### Why Prefix Caching Is Mutually Exclusive with Overlays and Activation Patches {#en-why-prefix-caching-is-mutually-exclusive-with-overlays-and-activation-patches}
 
 In vLLM, `enable_prefix_caching=True` shares KV blocks across requests that share identical prompt prefixes.
-**In pLLM, overlays (`Adapter`, `train_in_forward`) and `ActivationPatch` are strictly mutually exclusive with Prefix Caching (except immutable `InstanceState` patches with `last_tokens=0`) and are rejected at build time if combined.**
+**In pLLM, overlays (`Adapter`, `train_in_forward`) and `ActivationPatch` are strictly mutually exclusive with Prefix Caching (except immutable `InstanceState` `Adapter` and immutable `InstanceState` `ActivationPatch` with `last_tokens=0`) and are rejected at build time if combined.**
 
 **Why**:
 Prefix Caching assumes "identical token sequences produce identical KV tensors." However, per-request LoRA weights, step-updated fast weights, and layer-wise activation steering all change the mathematical computation of the forward pass:
@@ -558,19 +562,23 @@ pllm.model.Adapter(
     state: str,
     targets: tuple[pllm.model.Projection, ...],
     weight: str = "value",
-    operator: Literal["dense", "low_rank", "per_head"] = "dense",
-    factors: tuple[str, str] = ("a", "b"),
+    operator: Literal["dense", "low_rank", "per_head"] | Callable[..., torch.Tensor] = "dense",
+    factors: tuple[str, ...] = ("a", "b"),
     scale: float = 1.0,
+    *,
+    share: Mapping[str, tuple[tuple[int, ...], ...]] = {},
 )
 ```
 
-- **`targets`**：目标投影元组。投影名称由 `pllm.model.Projection(name, layer=None)` 声明，可选名称为 Hugging Face 标准的 `"q_proj"`、`"k_proj"`、`"v_proj"`、`"gate_proj"`、`"up_proj"`、`"down_proj"`；`layer=None` 表示对模型所有层生效。
+- **`targets`**：目标投影元组。投影名称由 `pllm.model.Projection(name, layer=None)` 声明，可选名称为 Hugging Face 标准的 `"q_proj"`、`"k_proj"`、`"v_proj"`、`"o_proj"`、`"gate_proj"`、`"up_proj"`、`"down_proj"`；`layer=None` 表示对模型所有层生效。
 - **`operator`**：
   - `"low_rank"`：低秩乘积 $$\text{scale} \cdot (x A^T) B^T$$，读取 `factors`（默认 `("a", "b")`）命名的两个字段。
   - `"dense"`：稠密矩阵加法 $$\text{scale} \cdot x W_{\text{delta}}^T$$，读取 `weight`（默认 `"value"`）命名的字段。
   - `"per_head"`：按注意力头独立施加形状为 `(head_dim, head_dim)` 的块变换，读取 `weight` 字段。
+  - 自定义可调用对象 `fn(hidden, *weights) -> delta`：纯 PyTorch 函数或 `torch.library.custom_op`（须为 `mutates_args=()` 且注册 `register_fake`），按顺序读取 `factors` 命名的字段（声明期使用 `FakeTensorMode` 与 `fixed_shapes` 校验；要求 `tensor_parallel_size=1`）。
+- **`share`**：可选字段共享映射，从字段名映射到层号分组，使组内同名投影共享同一份状态字段（例如 Concertina 折叠架构在相邻层间共享低秩因子 `a`/`b`）。
 - **多目标字段展开规则**：
-  当一个 `Adapter` 作用于多个 `targets` 时，状态中的 `pllm.Field` 形状回调 `lambda in_features, out_features: (...)` 会按目标投影的输入与输出宽度被依次调用。底层分配的私有字段将按照 targets 列表的顺序自动展开并命名为 `a_0`, `b_0`, `a_1`, `b_1`, ...。
+  当一个 `Adapter` 作用于多个 `targets` 时，状态中的 `pllm.Field` 形状回调 `lambda in_features, out_features: (...)` 会按目标投影的输入与输出宽度被依次调用。底层分配的私有字段将按照 targets 列表的顺序自动展开并命名为 `a_0`, `b_0`, `a_1`, `b_1`, ...（声明在 `share=` 中的字段每组只在领头层分配一份）。
 
 ### `RequestState` 与 `InstanceState` 都能进图 {#zh-sec-7}
 
@@ -595,9 +603,9 @@ pllm.model.Adapter(
 
 在 `tensor_parallel_size > 1`（vLLM 0.32）下，`"dense"` 与 `"low_rank"` 算子严格遵循底座投影的通信切分：
 - **列并行投影（q_proj, k_proj, v_proj, gate_proj, up_proj）**：按输出特征切分。稠密权重按行切分；低秩补丁中 $$B$$ 按输出维度分片，$$A$$ 在各卡间复制。
-- **行并行投影（down_proj）**：按输入特征切分。稠密权重按列切分；低秩补丁中 $$A$$ 按输入维度分片，$$B$$ 在各卡间复制。
+- **行并行投影（o_proj, down_proj）**：按输入特征切分。稠密权重按列切分；低秩补丁中 $$A$$ 按输入维度分片，$$B$$ 在各卡间复制。
 - 状态必须由 `pllm.Zeros` 或 `pllm.Computed` 初始化，且只能由 `@pllm.train_in_forward` 在单卡本地分片上更新（禁止跨卡从列切分输出反向训练复制的 $$A$$，或从行切分输入反向训练复制的 $$B$$）。
-- `"per_head"` 算子以及携带优化器或其他外部导入（`Imported` / Checkpoint）的状态目前要求 `tensor_parallel_size=1`。
+- `"per_head"` 算子、自定义投影算子可调用对象，以及携带优化器或其他外部导入（`Imported` / Checkpoint）的状态目前要求 `tensor_parallel_size=1`。
 
 ---
 
@@ -791,7 +799,7 @@ print(testing.check(DynamicSteering(), CONFIG).passed)
 ### 为什么 Prefix Caching 与 Overlay / 激活补丁互斥 {#zh-sec-22}
 
 在 vLLM 配置中，`enable_prefix_caching=True` 会在不同的请求之间共享具有相同前缀文本的 KV 块。
-**在 pLLM 中，所有 Overlay（Adapter、train_in_forward）与 ActivationPatch 均与 Prefix Caching 严格互斥，组合时会在构建期直接拒绝。**
+**在 pLLM 中，除仅读取不可变 `InstanceState` 的 `Adapter` 与 `last_tokens=0` 的 `ActivationPatch` 外，其余 Overlay（`Adapter`、`train_in_forward`）与 `ActivationPatch` 均与 Prefix Caching 严格互斥，组合时会在构建期直接拒绝。**
 
 **原因**：
 Prefix Caching 的基本假设是“相同的 token 序列产生完全相同的 KV 张量”。但无论是每请求的 LoRA 权重，还是逐步更新的快权重，亦或是逐层注入的激活引导，都会改变前向传播的实际数学计算：

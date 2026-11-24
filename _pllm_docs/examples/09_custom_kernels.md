@@ -30,7 +30,7 @@ New inference-time algorithms increasingly rely on operations that cannot be exp
 In pLLM, there is no new operator-wrapping API to learn: wrap your kernel with PyTorch's `torch.library.custom_op` and call it inside workload methods like any normal function. Once wired in, pLLM automatically does three things:
 - Pre-launch `pllm.explain` lists the operator (per-row FLOPs, logical bytes, and whether a CPU reference exists).
 - `pllm.testing.check` runs scheduling contract checks on CPU using your CPU reference.
-- `pllm.testing.check_on_gpu` replays CPU inputs on the GPU and compares your kernel's outputs against the CPU reference (*device equivalence*).
+- `pllm.testing.check_on_gpu` replays CPU inputs on the GPU and compares your kernel's outputs against the CPU reference (_device equivalence_).
 
 **Example Algorithm Used Here**
 

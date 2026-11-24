@@ -25,7 +25,7 @@ nav: false
 
 If you want to serve a Test-Time Training (TTT) model, you immediately run into a structural difference: it stores "memory" in a different place than a standard inference model.
 
-A standard model keeps its weights frozen during inference and stores all context memory in the KV cache. TTT's idea is to treat part of the model's weights as "fast weights" that are continuously updated while reading inputs, memorizing context directly in the weights. ByteDance Seed's In-Place TTT (*In-Place Test-Time Training*, arXiv 2604.06169) is called "In-Place" because it adds no new layers—instead, it updates the existing MLP down-projection matrices directly as fast weights.
+A standard model keeps its weights frozen during inference and stores all context memory in the KV cache. TTT's idea is to treat part of the model's weights as "fast weights" that are continuously updated while reading inputs, memorizing context directly in the weights. ByteDance Seed's In-Place TTT (_In-Place Test-Time Training_, arXiv 2604.06169) is called "In-Place" because it adds no new layers—instead, it updates the existing MLP down-projection matrices directly as fast weights.
 
 Putting such a model into an inference server raises three concrete challenges:
 
@@ -299,7 +299,7 @@ Both are sound engineering choices; since the paper leaves precision unspecified
 
 如果你想在服务里跑一个测试时训练（Test-Time Training，TTT）模型，先会遇到一个问题：它和普通推理模型存"记忆"的地方不一样。
 
-普通模型在推理时权重固定不变，它对上文的记忆全部存在 KV cache 里。TTT 的想法是：模型在读输入的同时，把一部分权重当作"快权重"不断更新，直接用权重记住上文。ByteDance Seed 提出的 In-Place TTT（论文 *In-Place Test-Time Training*，arXiv 2604.06169）之所以叫 "In-Place"，是因为它不往模型里加新层，而是直接把已有 MLP 的最后一个投影矩阵（down projection）当成快权重来改。
+普通模型在推理时权重固定不变，它对上文的记忆全部存在 KV cache 里。TTT 的想法是：模型在读输入的同时，把一部分权重当作"快权重"不断更新，直接用权重记住上文。ByteDance Seed 提出的 In-Place TTT（论文 _In-Place Test-Time Training_，arXiv 2604.06169）之所以叫 "In-Place"，是因为它不往模型里加新层，而是直接把已有 MLP 的最后一个投影矩阵（down projection）当成快权重来改。
 
 把这种模型放进推理服务里，有三个具体的难点：
 

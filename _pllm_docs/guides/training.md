@@ -159,7 +159,7 @@ Only when **the same state maps to multiple rows within a single engine step** d
 
 ### Mechanics and How to Choose {#en-mechanics-and-how-to-choose}
 
-`@pllm.train`'s `reduction` reduces only the selected rows *within* each state at the current step—**both options keep different states completely independent**:
+`@pllm.train`'s `reduction` reduces only the selected rows _within_ each state at the current step—**both options keep different states completely independent**:
 - `reduction="mean"` (default): averages the $$n_s$$ rows selected for state $$s$$ in this step, $$\frac{1}{n_s}\sum_{r \in s} \ell_r$$.
 - `reduction="sum"`: sums the rows selected for state $$s$$ in this step, $$\sum_{r \in s} \ell_r$$. Each state's reduced scalar loss is then **summed** across states before backpropagation; rows from different states are never averaged together.
 

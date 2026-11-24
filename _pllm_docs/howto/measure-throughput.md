@@ -275,7 +275,7 @@ After a benchmark finishes, it prints structured JSON lines to stdout. Interpret
 
 - **`tokens_per_second`**: Primary reported metric—the median throughput across rounds.
 - **`round_rates`**: Tuple of measured rates for each round.
-  - *Diagnostic tip*: Variance exceeding 5% across rounds usually indicates host swapping, VRAM thrashing, or competing processes on the GPU.
+  - _Diagnostic tip_: Variance exceeding 5% across rounds usually indicates host swapping, VRAM thrashing, or competing processes on the GPU.
 - **`vanilla_tokens_per_second`**: Median rate of native vLLM under identical hardware, prompts, and sampling settings.
 - **`vs_vanilla`**: `tokens_per_second / vanilla_tokens_per_second`, showing the fraction of native throughput retained (e.g., 0.92 means 92% of native throughput, or 8% overhead).
 
@@ -596,7 +596,7 @@ python -m tools.benchmark_esamp --model Qwen/Qwen2.5-7B-Instruct --gpu-memory-ut
 
 - **`tokens_per_second`**：主要汇报指标。它是各轮吞吐的中位数。
 - **`round_rates`**：每轮实测速率的元组。
-  - *排查提示*：如果各轮速率波动超过 5%，通常表明 GPU 受到宿主内存交换、显存颠簸或多进程竞争干扰。
+  - _排查提示_：如果各轮速率波动超过 5%，通常表明 GPU 受到宿主内存交换、显存颠簸或多进程竞争干扰。
 - **`vanilla_tokens_per_second`**：在完全相同硬件、Prompts 与采样配置下原生 vLLM 的中位数速率。
 - **`vs_vanilla`**：即 `tokens_per_second / vanilla_tokens_per_second`，直观反映挂载算法后的吞吐保留百分比（例如 0.92 代表吞吐为原生的 92%，开销为 8%）。
 
