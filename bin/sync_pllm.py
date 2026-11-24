@@ -358,7 +358,7 @@ def convert_prose_chunk(
         )
         return "[{}]({})".format(label, new_url)
 
-    chunk = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", replace_img, chunk)
+    chunk = re.sub(r"!\[([^\n]*?)\]\(([^)\s]+)\)", replace_img, chunk)
     chunk = re.sub(r"(?<!!)\[([^\]]+)\]\(([^)\s]+)\)", replace_link, chunk)
 
     math_tokens: List[str] = []
@@ -378,6 +378,9 @@ def convert_prose_chunk(
         return "\x00MATH{}\x00".format(idx)
 
     chunk = re.sub(r"(?<!\$)\$(?!\$)([^\$\n]+?)(?<!\$)\$(?!\$)", save_single_math, chunk)
+
+    # Normalize Markdown single-asterisk emphasis (*italic*) to underscore (_italic_) to match Prettier
+    chunk = re.sub(r"(?<![*\\\w])\*(?![*\s])([^*\n]+?)(?<![*\s])\*(?![*\w])", r"_\1_", chunk)
 
     if "{{" in chunk or "{%" in chunk:
         chunk = chunk.replace("{{", "{% raw %}{{{% endraw %}").replace("{%", "{% raw %}{%{% endraw %}")
@@ -645,6 +648,11 @@ def parse_personal_readme_metadata(personal_readme_path: pathlib.Path) -> Dict[s
         badge_en, stem = m.group(1).strip(), m.group(2).strip()
         key = "personal-" + stem
         meta_by_stem.setdefault(key, {})["badge_en"] = badge_en
+        after = text[m.end() :].lstrip(" \t")
+        if after.startswith("\n") and after[1:].splitlines():
+            next_line = after[1:].splitlines()[0].strip()
+            if next_line.startswith("*") and next_line.endswith("*") and len(next_line) > 2:
+                meta_by_stem[key]["summary_en"] = next_line.strip("*").strip()
 
     return meta_by_stem
 
