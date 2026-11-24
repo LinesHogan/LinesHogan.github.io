@@ -32,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **系统与架构专栏（6/11 · 极客拆解 · 静态图寻址）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/06-cuda-graph-pointer-smuggling.md)
+> **系统与架构专栏（6/12 · 极客拆解 · 静态图寻址）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/06-cuda-graph-pointer-smuggling.md)
 
 在单卡脚本里调通一段在线学习算法（比如每生成一个词，就拿首尾层隐藏状态算一次损失、反向求导并用 `AdamW` 更新当前请求专属的轻量权重）之后，搬进并发推理引擎遇到的第一个性能悬崖，通常不在 GPU 上，而在 CPU 上。
 
@@ -131,7 +131,7 @@ def _gather_rows(descriptor, rows, output, width: tl.constexpr):
 
 </div>
 
-> **Systems & Architecture (6/11 · Deep Dive · Frozen Graphs)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/06-cuda-graph-pointer-smuggling.md)
+> **Systems & Architecture (6/12 · Deep Dive · Frozen Graphs)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/06-cuda-graph-pointer-smuggling.md)
 
 After getting an online learning loop working in a single-request script—say, computing a token-level loss from hidden states, running `autograd` backward, and stepping per-request `AdamW` weights on every decode token—moving it into a concurrent serving engine hits an immediate wall. That first wall isn't on the GPU; it is on the CPU.
 

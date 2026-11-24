@@ -32,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **系统与架构专栏（7/11 · 极客拆解 · 显存并发状态）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/07-gpu-mvcc-and-rcu.md)
+> **系统与架构专栏（7/12 · 极客拆解 · 显存并发状态）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/07-gpu-mvcc-and-rcu.md)
 
 在单请求研究脚本里，在线更新参数根本算不上一个系统问题：建一个字典 `states[req_id]`，每步算完梯度调一句 `param.add_(delta)` 原地覆盖，请求结束 `del` 掉就完事了。
 
@@ -157,7 +157,7 @@ return "reset" if (applied & _rewritten(graph)) or custom or probe.custom_attent
 
 </div>
 
-> **Systems & Architecture (7/11 · Deep Dive · GPU MVCC & RCU)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/07-gpu-mvcc-and-rcu.md)
+> **Systems & Architecture (7/12 · Deep Dive · GPU MVCC & RCU)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/07-gpu-mvcc-and-rcu.md)
 
 In a single-request research script, mutating online state barely registers as a design problem: keep a Python dict `states[req_id]`, call `param.add_(delta)` in place after each step, and `del` it when generation finishes.
 

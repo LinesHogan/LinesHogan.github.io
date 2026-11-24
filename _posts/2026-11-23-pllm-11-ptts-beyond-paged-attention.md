@@ -32,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **系统与架构专栏（11/11 · 架构抽象 · 状态底座）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/11-ptts-beyond-paged-attention.md)
+> **系统与架构专栏（11/12 · 架构抽象 · 状态底座）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/11-ptts-beyond-paged-attention.md)
 
 回顾现代推理引擎的演进，PagedAttention 解决了一个核心系统问题：把原本每个请求各自连续申请、长短不一的 KV 缓存，统一拆成固定长度的物理块（Block），通过一张整数块表做间接寻址。只要算法的状态满足“每步沿序列位置向后追加 `[kv_heads, head_dim]`，且历史位置只读不改”，这一套抽象就足够干净。
 
@@ -111,7 +111,7 @@ class DynamicSteering(pllm.Workload):
 
 </div>
 
-> **Systems & Architecture (11/11 · Architecture · State Layer)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/11-ptts-beyond-paged-attention.md)
+> **Systems & Architecture (11/12 · Architecture · State Layer)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/11-ptts-beyond-paged-attention.md)
 
 PagedAttention solved a foundational memory problem in LLM serving: replacing per-request contiguous KV allocations with fixed-size physical blocks indexed through a block table. Whenever an algorithm's state follows that single law—append `[kv_heads, head_dim]` at token index $$t$$ while keeping positions $$0..t-1$$ immutable—sequence block tables are hard to beat.
 

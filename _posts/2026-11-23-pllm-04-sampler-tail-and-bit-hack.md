@@ -32,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **系统与架构专栏（4/11 · 极客拆解 · 尾声与位运算）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/04-sampler-tail-and-bit-hack.md)
+> **系统与架构专栏（4/12 · 极客拆解 · 尾声与位运算）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/04-sampler-tail-and-bit-hack.md)
 
 往大模型解码循环末尾加一点自定义采样逻辑——比如用在线训练的轻量小网络预测值 $$g$$ 去压低主模型隐藏状态 $$h$$ 里的平庸候选词——公式通常只有一行：在主模型做完 `top-k` / `top-p` 过滤留下的候选词上，按 $$(1 + \beta) s_i - \beta g_i$$ 重新打分，再抽样生成下一个词。
 
@@ -148,7 +148,7 @@ _(附带一个用同样方式抓显存水位爬升查出来的 PyTorch 注册陷
 
 </div>
 
-> **Systems & Architecture (4/11 · Deep Dive · Bit Tricks & Tail Bandwidth)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/04-sampler-tail-and-bit-hack.md)
+> **Systems & Architecture (4/12 · Deep Dive · Bit Tricks & Tail Bandwidth)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/04-sampler-tail-and-bit-hack.md)
 
 Adding custom sampling guidance to the end of an LLM decode loop—say, using an online-trained lightweight predictor $$g$$ to suppress bland candidate tokens in the trunk hidden state $$h$$—usually takes one line of math: over the candidate set surviving the trunk's `top-k` / `top-p` filter, rescore each surviving token as $$(1 + \beta) s_i - \beta g_i$$ before drawing the next token.
 

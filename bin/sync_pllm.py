@@ -694,7 +694,7 @@ def sync_blogs(
         rel_check = zf.relative_to(pllm_dir).as_posix()
         ts_str = run_git(pllm_dir, ["log", "--diff-filter=A", "--follow", "--format=%at", "-1", "--", rel_check])
         raw_ts_by_stem[stem] = (
-            int(ts_str) if ts_str.isdigit() else int(datetime.datetime(2026, 11, 23, 3, 0, tzinfo=CST).timestamp())
+            int(ts_str) if ts_str.isdigit() else int(zf.stat().st_mtime)
         )
 
     blog_url_by_stem: Dict[str, str] = {}
@@ -717,7 +717,7 @@ def sync_blogs(
     expected_filenames = set()
     blog_records: List[Dict[str, object]] = []
 
-    arch_nums = {1, 2, 11}
+    arch_nums = {1, 2, 11, 12}
 
     for idx, (stem, zh_path, en_path, is_personal) in enumerate(all_entries, start=1):
         zh_rel = zh_path.relative_to(pllm_dir).as_posix()

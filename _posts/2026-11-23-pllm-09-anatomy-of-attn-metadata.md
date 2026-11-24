@@ -32,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **系统与架构专栏（9/11 · 极客拆解 · 批次解包与元数据）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/09-anatomy-of-attn-metadata.md)
+> **系统与架构专栏（9/12 · 极客拆解 · 批次解包与元数据）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/09-anatomy-of-attn-metadata.md)
 
 在单请求脚本里编写模型层逻辑时，激活张量的形状是规整的三维 `[batch_size, seq_len, hidden_size]`，请求下标与序列位置直接对应前两个维度。
 
@@ -130,7 +130,7 @@ keys = key_cache[blocks, safe % 16].masked_fill(~valid[..., None, None], 0.0)
 
 </div>
 
-> **Systems & Architecture (9/11 · Deep Dive · Unpacking Jagged Batches)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/09-anatomy-of-attn-metadata.md)
+> **Systems & Architecture (9/12 · Deep Dive · Unpacking Jagged Batches)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/09-anatomy-of-attn-metadata.md)
 
 In a single-request research script, activations arrive as a 3D `[batch_size, seq_len, hidden_size]` tensor where request index and token position correspond directly to the first two axes.
 

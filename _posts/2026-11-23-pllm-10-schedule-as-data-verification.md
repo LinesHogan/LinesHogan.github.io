@@ -32,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **系统与架构专栏（10/11 · 极客拆解 · 多租户核验）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/10-schedule-as-data-verification.md)
+> **系统与架构专栏（10/12 · 极客拆解 · 多租户核验）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/10-schedule-as-data-verification.md)
 
 假设你让助手或编码智能体写一个最简单的激活探针：在 Transformer 第 8 层对隐藏状态 `h` 做一次中心化处理，它十有八九会写出下面这一行代码：
 
@@ -99,7 +99,7 @@ centered = h - h.mean(dim=0, keepdim=True)
 
 </div>
 
-> **Systems & Architecture (10/11 · Deep Dive · Multi-Tenant Verification)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/10-schedule-as-data-verification.md)
+> **Systems & Architecture (10/12 · Deep Dive · Multi-Tenant Verification)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/10-schedule-as-data-verification.md)
 
 Ask a colleague or a coding agent to write a quick activation-centering hook at Layer 8 of a Transformer, and nine times out of ten you will get this one-liner:
 

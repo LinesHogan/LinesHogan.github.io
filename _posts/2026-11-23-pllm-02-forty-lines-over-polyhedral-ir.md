@@ -32,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **系统与架构专栏（2/11 · 工程复盘）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/02-forty-lines-over-polyhedral-ir.md)
+> **系统与架构专栏（2/12 · 工程复盘）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/02-forty-lines-over-polyhedral-ir.md)
 
 写底层基础软件的人，心里多少都有点“编译器情结”。只要手头的活涉及循环迭代、跨步数据依赖外加两条 CUDA Stream 的并行编排，脑子里就容易浮现出多面体模型（Polyhedral Model）和整数线性规划——仿佛不先立一套工整的中间表示（IR），直接写几十行图算法就显得不够庄重。
 
@@ -125,7 +125,7 @@ fn propagate(bounds: &[(u32, u32)], edges: &[(usize, usize, i64)]) -> Result<Vec
 
 </div>
 
-> **Systems & Architecture (2/11 · Postmortem)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/02-forty-lines-over-polyhedral-ir.md)
+> **Systems & Architecture (2/12 · Postmortem)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/02-forty-lines-over-polyhedral-ir.md)
 
 Systems engineers have a soft spot for compiler machinery. Hand us an iterative loop with cross-step state dependencies and two CUDA streams to coordinate, and our minds drift straight toward polyhedral models and integer linear programming—as if solving a scheduling problem without first designing an intermediate representation (IR) were cutting corners.
 

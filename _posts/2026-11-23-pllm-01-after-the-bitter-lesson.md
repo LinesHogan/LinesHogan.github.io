@@ -32,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **系统与架构专栏（1/11 · 观点思辨）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/01-after-the-bitter-lesson.md)
+> **系统与架构专栏（1/12 · 观点思辨）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/01-after-the-bitter-lesson.md)
 
 过去十年，理查德·萨顿（Richard Sutton）的《苦涩的教训》在深度学习圈子里近乎公理：凡是往模型里塞人类先验和精巧局部结构的做法，长远看都会输给“干净统一的架构加海量算力”。
 
@@ -141,7 +141,7 @@ class ESampLite(pllm.Workload):
 
 </div>
 
-> **Systems & Architecture (1/11 · Position)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/01-after-the-bitter-lesson.md)
+> **Systems & Architecture (1/12 · Position)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/01-after-the-bitter-lesson.md)
 
 For most of the past decade, Richard Sutton's _Bitter Lesson_ operated as deep learning's house creed: domain priors and intricate local machinery eventually lose to uniform architectures backed by more compute.
 

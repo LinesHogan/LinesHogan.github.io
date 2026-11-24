@@ -32,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **系统与架构专栏（8/11 · 极客拆解 · 跨代际注意力）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/08-attention-from-gqa-to-mla.md)
+> **系统与架构专栏（8/12 · 极客拆解 · 跨代际注意力）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/08-attention-from-gqa-to-mla.md)
 
 做长上下文探测、局部/全局交替注意力或者块级稀疏筛选时，研究员在单机脚本里习惯直接伸手去拿 `Key` 和 `Value` 张量，或者给注意力函数传一个 `window_size` 参数。
 
@@ -153,7 +153,7 @@ class WindowProbe(pllm.Workload):
 
 </div>
 
-> **Systems & Architecture (8/11 · Deep Dive · Attention Layouts)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/08-attention-from-gqa-to-mla.md)
+> **Systems & Architecture (8/12 · Deep Dive · Attention Layouts)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/08-attention-from-gqa-to-mla.md)
 
 Researchers prototyping long-context probes, alternating local/global windows, or sparse top-$$k$$ attention in standalone scripts are used to reaching directly for `Key` and `Value` tensors—or passing a `window_size` argument to an attention kernel.
 

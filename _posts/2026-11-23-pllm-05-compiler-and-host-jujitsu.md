@@ -32,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **系统与架构专栏（5/11 · 极客拆解 · 编译图与快权重）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/05-compiler-and-host-jujitsu.md)
+> **系统与架构专栏（5/12 · 极客拆解 · 编译图与快权重）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/05-compiler-and-host-jujitsu.md)
 
 翻开不少前沿推理期算法——比如把选定层 MLP 的下投影矩阵 `down_proj` 当成在线“快权重（Fast Weights）”、每攒够一段上下文就做一次外积更新的 In-Place TTT，或是逐请求动态加减方向向量的激活引导——它们的官方开源代码在推理入口处往往写着同一行断言：
 
@@ -152,7 +152,7 @@ compiled = torch.compile(eager, fullgraph=True, dynamic=False, options={"triton.
 
 </div>
 
-> **Systems & Architecture (5/11 · Deep Dive · Compiled Fast Weights)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/05-compiler-and-host-jujitsu.md)
+> **Systems & Architecture (5/12 · Deep Dive · Compiled Fast Weights)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/05-compiler-and-host-jujitsu.md)
 
 Open almost any research release for inference-time adaptation—whether In-Place Test-Time Training (TTT), which treats selected MLP `down_proj` matrices as online fast weights updated every token chunk, or per-request activation steering—and you will likely find this line near the top of `generate`:
 

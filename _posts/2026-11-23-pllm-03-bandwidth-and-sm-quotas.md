@@ -32,7 +32,7 @@ related_posts: true
 
 </div>
 
-> **系统与架构专栏（3/11 · 极客拆解 · 带宽与配额）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/03-bandwidth-and-sm-quotas.md)
+> **系统与架构专栏（3/12 · 极客拆解 · 带宽与配额）** · [pLLM 项目主页与文档](/pllm/) · [全站博客分类目录](/blog/) · [GitHub 原文 ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/zh/03-bandwidth-and-sm-quotas.md)
 
 在单请求研究脚本里调性能，有两条几乎不用过脑子的经验：遇到高延迟访存就把启动网格（grid）开大，靠成千上万个线程块切换来掩盖延迟；遇到像 `the`、句号这类简单词，在第 16 层判断收敛后直接跳过后面几层（Early Exit），跳过四分之一的词自然能省近四分之一的时间。
 
@@ -129,7 +129,7 @@ def bounded_rows(src, rows, out, count: int, width: tl.constexpr, block: tl.cons
 
 </div>
 
-> **Systems & Architecture (3/11 · Deep Dive · Bandwidth & Quotas)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/03-bandwidth-and-sm-quotas.md)
+> **Systems & Architecture (3/12 · Deep Dive · Bandwidth & Quotas)** · [pLLM Project & Docs](/pllm/) · [All Blog Categories](/blog/) · [GitHub Source ↗](https://github.com/LinesHogan/pLLM/blob/main/blog/en/03-bandwidth-and-sm-quotas.md)
 
 Profiling single-request research scripts builds two reliable reflexes: when memory latency is high, launch a massive grid of thread blocks (CTAs) so warp switching hides the wait; when easy tokens like periods or `the` settle their representation by layer 16, branch around the next few layers (early exit) to pocket proportional speedups.
 
